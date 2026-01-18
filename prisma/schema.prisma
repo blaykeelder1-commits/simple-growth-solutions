@@ -1,0 +1,1133 @@
+// Prisma schema for Simple Growth Solutions
+// Multi-tenant business services platform
+// Database: PostgreSQL (Supabase)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ==========================================
+// CORE: Users & Organizations (Multi-tenancy)
+// ==========================================
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  emailVerified  DateTime? @map("email_verified")
+  password       String?   // Nullable for OAuth users
+  name           String?
+  image          String?
+  role           String    @default("user") // admin, user, client, owner, analyst, viewer
+  authProvider   String    @default("email") @map("auth_provider") // email, google
+  organizationId String?   @map("organization_id")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lastLoginAt    DateTime? @map("last_login_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  // NextAuth relations
+  accounts       Account[]
+  sessions       Session[]
+
+  // Business relations
+  changeRequests    ChangeRequest[]
+  aiRecommendations AIRecommendation[] @relation("ActionedBy")
+  followUpActions   FollowUpAction[]
+  communicationLogs CommunicationLog[]
+  auditLogs         AuditLog[]
+
+  @@index([organizationId])
+  @@map("users")
+}
+
+// NextAuth.js required models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Organization {
+  id                 String   @id @default(cuid())
+  name               String
+  industry           String?
+  annualRevenueTier  String?  @map("annual_revenue_tier") // '100k-500k', '500k-1m', '1m-5m', '5m-20m'
+  timezone           String   @default("America/New_York")
+  currency           String   @default("USD")
+  logoUrl            String?  @map("logo_url")
+  subscriptionTier   String   @default("starter") @map("subscription_tier")
+  subscriptionStatus String   @default("trial") @map("subscription_status")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  // Core relations
+  users              User[]
+  subscriptions      Subscription[]
+
+  // Website Management
+  websiteProjects    WebsiteProject[]
+
+  // Cash Flow AI
+  clients            Client[]
+  invoices           Invoice[]
+  cashFlowSnapshots  CashFlowSnapshot[]
+  aiRecommendations  AIRecommendation[]
+  followUpActions    FollowUpAction[]
+  recoveryEvents     RecoveryEvent[]
+  billingCycles      BillingCycle[]
+
+  // Business Chauffeur
+  integrations       Integration[]
+  businessMetrics    BusinessMetric[]
+  competitorAnalyses CompetitorAnalysis[]
+  businessInsights   BusinessInsight[]
+
+  // Cybersecurity
+  securityScans      SecurityScan[]
+
+  // Analytics
+  communicationEffectiveness CommunicationEffectiveness[]
+  paymentMethodStats PaymentMethodStats[]
+  auditLogs          AuditLog[]
+
+  @@map("organizations")
+}
+
+// ==========================================
+// LEADS (Sales Pipeline)
+// ==========================================
+
+model Lead {
+  id            String   @id @default(cuid())
+  businessName  String   @map("business_name")
+  contactName   String   @map("contact_name")
+  email         String
+  phone         String?
+  hasWebsite    Boolean  @default(false) @map("has_website")
+  websiteUrl    String?  @map("website_url")
+  industry      String?
+  challenges    String?  @db.Text
+  status        String   @default("new")
+  notes         String?  @db.Text
+  analysisScore Int?     @map("analysis_score")
+  analysisData  String?  @map("analysis_data") @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Conversion to organization
+  convertedToOrgId String? @map("converted_to_org_id")
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("leads")
+}
+
+// ==========================================
+// BILLING: Stripe Subscriptions
+// ==========================================
+
+model Subscription {
+  id                   String   @id @default(cuid())
+  organizationId       String   @map("organization_id")
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  stripeCustomerId     String?  @map("stripe_customer_id")
+  stripeSubscriptionId String?  @map("stripe_subscription_id")
+  stripePriceId        String?  @map("stripe_price_id")
+
+  plan                 String   // website_management, cybersecurity, chauffeur, cashflow_ai
+  status               String   @default("pending") // pending, trialing, active, past_due, canceled
+  priceMonthly         Int      @default(0) @map("price_monthly") // in cents
+
+  trialStartDate       DateTime? @map("trial_start_date")
+  trialEndDate         DateTime? @map("trial_end_date")
+  currentPeriodStart   DateTime? @map("current_period_start")
+  currentPeriodEnd     DateTime? @map("current_period_end")
+  canceledAt           DateTime? @map("canceled_at")
+
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  successFeeBillings   SuccessFeeBilling[]
+
+  @@index([organizationId])
+  @@index([stripeCustomerId])
+  @@map("subscriptions")
+}
+
+model SuccessFeeBilling {
+  id              String   @id @default(cuid())
+  subscriptionId  String   @map("subscription_id")
+  subscription    Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  invoiceId       String?  @map("invoice_id")
+  invoice         Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  recoveredAmount Int      @map("recovered_amount") // Amount recovered in cents
+  feePercentage   Float    @default(0.08) @map("fee_percentage") // 8%
+  feeAmount       Int      @map("fee_amount") // Calculated fee in cents
+
+  status          String   @default("pending") // pending, invoiced, paid
+  stripeInvoiceId String?  @map("stripe_invoice_id")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([subscriptionId])
+  @@map("success_fee_billings")
+}
+
+// ==========================================
+// WEBSITE PROJECTS: Request & Build Workflow
+// ==========================================
+
+model WebsiteProject {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Project Info
+  projectName    String   @map("project_name")
+  projectType    String   @map("project_type") // new_build, redesign, migration
+  existingUrl    String?  @map("existing_url")
+
+  // Requirements (stored as JSON strings)
+  desiredFeatures   String? @map("desired_features") @db.Text // JSON: ["e-commerce", "booking", "blog", etc.]
+  designPreferences String? @map("design_preferences") @db.Text // JSON: { colors, style, references }
+  targetAudience    String? @map("target_audience")
+  competitors       String? @db.Text // JSON: array of competitor URLs
+
+  // Status tracking
+  status            String   @default("submitted") // submitted, reviewing, approved, in_progress, review_ready, revision, deployed, completed
+  priority          Int      @default(0)
+
+  // Deployment
+  deploymentPlatform String? @map("deployment_platform") // vercel, netlify, custom
+  deployedUrl        String? @map("deployed_url")
+  repositoryUrl      String? @map("repository_url")
+
+  // Timeline
+  estimatedCompletion DateTime? @map("estimated_completion")
+  actualCompletion    DateTime? @map("actual_completion")
+
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  changeRequests     ChangeRequest[]
+  projectNotes       ProjectNote[]
+  projectFiles       ProjectFile[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@map("website_projects")
+}
+
+model ChangeRequest {
+  id          String   @id @default(cuid())
+  projectId   String   @map("project_id")
+  project     WebsiteProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requesterId String   @map("requester_id")
+  requester   User     @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String   @db.Text
+  type        String   @default("feature") // feature, bug, content, design
+  priority    String   @default("normal") // low, normal, high, urgent
+
+  status      String   @default("pending") // pending, approved, in_progress, completed, rejected
+  resolution  String?  @db.Text
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([projectId])
+  @@index([status])
+  @@map("change_requests")
+}
+
+model ProjectNote {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  project   WebsiteProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  content   String   @db.Text
+  isInternal Boolean @default(true) @map("is_internal") // Internal notes vs client-visible
+  authorId  String?  @map("author_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([projectId])
+  @@map("project_notes")
+}
+
+model ProjectFile {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  project   WebsiteProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  filename  String
+  fileUrl   String   @map("file_url")
+  fileType  String   @map("file_type") // design, asset, document
+  fileSize  Int?     @map("file_size")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([projectId])
+  @@map("project_files")
+}
+
+// ==========================================
+// CASH FLOW AI: Clients & Invoices
+// ==========================================
+
+model Client {
+  id                   String   @id @default(cuid())
+  organizationId       String   @map("organization_id")
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name                 String
+  email                String?
+  phone                String?
+  address              String?
+  industry             String?  // Client's industry for benchmarking
+
+  // External IDs for integrations
+  externalId           String?  @map("external_id") // ID from accounting system
+  quickbooksId         String?  @map("quickbooks_id")
+  xeroId               String?  @map("xero_id")
+
+  // Payment behavior metrics (computed by AI service)
+  paymentScore         Int?     @map("payment_score") // 0-100 score based on payment history
+  paymentBehaviorTier  String?  @map("payment_behavior_tier") // A, B, C, D
+  avgDaysToPayment     Decimal? @map("avg_days_to_payment") @db.Decimal(5, 1)
+  totalOutstanding     Decimal  @default(0) @map("total_outstanding") @db.Decimal(15, 2)
+  totalPaid            Decimal  @default(0) @map("total_paid") @db.Decimal(15, 2)
+  totalInvoiced        Decimal  @default(0) @map("total_invoiced") @db.Decimal(15, 2)
+
+  // Enhanced AI fields
+  industryBenchmarkDelta   Int?     @map("industry_benchmark_delta") // How they compare to industry avg (-50 to +50)
+  preferredPaymentMethod   String?  @map("preferred_payment_method") // ach, check, credit_card, wire
+  bestContactDay           String?  @map("best_contact_day") // monday, tuesday, etc.
+  bestContactHour          Int?     @map("best_contact_hour") // 0-23
+  seasonalPaymentPattern   String?  @map("seasonal_payment_pattern") @db.Text // JSON string of monthly patterns
+
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  invoices             Invoice[]
+  payments             Payment[]
+  communicationLogs    CommunicationLog[]
+  aiRecommendations    AIRecommendation[]
+  followUpActions      FollowUpAction[]
+  seasonalPatterns     ClientSeasonalPattern[]
+  recoveryEvents       RecoveryEvent[]
+
+  @@unique([organizationId, externalId])
+  @@index([organizationId])
+  @@index([organizationId, paymentScore])
+  @@map("clients")
+}
+
+model Invoice {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  clientId       String?  @map("client_id")
+  client         Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  invoiceNumber  String   @map("invoice_number")
+  amount         Decimal  @db.Decimal(15, 2) // in cents or dollars depending on preference
+  amountPaid     Decimal  @default(0) @map("amount_paid") @db.Decimal(15, 2)
+  currency       String   @default("USD")
+
+  dueDate        DateTime @map("due_date") @db.Date
+  issueDate      DateTime @default(now()) @map("issue_date") @db.Date
+  paidDate       DateTime? @map("paid_date") @db.Date
+
+  status         String   @default("draft") // draft, sent, viewed, partial, paid, overdue, written_off
+  daysOverdue    Int      @default(0) @map("days_overdue")
+
+  // External IDs
+  externalId     String?  @map("external_id")
+  quickbooksId   String?  @map("quickbooks_id")
+  xeroId         String?  @map("xero_id")
+
+  // AI predictions
+  predictedPaymentDate DateTime? @map("predicted_payment_date") @db.Date
+  recoveryLikelihood   Decimal?  @map("recovery_likelihood") @db.Decimal(5, 4) // 0.0000 - 1.0000
+  riskLevel            String?   @map("risk_level") // low, medium, high, critical
+  recommendedAction    String?   @map("recommended_action")
+  recommendedActionDate DateTime? @map("recommended_action_date") @db.Date
+
+  // Line items stored as JSON
+  lineItems      String?  @map("line_items") @db.Text // JSON array
+  notes          String?  @db.Text
+  source         String   @default("manual") // sync, manual, csv
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  payments          Payment[]
+  invoicePayments   InvoicePayment[]
+  recoveryEvents    RecoveryEvent[]
+  followUpActions   FollowUpAction[]
+  aiRecommendations AIRecommendation[]
+  successFeeBillings SuccessFeeBilling[]
+  paymentPredictions PaymentPrediction[]
+
+  @@unique([organizationId, externalId])
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, dueDate])
+  @@index([clientId])
+  @@map("invoices")
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  invoiceId String   @map("invoice_id")
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  clientId  String   @map("client_id")
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  amount    Decimal  @db.Decimal(15, 2) // in cents
+  method    String?  // check, ach, credit_card, cash, wire, other
+  reference String?  // Check number, transaction ID, etc.
+
+  // External IDs
+  quickbooksId String? @map("quickbooks_id")
+  xeroId       String? @map("xero_id")
+
+  paidAt    DateTime @default(now()) @map("paid_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([invoiceId])
+  @@index([clientId])
+  @@map("payments")
+}
+
+// Enhanced payment tracking from CFA
+model InvoicePayment {
+  id            String   @id @default(cuid())
+  invoiceId     String   @map("invoice_id")
+  invoice       Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  amount        Decimal  @db.Decimal(15, 2)
+  paymentDate   DateTime @map("payment_date") @db.Date
+  paymentMethod String?  @map("payment_method") // ach, check, credit_card, wire, other
+  externalId    String?  @map("external_id")
+
+  // Payment timing analytics
+  dayOfWeek     Int?     @map("day_of_week") // 0-6 (Sunday-Saturday)
+  hourOfDay     Int?     @map("hour_of_day") // 0-23
+  daysFromDue   Int?     @map("days_from_due") // Negative = early, Positive = late
+
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([invoiceId])
+  @@map("invoice_payments")
+}
+
+model RecoveryEvent {
+  id               String   @id @default(cuid())
+  organizationId   String   @map("organization_id")
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoiceId        String   @map("invoice_id")
+  invoice          Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  clientId         String?  @map("client_id")
+  client           Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  // Event classification
+  eventType        String   @map("event_type") // payment_received, partial_payment, promise_to_pay, dispute, overdue_recovery, accelerated_payment, gap_avoided
+
+  // Financial details
+  invoiceAmount    Decimal  @default(0) @map("invoice_amount") @db.Decimal(15, 2)
+  recoveredAmount  Decimal  @default(0) @map("recovered_amount") @db.Decimal(15, 2)
+  amount           Int      @default(0) // Legacy: in cents
+
+  // For tiered pricing
+  daysOverdue      Int?     @map("days_overdue") // At time of recovery
+  daysAccelerated  Int?     @map("days_accelerated") // If paid early, how many days
+
+  // Platform fee calculation
+  feePercentage    Decimal  @default(0.08) @map("fee_percentage") @db.Decimal(5, 4) // e.g., 0.08 for 8%
+  platformFee      Decimal  @default(0) @map("platform_fee") @db.Decimal(15, 2)
+
+  // Attribution - what led to recovery?
+  attributedTo     String?  @map("attributed_to") // ai_recommendation, follow_up, automatic
+  recommendationId String?  @map("recommendation_id")
+  followUpActionId String?  @map("follow_up_action_id")
+
+  notes            String?  @db.Text
+
+  // Status
+  status           String   @default("pending") // pending, confirmed, disputed, paid_out
+  confirmedAt      DateTime? @map("confirmed_at")
+
+  // Billing cycle reference
+  billingCycleId   String?  @map("billing_cycle_id")
+  billingCycle     BillingCycle? @relation(fields: [billingCycleId], references: [id])
+
+  eventDate        DateTime @default(now()) @map("event_date")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, eventDate])
+  @@index([organizationId, status])
+  @@index([invoiceId])
+  @@index([billingCycleId])
+  @@map("recovery_events")
+}
+
+model CashFlowSnapshot {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  snapshotDate   DateTime @map("snapshot_date") @db.Date
+
+  // Balances
+  totalReceivables     Decimal? @map("total_receivables") @db.Decimal(15, 2)
+  totalPayables        Decimal? @map("total_payables") @db.Decimal(15, 2)
+  overdueReceivables   Decimal? @map("overdue_receivables") @db.Decimal(15, 2)
+  totalOverdue         Decimal? @map("total_overdue") @db.Decimal(15, 2)
+  overdue30Days        Decimal? @map("overdue_30_days") @db.Decimal(15, 2)
+  overdue60Days        Decimal? @map("overdue_60_days") @db.Decimal(15, 2)
+  overdue90PlusDays    Decimal? @map("overdue_90_plus_days") @db.Decimal(15, 2)
+
+  // Forecasts
+  projectedInflow30d   Decimal? @map("projected_inflow_30d") @db.Decimal(15, 2)
+  projectedOutflow30d  Decimal? @map("projected_outflow_30d") @db.Decimal(15, 2)
+  projectedInflow60d   Decimal? @map("projected_inflow_60d") @db.Decimal(15, 2)
+  projectedOutflow60d  Decimal? @map("projected_outflow_60d") @db.Decimal(15, 2)
+  projectedInflow90d   Decimal? @map("projected_inflow_90d") @db.Decimal(15, 2)
+  projectedOutflow90d  Decimal? @map("projected_outflow_90d") @db.Decimal(15, 2)
+  forecast7Day         Decimal? @map("forecast_7_day") @db.Decimal(15, 2)
+  forecast14Day        Decimal? @map("forecast_14_day") @db.Decimal(15, 2)
+  forecast30Day        Decimal? @map("forecast_30_day") @db.Decimal(15, 2)
+  predictedGapDate     DateTime? @map("predicted_gap_date") @db.Date
+  predictedGapAmount   Decimal? @map("predicted_gap_amount") @db.Decimal(15, 2)
+
+  // Health metrics
+  cashFlowHealthScore  Int? @map("cash_flow_health_score") // 0-100
+  runwayDays           Int? @map("runway_days")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, snapshotDate])
+  @@index([organizationId, snapshotDate])
+  @@map("cash_flow_snapshots")
+}
+
+model AIRecommendation {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoiceId      String?  @map("invoice_id")
+  invoice        Invoice? @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  clientId       String?  @map("client_id")
+  client         Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  type               String   // collection_strategy, payment_terms, client_risk, cash_flow, follow_up, escalate, prioritize, deprioritize
+  recommendationType String?  @map("recommendation_type") // Alias for type
+  title              String
+  description        String   @db.Text
+  recommendationText String?  @map("recommendation_text") @db.Text
+  priority           String   @default("medium") // low, medium, high, critical
+
+  // AI metadata
+  confidence         Decimal? @db.Decimal(5, 4) // 0.0000 - 1.0000
+  confidenceScore    Decimal? @map("confidence_score") @db.Decimal(3, 2) // 0.00-1.00
+  reasoning          String?  @db.Text // JSON explaining the recommendation
+
+  status             String   @default("pending") // pending, accepted, dismissed, completed, expired
+  actionTakenBy      String?  @map("action_taken_by")
+  actionTakenById    String?  @map("action_taken_by_id")
+  actionTakenByUser  User?    @relation("ActionedBy", fields: [actionTakenById], references: [id], onDelete: SetNull)
+  actionTakenAt      DateTime? @map("action_taken_at")
+  actionedAt         DateTime? @map("actioned_at")
+  actionedBy         String?  @map("actioned_by")
+  expiresAt          DateTime? @map("expires_at")
+
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@map("ai_recommendations")
+}
+
+model FollowUpAction {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoiceId      String?  @map("invoice_id")
+  invoice        Invoice? @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  clientId       String?  @map("client_id")
+  client         Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  assignedToId   String?  @map("assigned_to_id")
+  assignedTo     User?    @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  type           String   // email, call, letter, final_notice, meeting, escalation, sms
+  actionType     String?  @map("action_type") // Alias for type
+  scheduledFor   DateTime? @map("scheduled_for")
+  actionDate     DateTime @default(now()) @map("action_date")
+  nextActionDate DateTime? @map("next_action_date") @db.Date
+
+  status         String   @default("scheduled") // scheduled, completed, skipped
+  completedAt    DateTime? @map("completed_at")
+  outcome        String?  // no_response, promised_payment, dispute, partial_payment, paid, escalated
+  notes          String?  @db.Text
+
+  // Communication timing analytics
+  dayOfWeek       Int?     @map("day_of_week") // 0-6 (Sunday-Saturday)
+  hourOfDay       Int?     @map("hour_of_day") // 0-23
+  responseTimeMs  Int?     @map("response_time_ms") // How long until they responded
+  ledToPayment    Boolean  @default(false) @map("led_to_payment") // Did this action result in payment?
+  daysToPayment   Int?     @map("days_to_payment") // If ledToPayment, how many days?
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@index([organizationId, actionType, outcome])
+  @@index([invoiceId])
+  @@index([clientId, ledToPayment])
+  @@map("follow_up_actions")
+}
+
+model CommunicationLog {
+  id        String   @id @default(cuid())
+  clientId  String   @map("client_id")
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId    String?  @map("user_id")
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  type      String   // email, call, sms, letter
+  direction String   // inbound, outbound
+  subject   String?
+  content   String?  @db.Text
+
+  // Email specifics
+  emailMessageId String? @map("email_message_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([clientId])
+  @@map("communication_logs")
+}
+
+model PaymentPrediction {
+  id          String   @id @default(cuid())
+  invoiceId   String   @map("invoice_id")
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  predictedDate     DateTime @map("predicted_date")
+  predictedAmount   Decimal  @map("predicted_amount") @db.Decimal(15, 2) // in cents
+  confidence        Decimal  @db.Decimal(5, 4) // 0.0000 - 1.0000
+  modelVersion      String?  @map("model_version")
+
+  // Factors that influenced prediction (JSON)
+  factors     String?  @db.Text
+
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([invoiceId])
+  @@map("payment_predictions")
+}
+
+// ==========================================
+// CASH FLOW AI: Learning & Analytics
+// ==========================================
+
+model IndustryBenchmark {
+  id                    String   @id @default(cuid())
+  industry              String   @unique // technology, healthcare, retail, manufacturing, etc.
+
+  // Payment behavior benchmarks
+  avgDaysToPay          Decimal  @map("avg_days_to_pay") @db.Decimal(5, 1)
+  medianDaysToPay       Decimal  @map("median_days_to_pay") @db.Decimal(5, 1)
+  stdDevDaysToPay       Decimal  @map("std_dev_days_to_pay") @db.Decimal(5, 1)
+
+  // Risk distribution
+  pctPayOnTime          Decimal  @map("pct_pay_on_time") @db.Decimal(5, 2) // % that pay by due date
+  pctPay30Days          Decimal  @map("pct_pay_30_days") @db.Decimal(5, 2) // % that pay within 30 days overdue
+  pctPay60Days          Decimal  @map("pct_pay_60_days") @db.Decimal(5, 2)
+  pctPay90Plus          Decimal  @map("pct_pay_90_plus") @db.Decimal(5, 2)
+
+  // Seasonal patterns (JSON: {"Q1": 1.1, "Q2": 0.9, "Q3": 0.95, "Q4": 1.05})
+  seasonalMultipliers   String?  @map("seasonal_multipliers") @db.Text
+
+  // Economic sensitivity (how much this industry is affected by economic conditions)
+  economicSensitivity   Decimal  @map("economic_sensitivity") @db.Decimal(3, 2) // 0.0-2.0 multiplier
+
+  sampleSize            Int      @map("sample_size") // Number of data points
+  lastUpdated           DateTime @map("last_updated") @updatedAt
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  @@map("industry_benchmarks")
+}
+
+model ClientSeasonalPattern {
+  id             String   @id @default(cuid())
+  clientId       String   @unique @map("client_id")
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // Monthly payment behavior multipliers (1.0 = normal, 1.2 = 20% faster, 0.8 = 20% slower)
+  januaryMultiplier     Decimal  @default(1.0) @map("january_multiplier") @db.Decimal(3, 2)
+  februaryMultiplier    Decimal  @default(1.0) @map("february_multiplier") @db.Decimal(3, 2)
+  marchMultiplier       Decimal  @default(1.0) @map("march_multiplier") @db.Decimal(3, 2)
+  aprilMultiplier       Decimal  @default(1.0) @map("april_multiplier") @db.Decimal(3, 2)
+  mayMultiplier         Decimal  @default(1.0) @map("may_multiplier") @db.Decimal(3, 2)
+  juneMultiplier        Decimal  @default(1.0) @map("june_multiplier") @db.Decimal(3, 2)
+  julyMultiplier        Decimal  @default(1.0) @map("july_multiplier") @db.Decimal(3, 2)
+  augustMultiplier      Decimal  @default(1.0) @map("august_multiplier") @db.Decimal(3, 2)
+  septemberMultiplier   Decimal  @default(1.0) @map("september_multiplier") @db.Decimal(3, 2)
+  octoberMultiplier     Decimal  @default(1.0) @map("october_multiplier") @db.Decimal(3, 2)
+  novemberMultiplier    Decimal  @default(1.0) @map("november_multiplier") @db.Decimal(3, 2)
+  decemberMultiplier    Decimal  @default(1.0) @map("december_multiplier") @db.Decimal(3, 2)
+
+  // Quarterly patterns for quick lookups
+  q1Multiplier          Decimal  @default(1.0) @map("q1_multiplier") @db.Decimal(3, 2)
+  q2Multiplier          Decimal  @default(1.0) @map("q2_multiplier") @db.Decimal(3, 2)
+  q3Multiplier          Decimal  @default(1.0) @map("q3_multiplier") @db.Decimal(3, 2)
+  q4Multiplier          Decimal  @default(1.0) @map("q4_multiplier") @db.Decimal(3, 2)
+
+  // Confidence based on data points
+  dataPoints            Int      @default(0) @map("data_points")
+  confidenceScore       Decimal  @default(0) @map("confidence_score") @db.Decimal(3, 2)
+
+  lastUpdated           DateTime @map("last_updated") @updatedAt
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  @@map("client_seasonal_patterns")
+}
+
+model EconomicIndicator {
+  id                String   @id @default(cuid())
+  indicatorDate     DateTime @unique @map("indicator_date") @db.Date
+
+  // Key economic metrics
+  fedFundsRate      Decimal? @map("fed_funds_rate") @db.Decimal(5, 2)
+  unemploymentRate  Decimal? @map("unemployment_rate") @db.Decimal(5, 2)
+  inflationRate     Decimal? @map("inflation_rate") @db.Decimal(5, 2)
+  gdpGrowthRate     Decimal? @map("gdp_growth_rate") @db.Decimal(5, 2)
+  consumerConfidence Decimal? @map("consumer_confidence") @db.Decimal(6, 2)
+
+  // Business-specific indicators
+  businessConfidence   Decimal? @map("business_confidence") @db.Decimal(6, 2)
+  creditAvailability   Decimal? @map("credit_availability") @db.Decimal(5, 2) // Index 0-100
+  supplyChainStress    Decimal? @map("supply_chain_stress") @db.Decimal(5, 2) // Index 0-100
+
+  // Calculated impact score (-1.0 to 1.0, negative = harder to collect)
+  paymentImpactScore   Decimal  @map("payment_impact_score") @db.Decimal(4, 3)
+
+  source            String?  // fed, bls, census, calculated
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@index([indicatorDate])
+  @@map("economic_indicators")
+}
+
+model CommunicationEffectiveness {
+  id               String   @id @default(cuid())
+  organizationId   String   @map("organization_id")
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Segmentation
+  clientTier       String?  @map("client_tier") // A, B, C, D or null for aggregate
+  industry         String?  // null for aggregate across industries
+  actionType       String   @map("action_type") // email, call, sms, meeting
+
+  // Day of week effectiveness (% that led to payment)
+  sundayRate       Decimal  @default(0) @map("sunday_rate") @db.Decimal(5, 4)
+  mondayRate       Decimal  @default(0) @map("monday_rate") @db.Decimal(5, 4)
+  tuesdayRate      Decimal  @default(0) @map("tuesday_rate") @db.Decimal(5, 4)
+  wednesdayRate    Decimal  @default(0) @map("wednesday_rate") @db.Decimal(5, 4)
+  thursdayRate     Decimal  @default(0) @map("thursday_rate") @db.Decimal(5, 4)
+  fridayRate       Decimal  @default(0) @map("friday_rate") @db.Decimal(5, 4)
+  saturdayRate     Decimal  @default(0) @map("saturday_rate") @db.Decimal(5, 4)
+
+  // Hour of day effectiveness (JSON: {"9": 0.15, "10": 0.18, ...})
+  hourlyRates      String?  @map("hourly_rates") @db.Text
+
+  // Best performing combinations
+  bestDay          String?  @map("best_day")
+  bestHour         Int?     @map("best_hour")
+  bestDayHourRate  Decimal? @map("best_day_hour_rate") @db.Decimal(5, 4)
+
+  // Sample sizes for confidence
+  totalAttempts    Int      @default(0) @map("total_attempts")
+  successfulAttempts Int    @default(0) @map("successful_attempts")
+
+  lastUpdated      DateTime @map("last_updated") @updatedAt
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, clientTier, industry, actionType])
+  @@index([organizationId])
+  @@map("communication_effectiveness")
+}
+
+model PaymentMethodStats {
+  id               String   @id @default(cuid())
+  organizationId   String   @map("organization_id")
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  paymentMethod    String   @map("payment_method") // ach, check, credit_card, wire, other
+
+  // Performance metrics
+  avgDaysToPay     Decimal  @map("avg_days_to_pay") @db.Decimal(5, 1)
+  medianDaysToPay  Decimal  @map("median_days_to_pay") @db.Decimal(5, 1)
+  onTimeRate       Decimal  @map("on_time_rate") @db.Decimal(5, 4) // % paid on time
+
+  // Failure/bounce rates
+  failureRate      Decimal  @default(0) @map("failure_rate") @db.Decimal(5, 4)
+  avgRetryDays     Decimal? @map("avg_retry_days") @db.Decimal(5, 1) // Days to successful retry after failure
+
+  // Volume metrics
+  totalPayments    Int      @default(0) @map("total_payments")
+  totalAmount      Decimal  @default(0) @map("total_amount") @db.Decimal(15, 2)
+  avgPaymentAmount Decimal  @default(0) @map("avg_payment_amount") @db.Decimal(15, 2)
+
+  // Reliability score (0-100)
+  reliabilityScore Int      @default(50) @map("reliability_score")
+
+  lastUpdated      DateTime @map("last_updated") @updatedAt
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, paymentMethod])
+  @@index([organizationId])
+  @@map("payment_method_stats")
+}
+
+model BillingCycle {
+  id               String   @id @default(cuid())
+  organizationId   String   @map("organization_id")
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Billing period
+  periodStart      DateTime @map("period_start") @db.Date
+  periodEnd        DateTime @map("period_end") @db.Date
+
+  // Totals
+  totalRecovered   Decimal  @default(0) @map("total_recovered") @db.Decimal(15, 2)
+  totalFees        Decimal  @default(0) @map("total_fees") @db.Decimal(15, 2)
+
+  // Breakdown by type
+  overdueRecovery90Plus  Decimal @default(0) @map("overdue_recovery_90_plus") @db.Decimal(15, 2)
+  overdueRecovery30to90  Decimal @default(0) @map("overdue_recovery_30_to_90") @db.Decimal(15, 2)
+  acceleratedPayments    Decimal @default(0) @map("accelerated_payments") @db.Decimal(15, 2)
+  gapsAvoided            Decimal @default(0) @map("gaps_avoided") @db.Decimal(15, 2)
+
+  // Fee breakdown
+  fee90Plus        Decimal  @default(0) @map("fee_90_plus") @db.Decimal(15, 2)
+  fee30to90        Decimal  @default(0) @map("fee_30_to_90") @db.Decimal(15, 2)
+  feeAccelerated   Decimal  @default(0) @map("fee_accelerated") @db.Decimal(15, 2)
+  feeGapsAvoided   Decimal  @default(0) @map("fee_gaps_avoided") @db.Decimal(15, 2)
+
+  // Status
+  status           String   @default("open") // open, closed, invoiced, paid
+  invoicedAt       DateTime? @map("invoiced_at")
+  paidAt           DateTime? @map("paid_at")
+
+  // Payment details
+  stripeInvoiceId  String?  @map("stripe_invoice_id")
+  stripePaymentId  String?  @map("stripe_payment_id")
+
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  recoveryEvents   RecoveryEvent[]
+
+  @@unique([organizationId, periodStart])
+  @@index([organizationId, status])
+  @@map("billing_cycles")
+}
+
+model ModelTrainingLog {
+  id               String   @id @default(cuid())
+  modelType        String   @map("model_type") // payment_prediction, recovery_likelihood, communication_timing
+
+  // Training metrics
+  trainingDataSize Int      @map("training_data_size")
+  validationScore  Decimal  @map("validation_score") @db.Decimal(5, 4) // 0-1 accuracy/F1
+
+  // Feature importance (JSON)
+  featureImportance String? @map("feature_importance") @db.Text
+
+  // Hyperparameters (JSON)
+  hyperparameters   String?  @db.Text
+
+  // Performance tracking
+  productionAccuracy Decimal? @map("production_accuracy") @db.Decimal(5, 4)
+  predictionCount    Int      @default(0) @map("prediction_count")
+
+  trainedAt        DateTime @map("trained_at")
+  deployedAt       DateTime? @map("deployed_at")
+  retiredAt        DateTime? @map("retired_at")
+
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([modelType, trainedAt])
+  @@map("model_training_logs")
+}
+
+// ==========================================
+// BUSINESS CHAUFFEUR: Integrations & Insights
+// ==========================================
+
+model Integration {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  provider       String   // quickbooks, xero, square, clover, toast, google_business, yelp, freshbooks
+  status         String   @default("disconnected") // disconnected, connected, active, error, expired, revoked
+
+  // OAuth tokens (encrypted in production)
+  accessToken           String? @map("access_token") @db.Text
+  accessTokenEncrypted  String? @map("access_token_encrypted") @db.Text
+  refreshToken          String? @map("refresh_token") @db.Text
+  refreshTokenEncrypted String? @map("refresh_token_encrypted") @db.Text
+  tokenExpiresAt        DateTime? @map("token_expires_at")
+
+  // Provider-specific IDs
+  externalAccountId String? @map("external_account_id")
+
+  // Sync status
+  lastSyncAt     DateTime? @map("last_sync_at")
+  lastSyncStatus String?   @map("last_sync_status") // success, partial, error
+  syncError      String?   @map("sync_error") @db.Text
+  syncCursor     String?   @map("sync_cursor")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([organizationId, provider])
+  @@index([organizationId])
+  @@map("integrations")
+}
+
+model BusinessMetric {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  metricDate     DateTime @map("metric_date") @db.Date
+  period         String   @default("daily") // daily, weekly, monthly
+  source         String   // pos, accounting, reviews, manual
+
+  // Revenue metrics
+  revenue        Decimal? @db.Decimal(15, 2)
+  transactions   Int?
+  avgTicket      Decimal? @map("avg_ticket") @db.Decimal(15, 2)
+
+  // Cost metrics
+  laborCost      Decimal? @map("labor_cost") @db.Decimal(15, 2)
+  inventoryCost  Decimal? @map("inventory_cost") @db.Decimal(15, 2)
+  overheadCost   Decimal? @map("overhead_cost") @db.Decimal(15, 2)
+
+  // Review metrics
+  reviewCount    Int?     @map("review_count")
+  avgRating      Decimal? @map("avg_rating") @db.Decimal(3, 2)
+
+  // Custom metrics stored as JSON
+  customMetrics  String?  @map("custom_metrics") @db.Text
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([organizationId, metricDate, period, source])
+  @@index([organizationId, metricDate])
+  @@map("business_metrics")
+}
+
+model CompetitorAnalysis {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  competitorName String   @map("competitor_name")
+  competitorUrl  String?  @map("competitor_url")
+
+  // Metrics
+  reviewCount    Int?     @map("review_count")
+  avgRating      Decimal? @map("avg_rating") @db.Decimal(3, 2)
+  priceLevel     String?  @map("price_level") // $, $$, $$$, $$$$
+
+  // Analysis
+  strengths      String?  @db.Text // JSON array
+  weaknesses     String?  @db.Text // JSON array
+  opportunities  String?  @db.Text // JSON array
+
+  lastUpdated    DateTime @default(now()) @map("last_updated")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId])
+  @@map("competitor_analyses")
+}
+
+model BusinessInsight {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  category       String   // sales, costs, staffing, marketing, competitors
+  type           String   // trend, alert, opportunity, recommendation
+  title          String
+  description    String   @db.Text
+
+  // AI metadata
+  confidence     Decimal? @db.Decimal(5, 4)
+  dataPoints     String?  @map("data_points") @db.Text // JSON array of supporting data
+
+  // Action
+  actionRequired Boolean  @default(false) @map("action_required")
+  actionTaken    Boolean  @default(false) @map("action_taken")
+  actionDetails  String?  @map("action_details") @db.Text
+
+  // Timing
+  relevantFrom   DateTime? @map("relevant_from")
+  relevantTo     DateTime? @map("relevant_to")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@index([organizationId, category])
+  @@map("business_insights")
+}
+
+// ==========================================
+// CYBERSECURITY: Scans & Vulnerabilities
+// ==========================================
+
+model SecurityScan {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  targetUrl      String   @map("target_url")
+  scanType       String   @default("full") @map("scan_type") // full, ssl, headers, quick
+
+  // Results
+  overallScore   Int?     @map("overall_score") // 0-100
+  status         String   @default("pending") // pending, running, completed, failed
+
+  // Summary counts
+  criticalCount  Int      @default(0) @map("critical_count")
+  highCount      Int      @default(0) @map("high_count")
+  mediumCount    Int      @default(0) @map("medium_count")
+  lowCount       Int      @default(0) @map("low_count")
+
+  // Detailed results as JSON
+  sslDetails     String?  @map("ssl_details") @db.Text
+  headerDetails  String?  @map("header_details") @db.Text
+
+  startedAt      DateTime? @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relations
+  vulnerabilities Vulnerability[]
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@map("security_scans")
+}
+
+model Vulnerability {
+  id          String   @id @default(cuid())
+  scanId      String   @map("scan_id")
+  scan        SecurityScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  category    String   // ssl, headers, cookies, content, configuration
+  severity    String   // critical, high, medium, low, info
+  title       String
+  description String   @db.Text
+
+  // Remediation
+  remediation String?  @db.Text
+  references  String?  @db.Text // JSON array of reference URLs
+
+  // Status
+  status      String   @default("open") // open, acknowledged, fixed, false_positive
+  fixedAt     DateTime? @map("fixed_at")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([scanId])
+  @@index([severity])
+  @@map("vulnerabilities")
+}
+
+// ==========================================
+// AUDIT LOG
+// ==========================================
+
+model AuditLog {
+  id             String  @id @default(cuid())
+  organizationId String? @map("organization_id")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String? @map("user_id")
+  user           User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action         String
+  entityType     String? @map("entity_type")
+  entityId       String? @map("entity_id")
+  oldValues      Json?   @map("old_values")
+  newValues      Json?   @map("new_values")
+  ipAddress      String? @map("ip_address")
+  userAgent      String? @map("user_agent") @db.Text
+
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, createdAt])
+  @@index([userId])
+  @@map("audit_logs")
+}
