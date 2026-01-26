@@ -17,10 +17,17 @@ import {
   Menu,
   X,
   ChevronDown,
+  MessageCircle,
+  PiggyBank,
+  Brain,
+  Calculator,
+  Zap,
 } from "lucide-react";
+import { ChatWidget } from "@/components/chat/chat-widget";
 import { Button } from "@/components/ui/button";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
+import { SubscriptionProvider } from "@/lib/subscription/context";
 
 const navigation = [
   {
@@ -28,6 +35,7 @@ const navigation = [
     icon: TrendingUp,
     children: [
       { name: "Dashboard", href: "/dashboard/cashflow", icon: LayoutDashboard },
+      { name: "Work Invoices", href: "/dashboard/cashflow/action-plan", icon: Zap, highlight: true },
       { name: "Invoices", href: "/dashboard/cashflow/invoices", icon: FileText },
       { name: "Clients", href: "/dashboard/cashflow/clients", icon: Users },
       { name: "Recommendations", href: "/dashboard/cashflow/recommendations", icon: DollarSign },
@@ -38,8 +46,18 @@ const navigation = [
     icon: BarChart3,
     children: [
       { name: "Dashboard", href: "/dashboard/chauffeur", icon: LayoutDashboard },
+      { name: "Unified Intelligence", href: "/dashboard/chauffeur/unified", icon: Brain },
       { name: "Insights", href: "/dashboard/chauffeur/insights", icon: TrendingUp },
+      { name: "Payroll Analytics", href: "/dashboard/payroll", icon: PiggyBank },
+      { name: "ROI Calculator", href: "/dashboard/roi", icon: Calculator },
       { name: "Integrations", href: "/dashboard/chauffeur/integrations", icon: Settings },
+    ],
+  },
+  {
+    name: "AI Assistant",
+    icon: MessageCircle,
+    children: [
+      { name: "Chat", href: "/dashboard/chat", icon: MessageCircle },
     ],
   },
   {
@@ -141,11 +159,18 @@ export default function DashboardLayout({
                       className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
                         pathname === item.href
                           ? "bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-md shadow-blue-500/25"
+                          : (item as { highlight?: boolean }).highlight
+                          ? "bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 hover:from-purple-200 hover:to-pink-200 font-medium"
                           : "text-gray-600 hover:bg-white/60 hover:text-gray-900"
                       }`}
                     >
                       <item.icon className="h-4 w-4" />
                       {item.name}
+                      {(item as { highlight?: boolean }).highlight && pathname !== item.href && (
+                        <span className="ml-auto px-1.5 py-0.5 text-[10px] font-bold bg-purple-500 text-white rounded">
+                          NEW
+                        </span>
+                      )}
                     </Link>
                   ))}
                 </div>
@@ -192,8 +217,15 @@ export default function DashboardLayout({
           </div>
         </header>
 
-        <main className="p-6 lg:p-8">{children}</main>
+        <main className="p-6 lg:p-8">
+          <SubscriptionProvider>
+            {children}
+          </SubscriptionProvider>
+        </main>
       </div>
+
+      {/* Floating Chat Widget */}
+      <ChatWidget position="bottom-right" />
     </div>
   );
 }

@@ -83,6 +83,27 @@ const integrationConfig: Record<string, {
     icon: "Y",
     color: "from-red-500 to-red-700",
   },
+  gusto: {
+    name: "Gusto",
+    description: "Sync employee data and payroll information",
+    category: "Payroll",
+    icon: "G",
+    color: "from-green-400 to-teal-500",
+  },
+  adp: {
+    name: "ADP",
+    description: "Connect ADP payroll data",
+    category: "Payroll",
+    icon: "A",
+    color: "from-red-500 to-red-700",
+  },
+  quickbooks_payroll: {
+    name: "QuickBooks Payroll",
+    description: "Sync QuickBooks payroll data",
+    category: "Payroll",
+    icon: "QP",
+    color: "from-green-500 to-green-700",
+  },
 };
 
 const statusConfig: Record<string, { label: string; color: string; bgColor: string; icon: React.ElementType }> = {
@@ -178,7 +199,7 @@ export default function IntegrationsPage() {
     );
   }
 
-  const categories = ["Accounting", "POS", "Reviews"];
+  const categories = ["Accounting", "POS", "Reviews", "Payroll"];
 
   return (
     <div className="space-y-8">
@@ -202,6 +223,7 @@ export default function IntegrationsPage() {
                 {category === "Accounting" && "Sync financial data from your accounting software"}
                 {category === "POS" && "Connect your point of sale system for sales data"}
                 {category === "Reviews" && "Monitor your online reputation"}
+                {category === "Payroll" && "Connect payroll providers for staffing insights and hiring recommendations"}
               </CardDescription>
             </CardHeader>
             <CardContent>

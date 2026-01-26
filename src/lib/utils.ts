@@ -41,3 +41,8 @@ export function truncate(text: string, length: number): string {
   if (text.length <= length) return text;
   return text.slice(0, length) + "...";
 }
+
+// Generate a unique ID (simple implementation)
+export function generateId(): string {
+  return `${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 9)}`;
+}

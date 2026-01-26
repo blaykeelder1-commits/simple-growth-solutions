@@ -20,6 +20,8 @@ import {
   RefreshCw,
   Zap,
   ArrowUpRight,
+  Users,
+  Brain,
 } from "lucide-react";
 
 interface DashboardStats {
@@ -337,6 +339,53 @@ export default function ChauffeurDashboard() {
                 <h4 className="font-semibold text-gray-900">View Insights</h4>
                 <p className="text-sm text-gray-500 mt-1">AI recommendations</p>
               </div>
+            </Link>
+
+            <Link href="/dashboard/payroll">
+              <div className="quick-action-card group">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-lg shadow-teal-500/25">
+                  <Users className="h-6 w-6 text-white" />
+                </div>
+                <h4 className="font-semibold text-gray-900">Payroll Analytics</h4>
+                <p className="text-sm text-gray-500 mt-1">Staffing insights</p>
+              </div>
+            </Link>
+
+            <Link href="/dashboard/chauffeur/unified">
+              <div className="quick-action-card group">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-lg shadow-indigo-500/25">
+                  <Brain className="h-6 w-6 text-white" />
+                </div>
+                <h4 className="font-semibold text-gray-900">Unified Intelligence</h4>
+                <p className="text-sm text-gray-500 mt-1">Cross-system analysis</p>
+              </div>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Unified Intelligence CTA */}
+      <Card className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white overflow-hidden relative">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cg fill=%22none%22 fill-rule=%22evenodd%22%3E%3Cg fill=%22%23ffffff%22 fill-opacity=%220.1%22%3E%3Cpath d=%22M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-30" />
+        <CardContent className="py-8 relative">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="h-16 w-16 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                <Brain className="h-8 w-8 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold">Unified Business Intelligence</h3>
+                <p className="text-white/80 mt-1">
+                  See how all your data connects with AI-powered cross-system analysis
+                </p>
+              </div>
+            </div>
+            <Link href="/dashboard/chauffeur/unified">
+              <Button className="bg-white text-indigo-600 hover:bg-white/90 shadow-lg whitespace-nowrap">
+                <Brain className="h-4 w-4 mr-2" />
+                View Unified Insights
+                <ArrowUpRight className="h-4 w-4 ml-2" />
+              </Button>
             </Link>
           </div>
         </CardContent>

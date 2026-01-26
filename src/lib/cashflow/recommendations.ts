@@ -1,6 +1,12 @@
 // AI-powered recommendation engine for Cash Flow AI
+// Uses "could do" framing to avoid advisory liability
 
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import {
+  getDisclaimer,
+  getConfidenceInfo,
+  SUGGESTIVE_LANGUAGE,
+} from "@/lib/legal/disclaimers";
 
 export interface RecommendationInput {
   clientName: string;
@@ -28,9 +34,27 @@ export interface Recommendation {
   actions: string[];
   reasoning: string;
   confidence: number;
+  // Legal compliance fields
+  disclaimer: string;
+  confidenceLevel: "high" | "medium" | "low";
+  isEducational: boolean;
+}
+
+// Helper to create recommendation with legal compliance fields
+function createRecommendation(
+  base: Omit<Recommendation, "disclaimer" | "confidenceLevel" | "isEducational">
+): Recommendation {
+  const confidenceInfo = getConfidenceInfo(base.confidence);
+  return {
+    ...base,
+    disclaimer: getDisclaimer("recommendation", "short"),
+    confidenceLevel: confidenceInfo.level,
+    isEducational: true,
+  };
 }
 
 // Rule-based recommendations (fallback)
+// Uses "could" language to frame suggestions as educational, not prescriptive
 export function generateRuleBasedRecommendations(
   input: RecommendationInput
 ): Recommendation[] {
@@ -39,160 +63,194 @@ export function generateRuleBasedRecommendations(
   // Overdue invoice recommendations
   if (input.daysPastDue > 0) {
     if (input.daysPastDue <= 7) {
-      recommendations.push({
-        type: "collection_strategy",
-        title: "Send friendly payment reminder",
-        description: `Invoice for ${input.clientName} is ${input.daysPastDue} days past due. A friendly reminder typically resolves early-stage overdue invoices.`,
-        priority: "medium",
-        actions: [
-          "Send automated email reminder",
-          "Offer online payment link",
-          "Confirm invoice receipt",
-        ],
-        reasoning: "Early reminders have highest conversion rates",
-        confidence: 0.85,
-      });
+      recommendations.push(
+        createRecommendation({
+          type: "collection_strategy",
+          title: "Consider sending a friendly payment reminder",
+          description: `Invoice for ${input.clientName} is ${input.daysPastDue} days past due. You could consider a friendly reminder, which typically resolves early-stage overdue invoices.`,
+          priority: "medium",
+          actions: [
+            "Consider sending an automated email reminder",
+            "You could offer an online payment link",
+            "Optionally confirm invoice receipt",
+          ],
+          reasoning:
+            "Based on industry patterns, early reminders tend to have higher conversion rates",
+          confidence: 0.85,
+        })
+      );
     } else if (input.daysPastDue <= 30) {
-      recommendations.push({
-        type: "collection_strategy",
-        title: "Escalate collection efforts",
-        description: `Invoice for ${input.clientName} is ${input.daysPastDue} days overdue. Consider phone follow-up.`,
-        priority: "high",
-        actions: [
-          "Make phone call to accounts payable",
-          "Send formal collection notice",
-          "Offer payment plan if needed",
-        ],
-        reasoning: "Phone calls increase collection rates by 50% for 2-4 week overdue invoices",
-        confidence: 0.8,
-      });
+      recommendations.push(
+        createRecommendation({
+          type: "collection_strategy",
+          title: "Consider escalating collection efforts",
+          description: `Invoice for ${input.clientName} is ${input.daysPastDue} days overdue. You might want to consider phone follow-up.`,
+          priority: "high",
+          actions: [
+            "Consider making a phone call to accounts payable",
+            "You could send a formal collection notice",
+            "Optionally offer a payment plan if appropriate",
+          ],
+          reasoning:
+            "Data suggests phone calls could increase collection rates for 2-4 week overdue invoices",
+          confidence: 0.8,
+        })
+      );
     } else {
-      recommendations.push({
-        type: "collection_strategy",
-        title: "Final notice and escalation review",
-        description: `Invoice for ${input.clientName} is significantly overdue (${input.daysPastDue} days). Review for escalation.`,
-        priority: "critical",
-        actions: [
-          "Send final notice letter",
-          "Review for collection agency referral",
-          "Consider legal options",
-          "Document all communication attempts",
-        ],
-        reasoning: "Long-overdue invoices require formal escalation procedures",
-        confidence: 0.75,
-      });
+      recommendations.push(
+        createRecommendation({
+          type: "collection_strategy",
+          title: "Consider final notice and escalation review",
+          description: `Invoice for ${input.clientName} is significantly overdue (${input.daysPastDue} days). You could review escalation options.`,
+          priority: "critical",
+          actions: [
+            "Consider sending a final notice letter",
+            "You could review collection agency options",
+            "Consult with a professional about potential legal options",
+            "Consider documenting all communication attempts",
+          ],
+          reasoning:
+            "Long-overdue invoices often benefit from formal escalation procedures",
+          confidence: 0.75,
+        })
+      );
     }
   }
 
   // Client risk recommendations
   if (input.clientScore < 40) {
-    recommendations.push({
-      type: "client_risk",
-      title: "Review payment terms for high-risk client",
-      description: `${input.clientName} has a low payment score (${input.clientScore}). Consider requiring upfront payment or shorter terms.`,
-      priority: "high",
-      actions: [
-        "Require deposit for new work",
-        "Shorten payment terms to Net 15",
-        "Consider credit limit",
-        "Document risk assessment",
-      ],
-      reasoning: `Client has ${Math.round(input.paymentHistory.latePaymentRate * 100)}% late payment rate`,
-      confidence: 0.82,
-    });
+    recommendations.push(
+      createRecommendation({
+        type: "client_risk",
+        title: "Consider reviewing payment terms for this client",
+        description: `${input.clientName} has a lower payment score (${input.clientScore}). You could consider requiring upfront payment or shorter terms for future work.`,
+        priority: "high",
+        actions: [
+          "Consider requiring a deposit for new work",
+          "You could consider shortening payment terms",
+          "Optionally review credit limits",
+          "Consider documenting your risk assessment",
+        ],
+        reasoning: `Client's historical late payment rate is approximately ${Math.round(input.paymentHistory.latePaymentRate * 100)}%`,
+        confidence: 0.82,
+      })
+    );
   }
 
   // Payment terms recommendations
   if (input.paymentHistory.avgDaysToPayment > 45) {
-    recommendations.push({
-      type: "payment_terms",
-      title: "Offer early payment discount",
-      description: `${input.clientName} typically pays after ${Math.round(input.paymentHistory.avgDaysToPayment)} days. An early payment incentive could improve cash flow.`,
-      priority: "medium",
-      actions: [
-        "Offer 2% discount for payment within 10 days",
-        "Add early payment terms to next invoice",
-        "Communicate discount opportunity",
-      ],
-      reasoning: "Early payment discounts can reduce DSO by 15-20 days",
-      confidence: 0.7,
-    });
+    recommendations.push(
+      createRecommendation({
+        type: "payment_terms",
+        title: "Consider offering early payment incentives",
+        description: `${input.clientName} typically pays after ${Math.round(input.paymentHistory.avgDaysToPayment)} days. An early payment incentive could potentially improve cash flow.`,
+        priority: "medium",
+        actions: [
+          "Consider offering a small discount for early payment",
+          "You could add early payment terms to future invoices",
+          "Optionally communicate available payment incentives",
+        ],
+        reasoning:
+          "Early payment discounts have been shown to potentially reduce payment times",
+        confidence: 0.7,
+      })
+    );
   }
 
   // Cash flow recommendations for large outstanding amounts
-  if (input.totalOutstanding > 50000 * 100) { // $50,000 in cents
-    recommendations.push({
-      type: "cash_flow",
-      title: "Address concentration risk",
-      description: `${input.clientName} has significant outstanding balance ($${(input.totalOutstanding / 100).toLocaleString()}). Monitor closely.`,
-      priority: "high",
-      actions: [
-        "Set up payment milestone plan",
-        "Increase collection frequency",
-        "Review client credit limit",
-        "Consider invoice factoring",
-      ],
-      reasoning: "Large outstanding balances create cash flow risk",
-      confidence: 0.78,
-    });
+  if (input.totalOutstanding > 50000 * 100) {
+    // $50,000 in cents
+    recommendations.push(
+      createRecommendation({
+        type: "cash_flow",
+        title: "Consider addressing concentration risk",
+        description: `${input.clientName} has a significant outstanding balance ($${(input.totalOutstanding / 100).toLocaleString()}). You could consider monitoring this closely.`,
+        priority: "high",
+        actions: [
+          "Consider setting up a payment milestone plan",
+          "You could increase collection touchpoint frequency",
+          "Optionally review client credit limits",
+          "Consider consulting a financial advisor about invoice factoring",
+        ],
+        reasoning:
+          "Large outstanding balances from single clients can create cash flow concentration risk",
+        confidence: 0.78,
+      })
+    );
   }
 
   return recommendations;
 }
 
-// AI-enhanced recommendations using Claude
+// AI-enhanced recommendations using Gemini
+// Uses "could do" framing for legal compliance - suggestions are educational, not advisory
 export async function generateAIRecommendations(
   input: RecommendationInput
 ): Promise<Recommendation[]> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GOOGLE_AI_API_KEY;
 
   if (!apiKey) {
     return generateRuleBasedRecommendations(input);
   }
 
   try {
-    const anthropic = new Anthropic({ apiKey });
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    const prompt = `You are a cash flow management AI assistant. Analyze this client situation and provide actionable recommendations.
+    const prompt = `You are an educational cash flow analysis assistant helping business owners understand their data patterns. Your role is to present possibilities and educational insights, NOT to give directive advice.
 
-Client: ${input.clientName}
-Payment Score: ${input.clientScore}/100
-Current Invoice: $${(input.invoiceAmount / 100).toFixed(2)} (${input.daysPastDue} days past due)
-Total Outstanding: $${(input.totalOutstanding / 100).toFixed(2)}
-Average Days to Payment: ${Math.round(input.paymentHistory.avgDaysToPayment)}
-Late Payment Rate: ${Math.round(input.paymentHistory.latePaymentRate * 100)}%
-Total Paid Historically: $${(input.paymentHistory.totalPaid / 100).toFixed(2)}
+CRITICAL LANGUAGE REQUIREMENTS:
+- ALWAYS use "could", "might", "consider", "potential" instead of "should", "must", "need to", "have to"
+- Frame all suggestions as possibilities: "You could consider..." not "You should..."
+- Use hedging language: "Based on the data, one approach could be..."
+- Include confidence indicators for each recommendation
+- Never give directive financial or legal advice
+- Remind users to consult professionals for major decisions
 
-Based on this data, provide 2-3 specific, actionable recommendations in JSON format:
+Client Data:
+- Client: ${input.clientName}
+- Payment Score: ${input.clientScore}/100
+- Current Invoice: $${(input.invoiceAmount / 100).toFixed(2)} (${input.daysPastDue} days past due)
+- Total Outstanding: $${(input.totalOutstanding / 100).toFixed(2)}
+- Average Days to Payment: ${Math.round(input.paymentHistory.avgDaysToPayment)}
+- Late Payment Rate: ${Math.round(input.paymentHistory.latePaymentRate * 100)}%
+- Total Paid Historically: $${(input.paymentHistory.totalPaid / 100).toFixed(2)}
+
+Based on this data, provide 2-3 educational insights as possibilities to consider. Format as JSON:
 {
   "recommendations": [
     {
       "type": "collection_strategy" | "payment_terms" | "client_risk" | "cash_flow",
-      "title": "Brief title",
-      "description": "Detailed description",
+      "title": "Brief title using 'Consider...' or 'Potential...' framing",
+      "description": "Description using 'could', 'might', 'potential' language. Never directive.",
       "priority": "low" | "medium" | "high" | "critical",
-      "actions": ["Action 1", "Action 2", "Action 3"],
-      "reasoning": "Why this recommendation",
+      "actions": ["Consider action 1", "You could action 2", "Optionally action 3"],
+      "reasoning": "Data-based reasoning for why this could be relevant",
       "confidence": 0.0-1.0
     }
   ]
 }
 
-Focus on practical, business-appropriate advice. Be specific about timing and amounts where relevant.`;
+Remember: These are educational insights showing POSSIBILITIES, not advice. The business owner makes their own decisions. Return ONLY valid JSON, no other text.`;
 
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1024,
-      messages: [{ role: "user", content: prompt }],
-    });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
 
-    const content = response.content[0];
-    if (content.type !== "text") {
-      return generateRuleBasedRecommendations(input);
+    // Clean the response - remove markdown code blocks if present
+    let jsonText = text.trim();
+    if (jsonText.startsWith("```json")) {
+      jsonText = jsonText.slice(7);
+    } else if (jsonText.startsWith("```")) {
+      jsonText = jsonText.slice(3);
     }
+    if (jsonText.endsWith("```")) {
+      jsonText = jsonText.slice(0, -3);
+    }
+    jsonText = jsonText.trim();
 
     // Extract JSON from response
-    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+    const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       console.warn("[CashFlow AI] Failed to extract JSON from AI response");
       return generateRuleBasedRecommendations(input);
@@ -202,12 +260,19 @@ Focus on practical, business-appropriate advice. Be specific about timing and am
 
     // Validate the parsed response structure
     if (!parsed.recommendations || !Array.isArray(parsed.recommendations)) {
-      console.warn("[CashFlow AI] Invalid AI response structure - missing recommendations array");
+      console.warn(
+        "[CashFlow AI] Invalid AI response structure - missing recommendations array"
+      );
       return generateRuleBasedRecommendations(input);
     }
 
     // Validate and sanitize each recommendation
-    const validTypes = ["collection_strategy", "payment_terms", "client_risk", "cash_flow"];
+    const validTypes = [
+      "collection_strategy",
+      "payment_terms",
+      "client_risk",
+      "cash_flow",
+    ];
     const validPriorities = ["low", "medium", "high", "critical"];
 
     const validatedRecommendations: Recommendation[] = parsed.recommendations
@@ -224,22 +289,31 @@ Focus on practical, business-appropriate advice. Be specific about timing and am
           typeof r.confidence === "number"
         );
       })
-      .map((rec: Record<string, unknown>) => ({
-        type: validTypes.includes(rec.type as string)
-          ? (rec.type as Recommendation["type"])
-          : "collection_strategy",
-        title: String(rec.title).slice(0, 200), // Limit title length
-        description: String(rec.description).slice(0, 1000), // Limit description length
-        priority: validPriorities.includes(rec.priority as string)
-          ? (rec.priority as Recommendation["priority"])
-          : "medium",
-        actions: (rec.actions as unknown[])
-          .filter((a): a is string => typeof a === "string")
-          .slice(0, 10) // Limit actions count
-          .map((a) => a.slice(0, 200)), // Limit action length
-        reasoning: String(rec.reasoning).slice(0, 500),
-        confidence: Math.min(Math.max(Number(rec.confidence), 0), 1),
-      }));
+      .map((rec: Record<string, unknown>) => {
+        const confidence = Math.min(Math.max(Number(rec.confidence), 0), 1);
+        const confidenceInfo = getConfidenceInfo(confidence);
+
+        return {
+          type: validTypes.includes(rec.type as string)
+            ? (rec.type as Recommendation["type"])
+            : "collection_strategy",
+          title: String(rec.title).slice(0, 200),
+          description: String(rec.description).slice(0, 1000),
+          priority: validPriorities.includes(rec.priority as string)
+            ? (rec.priority as Recommendation["priority"])
+            : "medium",
+          actions: (rec.actions as unknown[])
+            .filter((a): a is string => typeof a === "string")
+            .slice(0, 10)
+            .map((a) => a.slice(0, 200)),
+          reasoning: String(rec.reasoning).slice(0, 500),
+          confidence,
+          // Add legal compliance fields
+          disclaimer: getDisclaimer("recommendation", "short"),
+          confidenceLevel: confidenceInfo.level,
+          isEducational: true,
+        };
+      });
 
     if (validatedRecommendations.length === 0) {
       console.warn("[CashFlow AI] No valid recommendations after validation");
@@ -252,3 +326,6 @@ Focus on practical, business-appropriate advice. Be specific about timing and am
     return generateRuleBasedRecommendations(input);
   }
 }
+
+// Export for use in legal compliance checks
+export { SUGGESTIVE_LANGUAGE };

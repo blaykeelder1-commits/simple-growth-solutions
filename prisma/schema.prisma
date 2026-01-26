@@ -125,12 +125,56 @@ model Organization {
   // Cybersecurity
   securityScans      SecurityScan[]
 
+  // HR & Payroll
+  employees          Employee[]
+  payrollSnapshots   PayrollSnapshot[]
+  hiringRecommendations HiringRecommendation[]
+
   // Analytics
   communicationEffectiveness CommunicationEffectiveness[]
   paymentMethodStats PaymentMethodStats[]
   auditLogs          AuditLog[]
 
+  // AI Chat
+  chatMessages       ChatMessage[]
+
+  // Bank Accounts (Plaid)
+  plaidItems         PlaidItem[]
+  bankAccounts       BankAccount[]
+  bankTransactions   BankTransaction[]
+
+  // Settings
+  settings           OrganizationSettings?
+
   @@map("organizations")
+}
+
+// Organization Settings for Business Intelligence
+model OrganizationSettings {
+  id              String   @id @default(cuid())
+  organizationId  String   @unique @map("organization_id")
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Industry classification
+  industryCategory String?  @map("industry_category") // services, food_beverage, automotive, etc.
+  industrySubtype  String?  @map("industry_subtype") // pet_grooming, hair_salon, fast_casual, auto_repair
+
+  // Location for regional benchmarking
+  region           String?  // "Austin, TX", "CA", zip code, etc.
+
+  // Business profile
+  businessSize     String?  @map("business_size") // small, medium, large
+  yearsInBusiness  Int?     @map("years_in_business")
+
+  // Preferences
+  notificationEmail    Boolean @default(true) @map("notification_email")
+  weeklyDigest         Boolean @default(true) @map("weekly_digest")
+  proactiveInsights    Boolean @default(true) @map("proactive_insights")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("organization_settings")
 }
 
 // ==========================================
@@ -1107,6 +1151,163 @@ model Vulnerability {
 }
 
 // ==========================================
+// HR & PAYROLL
+// ==========================================
+
+model Employee {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Basic info
+  name           String
+  email          String?
+  phone          String?
+  role           String   // job title
+  department     String?
+  employeeType   String   @default("full_time") @map("employee_type") // full_time, part_time, contractor
+
+  // Employment details
+  hireDate       DateTime @map("hire_date") @db.Date
+  terminationDate DateTime? @map("termination_date") @db.Date
+  status         String   @default("active") // active, on_leave, terminated
+
+  // Compensation (stored in cents for precision)
+  salary         Decimal? @db.Decimal(15, 2) // Annual salary in cents
+  hourlyRate     Decimal? @map("hourly_rate") @db.Decimal(10, 2) // Hourly rate in cents
+  payFrequency   String   @default("biweekly") @map("pay_frequency") // weekly, biweekly, semimonthly, monthly
+
+  // Performance metrics
+  performanceScore Int?   @map("performance_score") // 0-100
+  lastReviewDate   DateTime? @map("last_review_date") @db.Date
+
+  // External IDs for integrations
+  gustoId        String?  @map("gusto_id")
+  adpId          String?  @map("adp_id")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  payrollEntries PayrollEntry[]
+
+  @@unique([organizationId, gustoId])
+  @@index([organizationId])
+  @@index([organizationId, department])
+  @@map("employees")
+}
+
+model PayrollSnapshot {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Period
+  periodStart    DateTime @map("period_start") @db.Date
+  periodEnd      DateTime @map("period_end") @db.Date
+  payDate        DateTime @map("pay_date") @db.Date
+
+  // Totals (in cents)
+  totalGrossPay     Decimal @map("total_gross_pay") @db.Decimal(15, 2)
+  totalNetPay       Decimal @map("total_net_pay") @db.Decimal(15, 2)
+  totalTaxWithholdings Decimal @map("total_tax_withholdings") @db.Decimal(15, 2)
+  totalBenefitsCost Decimal @default(0) @map("total_benefits_cost") @db.Decimal(15, 2)
+  totalOvertimeCost Decimal @default(0) @map("total_overtime_cost") @db.Decimal(15, 2)
+  employerTaxes     Decimal @default(0) @map("employer_taxes") @db.Decimal(15, 2)
+
+  // Headcount
+  employeeCount     Int     @map("employee_count")
+  fullTimeCount     Int     @default(0) @map("full_time_count")
+  partTimeCount     Int     @default(0) @map("part_time_count")
+  contractorCount   Int     @default(0) @map("contractor_count")
+
+  // Department breakdown (JSON)
+  departmentBreakdown String? @map("department_breakdown") @db.Text
+
+  // External IDs
+  gustoPayrollId    String? @map("gusto_payroll_id")
+
+  // Source
+  source         String   @default("manual") // gusto, adp, manual, csv
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  payrollEntries PayrollEntry[]
+
+  @@unique([organizationId, periodStart, periodEnd])
+  @@index([organizationId, payDate])
+  @@map("payroll_snapshots")
+}
+
+model PayrollEntry {
+  id             String   @id @default(cuid())
+  snapshotId     String   @map("snapshot_id")
+  snapshot       PayrollSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  employeeId     String?  @map("employee_id")
+  employee       Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  // Hours
+  regularHours   Decimal  @default(0) @map("regular_hours") @db.Decimal(6, 2)
+  overtimeHours  Decimal  @default(0) @map("overtime_hours") @db.Decimal(6, 2)
+  ptoHours       Decimal  @default(0) @map("pto_hours") @db.Decimal(6, 2)
+
+  // Pay (in cents)
+  grossPay       Decimal  @map("gross_pay") @db.Decimal(15, 2)
+  netPay         Decimal  @map("net_pay") @db.Decimal(15, 2)
+  taxWithholdings Decimal @map("tax_withholdings") @db.Decimal(15, 2)
+  benefitsDeduction Decimal @default(0) @map("benefits_deduction") @db.Decimal(15, 2)
+  otherDeductions Decimal @default(0) @map("other_deductions") @db.Decimal(15, 2)
+
+  // Metadata
+  department     String?
+
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([snapshotId])
+  @@index([employeeId])
+  @@map("payroll_entries")
+}
+
+model HiringRecommendation {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Recommendation details
+  role           String   // Suggested role to hire
+  department     String?
+  reasoning      String   @db.Text // AI explanation using "could" language
+
+  // Financial projections
+  projectedROI       Decimal? @map("projected_roi") @db.Decimal(5, 2) // e.g., 1.5 = 150% ROI
+  industrySalaryLow  Decimal? @map("industry_salary_low") @db.Decimal(15, 2)
+  industrySalaryHigh Decimal? @map("industry_salary_high") @db.Decimal(15, 2)
+  suggestedSalary    Decimal? @map("suggested_salary") @db.Decimal(15, 2)
+
+  // Timing
+  suggestedTimeframe String? @map("suggested_timeframe") // "Q1 2024", "next 3 months", etc.
+  urgency            String  @default("informational") // informational, consider, recommended
+
+  // AI metadata
+  confidence     Decimal? @db.Decimal(5, 4) // 0.0000 - 1.0000
+  dataFactors    String?  @map("data_factors") @db.Text // JSON of factors considered
+
+  // Status
+  status         String   @default("active") // active, dismissed, actioned
+  actionedAt     DateTime? @map("actioned_at")
+  actionNotes    String?  @map("action_notes") @db.Text
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@map("hiring_recommendations")
+}
+
+// ==========================================
 // AUDIT LOG
 // ==========================================
 
@@ -1130,4 +1331,127 @@ model AuditLog {
   @@index([organizationId, createdAt])
   @@index([userId])
   @@map("audit_logs")
+}
+
+// ==========================================
+// PLAID: Bank Account Integration
+// ==========================================
+
+model PlaidItem {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  accessToken    String   @map("access_token") @db.Text // Encrypted in production
+  itemId         String   @map("item_id")
+  institutionId  String?  @map("institution_id")
+  institutionName String? @map("institution_name")
+  institutionLogo String? @map("institution_logo") @db.Text
+
+  status         String   @default("active") // active, needs_update, error
+  errorCode      String?  @map("error_code")
+  errorMessage   String?  @map("error_message") @db.Text
+
+  lastSynced     DateTime? @map("last_synced")
+  consentExpires DateTime? @map("consent_expires")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  bankAccounts   BankAccount[]
+
+  @@unique([organizationId, itemId])
+  @@index([organizationId])
+  @@map("plaid_items")
+}
+
+model BankAccount {
+  id               String   @id @default(cuid())
+  organizationId   String   @map("organization_id")
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plaidItemId      String?  @map("plaid_item_id")
+  plaidItem        PlaidItem? @relation(fields: [plaidItemId], references: [id], onDelete: SetNull)
+
+  plaidAccountId   String   @map("plaid_account_id")
+  name             String
+  officialName     String?  @map("official_name")
+  type             String   // depository, credit, loan, investment, other
+  subtype          String?
+  mask             String?  // Last 4 digits
+
+  availableBalance Int?     @map("available_balance") // In cents
+  currentBalance   Int      @map("current_balance") // In cents
+  limitAmount      Int?     @map("limit_amount") // For credit accounts, in cents
+  currency         String   @default("USD")
+
+  isPrimary        Boolean  @default(false) @map("is_primary")
+  isHidden         Boolean  @default(false) @map("is_hidden")
+
+  lastSynced       DateTime? @map("last_synced")
+
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  transactions     BankTransaction[]
+
+  @@unique([organizationId, plaidAccountId])
+  @@index([organizationId])
+  @@map("bank_accounts")
+}
+
+model BankTransaction {
+  id                   String   @id @default(cuid())
+  organizationId       String   @map("organization_id")
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bankAccountId        String?  @map("bank_account_id")
+  bankAccount          BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+
+  plaidTransactionId   String   @map("plaid_transaction_id")
+  plaidAccountId       String   @map("plaid_account_id")
+
+  amount               Int      // In cents. Positive = debit (out), Negative = credit (in)
+  date                 DateTime
+  name                 String
+  merchantName         String?  @map("merchant_name")
+  category             String[] // Plaid categories
+  pending              Boolean  @default(false)
+  paymentChannel       String?  @map("payment_channel") // online, in store, other
+
+  // User customization
+  customCategory       String?  @map("custom_category")
+  notes                String?  @db.Text
+  isRecurring          Boolean  @default(false) @map("is_recurring")
+  isExcluded           Boolean  @default(false) @map("is_excluded") // Exclude from analytics
+
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@unique([organizationId, plaidTransactionId])
+  @@index([organizationId, date])
+  @@index([bankAccountId, date])
+  @@map("bank_transactions")
+}
+
+// ==========================================
+// AI CHAT: Conversation History
+// ==========================================
+
+model ChatMessage {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String   @map("user_id")
+
+  role           String   // "user" or "assistant"
+  content        String   @db.Text
+
+  // Metadata
+  platform       String?  // "cashflow_ai", "business_chauffeur", "unified"
+  contextUsed    Json?    @map("context_used") // Summary of data context used
+
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, createdAt])
+  @@index([userId, createdAt])
+  @@map("chat_messages")
 }

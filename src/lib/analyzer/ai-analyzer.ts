@@ -1,8 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || "");
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 export interface AIAnalysisResult {
   overallAssessment: string;
@@ -68,24 +67,24 @@ Analyze this website and provide your analysis in the following JSON format:
 Focus on issues that would genuinely help the business owner understand why their current website is costing them money or customers. Be specific and actionable. Return ONLY valid JSON, no other text.`;
 
   try {
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 2000,
-      messages: [
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-    });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
 
-    const content = response.content[0];
-    if (content.type !== "text") {
-      throw new Error("Unexpected response type");
+    // Clean the response - remove markdown code blocks if present
+    let jsonText = text.trim();
+    if (jsonText.startsWith("```json")) {
+      jsonText = jsonText.slice(7);
+    } else if (jsonText.startsWith("```")) {
+      jsonText = jsonText.slice(3);
     }
+    if (jsonText.endsWith("```")) {
+      jsonText = jsonText.slice(0, -3);
+    }
+    jsonText = jsonText.trim();
 
     // Parse the JSON response
-    const analysis = JSON.parse(content.text) as AIAnalysisResult;
+    const analysis = JSON.parse(jsonText) as AIAnalysisResult;
     return analysis;
   } catch {
     // Return a fallback analysis if AI fails

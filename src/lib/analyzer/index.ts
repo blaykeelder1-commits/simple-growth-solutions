@@ -84,7 +84,7 @@ export async function analyzeWebsite(url: string): Promise<AnalysisResult> {
 
   // Run AI analysis for deeper insights
   let aiAnalysis: AIAnalysisResult | undefined;
-  if (process.env.ANTHROPIC_API_KEY && html) {
+  if (process.env.GOOGLE_AI_API_KEY && html) {
     try {
       aiAnalysis = await analyzeWithAI(normalizedUrl, html, {
         ssl: checks.ssl,
