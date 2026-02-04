@@ -25,7 +25,7 @@ export async function POST() {
       plan,
     });
   } catch (error) {
-    logger.error({ err: error }, Analysis error:', error);
+    logger.error({ err: error }, 'Analysis error:', error);
     return NextResponse.json(
       { error: 'Failed to analyze invoices' },
       { status: 500 }
@@ -54,7 +54,7 @@ export async function GET() {
       plan: pendingPlan,
     });
   } catch (error) {
-    logger.error({ err: error }, Get pending plan error:', error);
+    logger.error({ err: error }, 'Get pending plan error:', error);
     return NextResponse.json(
       { error: 'Failed to get pending plan' },
       { status: 500 }
