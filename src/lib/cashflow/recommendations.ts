@@ -7,6 +7,7 @@ import {
   getConfidenceInfo,
   SUGGESTIVE_LANGUAGE,
 } from "@/lib/legal/disclaimers";
+import { cashflowLogger as logger } from "@/lib/logger";
 
 export interface RecommendationInput {
   clientName: string;
@@ -252,7 +253,7 @@ Remember: These are educational insights showing POSSIBILITIES, not advice. The 
     // Extract JSON from response
     const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.warn("[CashFlow AI] Failed to extract JSON from AI response");
+      logger.warn("[CashFlow AI] Failed to extract JSON from AI response");
       return generateRuleBasedRecommendations(input);
     }
 
@@ -316,13 +317,13 @@ Remember: These are educational insights showing POSSIBILITIES, not advice. The 
       });
 
     if (validatedRecommendations.length === 0) {
-      console.warn("[CashFlow AI] No valid recommendations after validation");
+      logger.warn("[CashFlow AI] No valid recommendations after validation");
       return generateRuleBasedRecommendations(input);
     }
 
     return validatedRecommendations;
   } catch (error) {
-    console.error("[CashFlow AI] Error generating AI recommendations:", error);
+    logger.error("[CashFlow AI] Error generating AI recommendations:", error);
     return generateRuleBasedRecommendations(input);
   }
 }
