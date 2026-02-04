@@ -343,7 +343,7 @@ export async function syncPaymentsFromQuickBooks(organizationId: string): Promis
     let matched = 0;
 
     for (const payment of payments) {
-      const amount = Math.round(parseFloat(payment.TotalAmt) * 100); // Convert to cents
+      const _amount = Math.round(parseFloat(payment.TotalAmt) * 100); // Convert to cents (used for logging)
       const paymentDate = new Date(payment.TxnDate);
 
       // Try to match by QuickBooks invoice reference
