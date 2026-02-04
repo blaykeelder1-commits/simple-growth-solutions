@@ -323,7 +323,7 @@ Remember: These are educational insights showing POSSIBILITIES, not advice. The 
 
     return validatedRecommendations;
   } catch (error) {
-    logger.error("[CashFlow AI] Error generating AI recommendations:", error);
+    logger.error({ err: error }, "[CashFlow AI] Error generating AI recommendations");
     return generateRuleBasedRecommendations(input);
   }
 }

@@ -149,7 +149,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    logger.error('[Payroll API] Create error:', error);
+    logger.error({ err: error }, '[Payroll API] Create error');
     return NextResponse.json(
       { error: 'Failed to create payroll entry' },
       { status: 500 }
@@ -225,7 +225,7 @@ export async function GET() {
       employeeCount,
     });
   } catch (error) {
-    logger.error('[Payroll API] Get error:', error);
+    logger.error({ err: error }, '[Payroll API] Get error');
     return NextResponse.json(
       { error: 'Failed to fetch payroll data' },
       { status: 500 }

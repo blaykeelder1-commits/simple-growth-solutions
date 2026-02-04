@@ -63,26 +63,28 @@ export async function GET() {
         where: {
           invoice: { clientId: client.id },
         },
-        orderBy: { paymentDate: 'desc' },
+        orderBy: { paidAt: 'desc' },
         take: 20,
       });
 
       const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount) * 100, 0);
 
       // Calculate late payment rate
-      const paidInvoices = await prisma.invoice.count({
+      const paidInvoicesData = await prisma.invoice.findMany({
         where: {
           clientId: client.id,
           status: 'paid',
+          paidDate: { not: null },
+        },
+        select: {
+          paidDate: true,
+          dueDate: true,
         },
       });
-      const lateInvoices = await prisma.invoice.count({
-        where: {
-          clientId: client.id,
-          status: 'paid',
-          paidAt: { gt: prisma.raw('due_date') },
-        },
-      });
+      const paidInvoices = paidInvoicesData.length;
+      const lateInvoices = paidInvoicesData.filter(
+        inv => inv.paidDate && inv.paidDate > inv.dueDate
+      ).length;
       const latePaymentRate = paidInvoices > 0 ? lateInvoices / paidInvoices : 0;
 
       // Build recommendation input
@@ -126,7 +128,7 @@ export async function GET() {
       totalRecommendations: allRecommendations.reduce((sum, r) => sum + r.recommendations.length, 0),
     });
   } catch (error) {
-    logger.error('[Recommendations API] Error:', error);
+    logger.error({ err: error }, '[Recommendations API] Error');
     return NextResponse.json(
       { error: 'Failed to generate recommendations' },
       { status: 500 }

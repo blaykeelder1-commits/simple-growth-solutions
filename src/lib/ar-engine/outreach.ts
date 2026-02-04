@@ -78,7 +78,7 @@ export async function generatePaymentLink(
       id: paymentLink.id,
     };
   } catch (error) {
-    logger.error('[AR Engine] Failed to create payment link:', error);
+    logger.error({ err: error }, '[AR Engine] Failed to create payment link');
     throw error;
   }
 }
@@ -138,7 +138,7 @@ export async function sendOutreachEmail(
 
     return { success: true, messageId: result.id };
   } catch (error) {
-    logger.error('[AR Engine] Failed to send email:', error);
+    logger.error({ err: error }, '[AR Engine] Failed to send email');
     return { success: false, error: String(error) };
   }
 }
@@ -213,7 +213,7 @@ export async function sendOutreachSMS(
 
     return { success: true, messageId: message.sid };
   } catch (error) {
-    logger.error('[AR Engine] Failed to send SMS:', error);
+    logger.error({ err: error }, '[AR Engine] Failed to send SMS');
     return { success: false, error: String(error) };
   }
 }
@@ -315,7 +315,7 @@ export async function executeAction(
         return { success: false, error: 'Unknown action type' };
     }
   } catch (error) {
-    logger.error('[AR Engine] Failed to execute action:', error);
+    logger.error({ err: error }, '[AR Engine] Failed to execute action');
     return { success: false, error: String(error) };
   }
 }

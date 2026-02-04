@@ -329,7 +329,7 @@ export async function syncPaymentsFromQuickBooks(organizationId: string): Promis
 
     if (!response.ok) {
       const errorText = await response.text();
-      logger.error('[AR Engine] QuickBooks API error:', errorText);
+      logger.error({ errorText }, '[AR Engine] QuickBooks API error');
       await prisma.integration.update({
         where: { id: integration.id },
         data: { syncError: `API error: ${response.status}`, lastSyncStatus: 'error' },
@@ -407,7 +407,7 @@ export async function syncPaymentsFromQuickBooks(organizationId: string): Promis
 
     return matched;
   } catch (error) {
-    logger.error('[AR Engine] QuickBooks sync error:', error);
+    logger.error({ err: error }, '[AR Engine] QuickBooks sync error');
     await prisma.integration.update({
       where: { id: integration.id },
       data: { syncError: String(error), lastSyncStatus: 'error' },
@@ -472,7 +472,7 @@ async function refreshQuickBooksToken(integrationId: string): Promise<boolean> {
 
     return true;
   } catch (error) {
-    logger.error('[AR Engine] Token refresh error:', error);
+    logger.error({ err: error }, '[AR Engine] Token refresh error');
     return false;
   }
 }
