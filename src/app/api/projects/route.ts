@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/options";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { withAuth } from "@/lib/api/with-auth";
+import { apiError } from "@/lib/api/errors";
 import { z } from "zod";
 
 const createProjectSchema = z.object({
@@ -19,72 +19,60 @@ const createProjectSchema = z.object({
 });
 
 // GET /api/projects - List projects for current user's organization
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function GET(_request: NextRequest) {
+export const GET = withAuth(async (req, _ctx, session) => {
   try {
-    const session = await getServerSession(authOptions);
+    const { searchParams } = new URL(req.url);
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
+    const limit = Math.min(Math.max(1, parseInt(searchParams.get("limit") || "50")), 100);
+    const skip = (page - 1) * limit;
 
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
-    // Get the user with organization
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      include: { organization: true },
     });
 
     if (!user?.organizationId) {
-      // User has no organization - return empty projects
-      return NextResponse.json({ success: true, projects: [] });
+      return NextResponse.json({ success: true, projects: [], pagination: { page, limit, total: 0, totalPages: 0 } });
     }
 
-    const projects = await prisma.websiteProject.findMany({
-      where: { organizationId: user.organizationId },
-      include: {
-        changeRequests: {
-          select: { id: true, status: true },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    const where = { organizationId: user.organizationId };
 
-    return NextResponse.json({ success: true, projects });
-  } catch {
-    return NextResponse.json(
-      { success: false, message: "Failed to fetch projects" },
-      { status: 500 }
-    );
+    const [projects, total] = await Promise.all([
+      prisma.websiteProject.findMany({
+        where,
+        include: {
+          changeRequests: {
+            select: { id: true, status: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        skip,
+      }),
+      prisma.websiteProject.count({ where }),
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      projects,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
+  } catch (error) {
+    return apiError(error, "Failed to fetch projects");
   }
-}
+});
 
 // POST /api/projects - Create a new project
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (req, _ctx, session) => {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
-    const body = await request.json();
+    const body = await req.json();
     const validatedData = createProjectSchema.parse(body);
 
-    // Get or create organization for user
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      include: { organization: true },
     });
 
     let organizationId = user?.organizationId;
 
-    // If user doesn't have an organization, create one
     if (!organizationId) {
       const organization = await prisma.organization.create({
         data: {
@@ -97,7 +85,6 @@ export async function POST(request: NextRequest) {
       organizationId = organization.id;
     }
 
-    // Create the project
     const project = await prisma.websiteProject.create({
       data: {
         organizationId,
@@ -115,7 +102,6 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Create initial project note if there are additional notes
     if (validatedData.additionalNotes) {
       await prisma.projectNote.create({
         data: {
@@ -132,15 +118,6 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { success: false, message: "Invalid data", errors: error.issues },
-        { status: 400 }
-      );
-    }
-    return NextResponse.json(
-      { success: false, message: "Failed to create project" },
-      { status: 500 }
-    );
+    return apiError(error, "Failed to create project");
   }
-}
+});

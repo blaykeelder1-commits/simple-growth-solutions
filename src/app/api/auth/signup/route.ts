@@ -4,6 +4,8 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { withRateLimit } from "@/lib/rate-limit";
 import { sendWelcomeEmail } from "@/lib/email";
+import { apiError } from "@/lib/api/errors";
+import { apiLogger } from "@/lib/logger";
 
 const signupSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -65,8 +67,8 @@ export async function POST(request: NextRequest) {
     });
 
     // Send welcome email (async, don't wait)
-    sendWelcomeEmail(user.email, user.name || "there").catch(() => {
-      // Silently fail - email is not critical
+    sendWelcomeEmail(user.email, user.name || "there").catch((e) => {
+      apiLogger.warn({ err: e }, "Email send failed");
     });
 
     return NextResponse.json(
@@ -81,16 +83,6 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: error.issues[0].message },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: "Failed to create account" },
-      { status: 500 }
-    );
+    return apiError(error, "Failed to create account");
   }
 }

@@ -1,22 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/options";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { withAuth } from "@/lib/api/with-auth";
+import { apiError } from "@/lib/api/errors";
 
 // GET /api/change-requests - List change requests for user's organization
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (req, _ctx, session) => {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
-    const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get("limit") || "50");
+    const { searchParams } = new URL(req.url);
+    const limit = Math.min(Math.max(1, parseInt(searchParams.get("limit") || "50")), 100);
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
@@ -26,9 +17,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, requests: [] });
     }
 
-    // Build where clause based on user role
     const whereClause = user?.role === "admin"
-      ? {} // Admin sees all
+      ? {}
       : {
           project: {
             organizationId: user?.organizationId || undefined,
@@ -47,10 +37,7 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, requests });
-  } catch {
-    return NextResponse.json(
-      { success: false, message: "Failed to fetch change requests" },
-      { status: 500 }
-    );
+  } catch (error) {
+    return apiError(error, "Failed to fetch change requests");
   }
-}
+});

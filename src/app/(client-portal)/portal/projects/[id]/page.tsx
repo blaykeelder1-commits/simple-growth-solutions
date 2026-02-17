@@ -83,24 +83,29 @@ export default function ProjectDetailPage() {
   const router = useRouter();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchProject = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/projects/${params.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setProject(data.project);
+      } else if (res.status === 404) {
+        router.push("/portal/projects");
+      } else {
+        setError("Failed to load project details");
+      }
+    } catch {
+      setError("Unable to connect. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function fetchProject() {
-      try {
-        const res = await fetch(`/api/projects/${params.id}`);
-        if (res.ok) {
-          const data = await res.json();
-          setProject(data.project);
-        } else if (res.status === 404) {
-          router.push("/portal/projects");
-        }
-      } catch {
-        // Error handled silently - UI shows empty state
-      } finally {
-        setLoading(false);
-      }
-    }
-
     if (params.id) {
       fetchProject();
     }
@@ -110,6 +115,17 @@ export default function ProjectDetailPage() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
+        <AlertCircle className="h-12 w-12 text-amber-500 mb-4" />
+        <h2 className="text-lg font-semibold text-gray-900 mb-2">Something went wrong</h2>
+        <p className="text-gray-500 mb-4">{error}</p>
+        <Button onClick={fetchProject}>Try Again</Button>
       </div>
     );
   }

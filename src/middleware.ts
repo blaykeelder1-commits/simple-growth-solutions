@@ -25,14 +25,14 @@ export function middleware() {
     "camera=(), microphone=(), geolocation=(), interest-cohort=()"
   );
 
-  // Content Security Policy - adjust as needed for your app
+  // Content Security Policy
   if (process.env.NODE_ENV === "production") {
     headers.set(
       "Content-Security-Policy",
       [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com",
-        "style-src 'self' 'unsafe-inline'",
+        "script-src 'self' https://js.stripe.com",
+        "style-src 'self' 'unsafe-inline'", // unsafe-inline needed for Tailwind/inline styles
         "img-src 'self' data: https: blob:",
         "font-src 'self' data:",
         "connect-src 'self' https://api.stripe.com https://api.resend.com https://*.supabase.co wss://*.supabase.co",

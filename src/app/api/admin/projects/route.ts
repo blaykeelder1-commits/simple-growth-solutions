@@ -1,49 +1,39 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/options";
 import { prisma } from "@/lib/db/prisma";
+import { withAdmin } from "@/lib/api/with-auth";
+import { apiError } from "@/lib/api/errors";
 
-// GET /api/admin/projects - List all projects (admin only)
-export async function GET() {
+// GET /api/admin/projects - List all projects (admin only, paginated)
+export const GET = withAdmin(async (req) => {
   try {
-    const session = await getServerSession(authOptions);
+    const { searchParams } = new URL(req.url);
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
+    const limit = Math.min(Math.max(1, parseInt(searchParams.get("limit") || "50")), 100);
+    const skip = (page - 1) * limit;
 
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
-    // Check admin role
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-    });
-
-    if (user?.role !== "admin") {
-      return NextResponse.json(
-        { success: false, message: "Admin access required" },
-        { status: 403 }
-      );
-    }
-
-    const projects = await prisma.websiteProject.findMany({
-      include: {
-        organization: {
-          select: { id: true, name: true },
+    const [projects, total] = await Promise.all([
+      prisma.websiteProject.findMany({
+        include: {
+          organization: {
+            select: { id: true, name: true },
+          },
+          changeRequests: {
+            select: { id: true, status: true },
+          },
         },
-        changeRequests: {
-          select: { id: true, status: true },
-        },
-      },
-      orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
-    });
+        orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+        take: limit,
+        skip,
+      }),
+      prisma.websiteProject.count(),
+    ]);
 
-    return NextResponse.json({ success: true, projects });
-  } catch {
-    return NextResponse.json(
-      { success: false, message: "Failed to fetch projects" },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      success: true,
+      projects,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
+  } catch (error) {
+    return apiError(error, "Failed to fetch projects");
   }
-}
+});

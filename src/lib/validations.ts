@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+// Re-export industries from config
+export { industries } from "@/lib/config/industries";
+
 export const leadFormSchema = z.object({
   businessName: z
     .string()
@@ -30,19 +33,3 @@ export const leadFormSchema = z.object({
 });
 
 export type LeadFormData = z.infer<typeof leadFormSchema>;
-
-export const industries = [
-  "Restaurant / Food Service",
-  "Retail / E-commerce",
-  "Professional Services",
-  "Healthcare / Medical",
-  "Real Estate",
-  "Construction / Trades",
-  "Beauty / Wellness",
-  "Fitness / Sports",
-  "Education / Training",
-  "Technology / Software",
-  "Manufacturing",
-  "Non-profit",
-  "Other",
-] as const;

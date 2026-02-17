@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/db/prisma";
-import { authOptions } from "@/lib/auth/options";
+import { withAdmin } from "@/lib/api/with-auth";
+import { apiError } from "@/lib/api/errors";
+import { withRateLimit } from "@/lib/rate-limit";
 import { z } from "zod";
 
 // Full lead schema for questionnaire form
@@ -30,8 +31,12 @@ const quickLeadSchema = z.object({
     .optional(),
 });
 
-// POST - Create new lead (public)
+// POST - Create new lead (public, rate limited)
 export async function POST(req: NextRequest) {
+  // Rate limit public endpoint
+  const rateLimited = await withRateLimit(req, "api");
+  if (rateLimited) return rateLimited;
+
   try {
     const body = await req.json();
 
@@ -39,10 +44,8 @@ export async function POST(req: NextRequest) {
     const isQuickCapture = body.source === "url-analyzer" || (!body.businessName && body.email);
 
     if (isQuickCapture) {
-      // Handle quick lead capture from URL analyzer
       const validated = quickLeadSchema.parse(body);
 
-      // Generate a business name from the website URL or use a placeholder
       let businessName = "Website Analysis Lead";
       if (validated.websiteUrl) {
         try {
@@ -57,7 +60,6 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Build challenges string from analysis data
       let challenges = `Source: ${validated.source || "url-analyzer"}`;
       if (validated.analysisData) {
         if (validated.analysisData.score !== undefined) {
@@ -102,36 +104,33 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, lead }, { status: 201 });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { success: false, errors: error.issues },
-        { status: 400 }
-      );
-    }
-    return NextResponse.json(
-      { success: false, error: "Failed to create lead" },
-      { status: 500 }
-    );
+    return apiError(error, "Failed to create lead");
   }
 }
 
-// GET - List leads (admin only)
-export async function GET() {
+// GET - List leads (admin only, paginated)
+export const GET = withAdmin(async (req) => {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { searchParams } = new URL(req.url);
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
+    const limit = Math.min(Math.max(1, parseInt(searchParams.get("limit") || "50")), 100);
+    const skip = (page - 1) * limit;
 
-    const leads = await prisma.lead.findMany({
-      orderBy: { createdAt: "desc" },
+    const [leads, total] = await Promise.all([
+      prisma.lead.findMany({
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        skip,
+      }),
+      prisma.lead.count(),
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      leads,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
-
-    return NextResponse.json({ success: true, leads });
-  } catch {
-    return NextResponse.json(
-      { success: false, error: "Failed to fetch leads" },
-      { status: 500 }
-    );
+  } catch (error) {
+    return apiError(error, "Failed to fetch leads");
   }
-}
+});

@@ -412,6 +412,7 @@ model Client {
   @@unique([organizationId, externalId])
   @@index([organizationId])
   @@index([organizationId, paymentScore])
+  @@index([organizationId, totalOutstanding])
   @@map("clients")
 }
 
@@ -468,6 +469,7 @@ model Invoice {
   @@index([organizationId, status])
   @@index([organizationId, dueDate])
   @@index([clientId])
+  @@index([dueDate])
   @@map("invoices")
 }
 
@@ -616,7 +618,6 @@ model AIRecommendation {
   client         Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   type               String   // collection_strategy, payment_terms, client_risk, cash_flow, follow_up, escalate, prioritize, deprioritize
-  recommendationType String?  @map("recommendation_type") // Alias for type
   title              String
   description        String   @db.Text
   recommendationText String?  @map("recommendation_text") @db.Text
@@ -656,10 +657,8 @@ model FollowUpAction {
   assignedTo     User?    @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
 
   type           String   // email, call, letter, final_notice, meeting, escalation, sms
-  actionType     String?  @map("action_type") // Alias for type
   scheduledFor   DateTime? @map("scheduled_for")
   actionDate     DateTime @default(now()) @map("action_date")
-  nextActionDate DateTime? @map("next_action_date") @db.Date
 
   status         String   @default("scheduled") // scheduled, completed, skipped
   completedAt    DateTime? @map("completed_at")
@@ -677,7 +676,8 @@ model FollowUpAction {
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   @@index([organizationId])
-  @@index([organizationId, actionType, outcome])
+  @@index([organizationId, type, outcome])
+  @@index([organizationId, actionDate])
   @@index([invoiceId])
   @@index([clientId, ledToPayment])
   @@map("follow_up_actions")

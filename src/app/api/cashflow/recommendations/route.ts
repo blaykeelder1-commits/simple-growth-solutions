@@ -2,20 +2,23 @@
 // GET: Fetch AI-powered recommendations for all clients
 
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/options';
 import { prisma } from '@/lib/db/prisma';
 import { generateAIRecommendations, Recommendation, RecommendationInput } from '@/lib/cashflow/recommendations';
-import { apiLogger as logger } from '@/lib/logger';
+import { withAuth } from '@/lib/api/with-auth';
+import { apiError } from '@/lib/api/errors';
 
-export async function GET() {
+export const GET = withAuth(async (_req, _ctx, session) => {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const organizationId = session.user.organizationId;
+
+    if (!organizationId) {
+      return NextResponse.json({
+        success: true,
+        recommendations: [],
+        totalClients: 0,
+        totalRecommendations: 0,
+      });
+    }
 
     // Get all clients with their invoice data
     const clients = await prisma.client.findMany({
@@ -128,10 +131,6 @@ export async function GET() {
       totalRecommendations: allRecommendations.reduce((sum, r) => sum + r.recommendations.length, 0),
     });
   } catch (error) {
-    logger.error({ err: error }, '[Recommendations API] Error');
-    return NextResponse.json(
-      { error: 'Failed to generate recommendations' },
-      { status: 500 }
-    );
+    return apiError(error, "Failed to generate recommendations");
   }
-}
+});

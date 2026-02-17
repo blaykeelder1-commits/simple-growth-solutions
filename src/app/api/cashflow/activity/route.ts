@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/options";
+import { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
+import { withAuth } from "@/lib/api/with-auth";
+import { apiError } from "@/lib/api/errors";
 
 // Query params schema
 const querySchema = z.object({
@@ -10,17 +11,8 @@ const querySchema = z.object({
 });
 
 // GET /api/cashflow/activity - Get recent cash flow activity
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest, _ctx, session) => {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
     });
@@ -97,10 +89,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, activity });
   } catch (error) {
-    console.error("[API] cashflow/activity GET error:", error);
-    return NextResponse.json(
-      { success: false, message: "Failed to fetch activity" },
-      { status: 500 }
-    );
+    return apiError(error, "Failed to fetch activity");
   }
-}
+});

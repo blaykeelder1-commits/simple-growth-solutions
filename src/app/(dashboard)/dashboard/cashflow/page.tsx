@@ -37,23 +37,28 @@ interface DashboardStats {
 export default function CashFlowDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const statsRes = await fetch("/api/cashflow/stats");
+
+      if (statsRes.ok) {
+        const data = await statsRes.json();
+        setStats(data.stats);
+      } else {
+        setError("Failed to load cash flow data");
+      }
+    } catch {
+      setError("Unable to connect. Please check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const statsRes = await fetch("/api/cashflow/stats");
-
-        if (statsRes.ok) {
-          const data = await statsRes.json();
-          setStats(data.stats);
-        }
-      } catch {
-        // Error handled silently - UI shows empty state
-      } finally {
-        setLoading(false);
-      }
-    }
-
     fetchData();
   }, []);
 
@@ -61,6 +66,17 @@ export default function CashFlowDashboard() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
+        <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
+        <h2 className="text-lg font-semibold text-gray-900 mb-2">Something went wrong</h2>
+        <p className="text-gray-500 mb-4">{error}</p>
+        <Button onClick={fetchData}>Try Again</Button>
       </div>
     );
   }

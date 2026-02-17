@@ -57,31 +57,34 @@ export default function PortalDashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [recentRequests, setRecentRequests] = useState<ChangeRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [projectsRes, requestsRes] = await Promise.all([
+        fetch("/api/projects"),
+        fetch("/api/change-requests?limit=5"),
+      ]);
+
+      if (projectsRes.ok) {
+        const data = await projectsRes.json();
+        setProjects(data.projects || []);
+      }
+
+      if (requestsRes.ok) {
+        const data = await requestsRes.json();
+        setRecentRequests(data.requests || []);
+      }
+    } catch {
+      setError("Unable to load your dashboard. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const [projectsRes, requestsRes] = await Promise.all([
-          fetch("/api/projects"),
-          fetch("/api/change-requests?limit=5"),
-        ]);
-
-        if (projectsRes.ok) {
-          const data = await projectsRes.json();
-          setProjects(data.projects || []);
-        }
-
-        if (requestsRes.ok) {
-          const data = await requestsRes.json();
-          setRecentRequests(data.requests || []);
-        }
-      } catch {
-        // Error handled silently - UI shows empty state
-      } finally {
-        setLoading(false);
-      }
-    }
-
     fetchData();
   }, []);
 
@@ -89,6 +92,17 @@ export default function PortalDashboard() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
+        <AlertCircle className="h-12 w-12 text-amber-500 mb-4" />
+        <h2 className="text-lg font-semibold text-gray-900 mb-2">Something went wrong</h2>
+        <p className="text-gray-500 mb-4">{error}</p>
+        <Button onClick={fetchData}>Try Again</Button>
       </div>
     );
   }

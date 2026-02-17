@@ -5,70 +5,17 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import Link from "next/link";
 import {
-  LayoutDashboard,
-  DollarSign,
-  Users,
-  FileText,
-  TrendingUp,
-  Shield,
-  BarChart3,
-  Settings,
   LogOut,
   Menu,
   X,
   ChevronDown,
-  MessageCircle,
-  PiggyBank,
-  Brain,
-  Calculator,
-  Zap,
 } from "lucide-react";
 import { ChatWidget } from "@/components/chat/chat-widget";
 import { Button } from "@/components/ui/button";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
 import { SubscriptionProvider } from "@/lib/subscription/context";
-
-const navigation = [
-  {
-    name: "Cash Flow AI",
-    icon: TrendingUp,
-    children: [
-      { name: "Dashboard", href: "/dashboard/cashflow", icon: LayoutDashboard },
-      { name: "Work Invoices", href: "/dashboard/cashflow/action-plan", icon: Zap, highlight: true },
-      { name: "Invoices", href: "/dashboard/cashflow/invoices", icon: FileText },
-      { name: "Clients", href: "/dashboard/cashflow/clients", icon: Users },
-      { name: "Recommendations", href: "/dashboard/cashflow/recommendations", icon: DollarSign },
-    ],
-  },
-  {
-    name: "Business Chauffeur",
-    icon: BarChart3,
-    children: [
-      { name: "Dashboard", href: "/dashboard/chauffeur", icon: LayoutDashboard },
-      { name: "Unified Intelligence", href: "/dashboard/chauffeur/unified", icon: Brain },
-      { name: "Insights", href: "/dashboard/chauffeur/insights", icon: TrendingUp },
-      { name: "Payroll Analytics", href: "/dashboard/payroll", icon: PiggyBank },
-      { name: "ROI Calculator", href: "/dashboard/roi", icon: Calculator },
-      { name: "Integrations", href: "/dashboard/chauffeur/integrations", icon: Settings },
-    ],
-  },
-  {
-    name: "AI Assistant",
-    icon: MessageCircle,
-    children: [
-      { name: "Chat", href: "/dashboard/chat", icon: MessageCircle },
-    ],
-  },
-  {
-    name: "Security",
-    icon: Shield,
-    children: [
-      { name: "Dashboard", href: "/dashboard/security", icon: LayoutDashboard },
-      { name: "Scans", href: "/dashboard/security/scans", icon: Shield },
-    ],
-  },
-];
+import { dashboardNavigation as navigation } from "@/lib/config/navigation";
 
 export default function DashboardLayout({
   children,
@@ -79,7 +26,15 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [expandedSections, setExpandedSections] = useState<string[]>(["Cash Flow AI"]);
+  const [expandedSections, setExpandedSections] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("sgs-sidebar-sections");
+        if (saved) return JSON.parse(saved);
+      } catch { /* ignore */ }
+    }
+    return ["Cash Flow AI"];
+  });
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -88,9 +43,11 @@ export default function DashboardLayout({
   }, [status, router]);
 
   const toggleSection = (name: string) => {
-    setExpandedSections((prev) =>
-      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
-    );
+    setExpandedSections((prev) => {
+      const next = prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name];
+      try { localStorage.setItem("sgs-sidebar-sections", JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
   };
 
   if (status === "loading") {
@@ -130,7 +87,7 @@ export default function DashboardLayout({
           </button>
         </div>
 
-        <nav className="p-4 space-y-1">
+        <nav aria-label="Dashboard navigation" className="p-4 space-y-1">
           {navigation.map((section) => (
             <div key={section.name}>
               <button

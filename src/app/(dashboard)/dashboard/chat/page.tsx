@@ -24,6 +24,7 @@ import {
   Users,
   Activity,
 } from "lucide-react";
+import { SafeMarkdown } from "@/components/chat/safe-markdown";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -186,7 +187,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-10rem)] flex gap-6">
+    <div className="h-[calc(100dvh-10rem)] flex gap-6">
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col bg-white rounded-2xl border border-gray-200 overflow-hidden">
         {/* Header */}
@@ -290,11 +291,7 @@ export default function ChatPage() {
                     )}
                     <div className="text-sm whitespace-pre-wrap prose prose-sm max-w-none">
                       {message.role === "assistant" ? (
-                        <div
-                          dangerouslySetInnerHTML={{
-                            __html: formatMarkdown(message.content),
-                          }}
-                        />
+                        <SafeMarkdown content={message.content} />
                       ) : (
                         message.content
                       )}
@@ -361,7 +358,8 @@ export default function ChatPage() {
                 <button
                   key={index}
                   onClick={() => sendMessage(suggestion)}
-                  className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-indigo-100 hover:text-indigo-700 rounded-full transition-colors text-gray-600"
+                  disabled={isLoading}
+                  className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-indigo-100 hover:text-indigo-700 rounded-full transition-colors text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {suggestion}
                 </button>
@@ -478,20 +476,3 @@ export default function ChatPage() {
   );
 }
 
-// Simple markdown formatter
-function formatMarkdown(text: string): string {
-  return text
-    // Bold
-    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-    // Bullet points
-    .replace(/^- (.*?)$/gm, "<li>$1</li>")
-    .replace(/(<li>.*<\/li>)+/g, "<ul class='list-disc pl-4 my-2'>$&</ul>")
-    // Numbered lists
-    .replace(/^\d+\. (.*?)$/gm, "<li>$1</li>")
-    // Headers
-    .replace(/^## (.*?)$/gm, "<h3 class='font-semibold text-gray-900 mt-3 mb-1'>$1</h3>")
-    .replace(/^### (.*?)$/gm, "<h4 class='font-medium text-gray-800 mt-2 mb-1'>$1</h4>")
-    // Line breaks
-    .replace(/\n\n/g, "<br><br>")
-    .replace(/\n/g, "<br>");
-}

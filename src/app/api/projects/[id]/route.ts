@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/options";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { withAuth, withAdmin } from "@/lib/api/with-auth";
+import { apiError } from "@/lib/api/errors";
 import { z } from "zod";
 
 const updateProjectSchema = z.object({
@@ -14,20 +14,9 @@ const updateProjectSchema = z.object({
 });
 
 // GET /api/projects/[id] - Get single project
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withAuth(async (_req, ctx, session) => {
   try {
-    const session = await getServerSession(authOptions);
-    const { id } = await params;
-
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const { id } = await ctx.params;
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
@@ -54,7 +43,6 @@ export async function GET(
       );
     }
 
-    // Check access: admin can see all, users can only see their org's projects
     if (user?.role !== "admin" && project.organizationId !== user?.organizationId) {
       return NextResponse.json(
         { success: false, message: "Access denied" },
@@ -63,44 +51,23 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, project });
-  } catch {
-    return NextResponse.json(
-      { success: false, message: "Failed to fetch project" },
-      { status: 500 }
-    );
+  } catch (error) {
+    return apiError(error, "Failed to fetch project");
   }
-}
+});
 
-// PATCH /api/projects/[id] - Update project (admin only for some fields)
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+// PATCH /api/projects/[id] - Update project (admin only)
+export const PATCH = withAdmin(async (req, ctx, session) => {
   try {
-    const session = await getServerSession(authOptions);
-    const { id } = await params;
-
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-    });
-
-    // Only admins can update project status and deployment info
-    if (user?.role !== "admin") {
-      return NextResponse.json(
-        { success: false, message: "Admin access required" },
-        { status: 403 }
-      );
-    }
-
-    const body = await request.json();
+    const { id } = await ctx.params;
+    const body = await req.json();
     const validatedData = updateProjectSchema.parse(body);
+
+    // Get old values for audit log
+    const oldProject = await prisma.websiteProject.findUnique({
+      where: { id },
+      select: { status: true, priority: true, deployedUrl: true, deploymentPlatform: true },
+    });
 
     const project = await prisma.websiteProject.update({
       where: { id },
@@ -125,17 +92,21 @@ export async function PATCH(
       },
     });
 
+    // Audit log
+    await prisma.auditLog.create({
+      data: {
+        userId: session.user.id,
+        organizationId: project.organizationId,
+        action: "project_updated",
+        entityType: "website_project",
+        entityId: id,
+        oldValues: oldProject ? JSON.parse(JSON.stringify(oldProject)) : undefined,
+        newValues: JSON.parse(JSON.stringify(validatedData)),
+      },
+    });
+
     return NextResponse.json({ success: true, project });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { success: false, message: "Invalid data", errors: error.issues },
-        { status: 400 }
-      );
-    }
-    return NextResponse.json(
-      { success: false, message: "Failed to update project" },
-      { status: 500 }
-    );
+    return apiError(error, "Failed to update project");
   }
-}
+});
