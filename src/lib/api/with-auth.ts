@@ -3,10 +3,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/options";
 import { Session } from "next-auth";
 
+/** Session type with guaranteed non-optional user fields after auth check */
+export type AuthenticatedSession = Session & {
+  user: { id: string; role: string; organizationId: string | null };
+};
+
 export type AuthenticatedHandler = (
   req: NextRequest,
   ctx: { params: Promise<Record<string, string>> },
-  session: Session & { user: { id: string; role: string; organizationId: string | null } }
+  session: AuthenticatedSession
 ) => Promise<NextResponse>;
 
 export type AdminHandler = AuthenticatedHandler;
@@ -26,7 +31,17 @@ export function withAuth(handler: AuthenticatedHandler) {
       );
     }
 
-    return handler(req, ctx, session as Parameters<AuthenticatedHandler>[2]);
+    // Ensure role is always present (default to "user" if missing from session)
+    const authedSession: AuthenticatedSession = {
+      ...session,
+      user: {
+        ...session.user,
+        role: session.user.role ?? "user",
+        organizationId: session.user.organizationId ?? null,
+      },
+    };
+
+    return handler(req, ctx, authedSession);
   };
 }
 

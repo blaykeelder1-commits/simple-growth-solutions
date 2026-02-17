@@ -93,13 +93,35 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
   }
 
   const planConfig = PLANS[plan];
+  if (!planConfig) {
+    apiLogger.warn({ plan }, "Unknown plan in checkout session metadata");
+    return;
+  }
+
+  const stripeSubscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id ?? null;
+
+  // Guard against duplicate webhook deliveries: if this Stripe subscription
+  // already exists, update it instead of creating a duplicate row.
+  if (stripeSubscriptionId) {
+    const existing = await prisma.subscription.findFirst({
+      where: { stripeSubscriptionId },
+    });
+
+    if (existing) {
+      await prisma.subscription.update({
+        where: { id: existing.id },
+        data: { status: "active" },
+      });
+      return;
+    }
+  }
 
   await prisma.subscription.create({
     data: {
       organizationId,
       stripeCustomerId: typeof session.customer === "string" ? session.customer : session.customer?.id ?? null,
-      stripeSubscriptionId: typeof session.subscription === "string" ? session.subscription : session.subscription?.id ?? null,
-      stripePriceId: planConfig.priceId || undefined,
+      stripeSubscriptionId,
+      stripePriceId: planConfig.priceId ?? undefined,
       plan,
       status: "active",
       priceMonthly: planConfig.amount,
@@ -116,11 +138,22 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
     return;
   }
 
-  // Use type assertion for Stripe SDK version compatibility
-  const sub = subscription as unknown as Record<string, unknown>;
-  const periodStart = sub.current_period_start as number | undefined;
-  const periodEnd = sub.current_period_end as number | undefined;
-  const canceledAt = sub.canceled_at as number | null | undefined;
+  // current_period_start/end were removed from the Stripe SDK types in the
+  // 2025-12-15.clover API version, but Stripe still sends them in webhook
+  // payloads. Access them from the raw object safely.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw = subscription as any as Record<string, unknown>;
+  const periodStart =
+    typeof raw.current_period_start === "number"
+      ? raw.current_period_start
+      : undefined;
+  const periodEnd =
+    typeof raw.current_period_end === "number"
+      ? raw.current_period_end
+      : undefined;
+
+  // canceled_at IS on the typed interface
+  const canceledAt = subscription.canceled_at;
 
   await prisma.subscription.update({
     where: { id: existingSub.id },
@@ -150,15 +183,30 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
 }
 
 function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
-  const inv = invoice as unknown as Record<string, unknown>;
-  const sub = inv.subscription;
+  // In Stripe API 2025-12-15.clover (SDK v20+), the subscription reference
+  // moved from invoice.subscription to invoice.parent.subscription_details.subscription.
+  const sub = invoice.parent?.subscription_details?.subscription;
+  if (!sub) {
+    // Fallback: check if the legacy top-level field is still present in the
+    // raw webhook payload for backward compatibility.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = invoice as any as Record<string, unknown>;
+    if (typeof raw.subscription === "string") return raw.subscription;
+    if (
+      raw.subscription &&
+      typeof raw.subscription === "object" &&
+      "id" in (raw.subscription as Record<string, unknown>)
+    ) {
+      return (raw.subscription as { id: string }).id;
+    }
+    return null;
+  }
   if (typeof sub === "string") return sub;
-  if (sub && typeof sub === "object" && "id" in (sub as Record<string, unknown>)) return (sub as { id: string }).id;
-  return null;
+  return sub.id;
 }
 
 async function handleInvoicePaid(invoice: Stripe.Invoice) {
-  const subscriptionId = await getInvoiceSubscriptionId(invoice);
+  const subscriptionId = getInvoiceSubscriptionId(invoice);
   if (subscriptionId) {
     await prisma.subscription.updateMany({
       where: { stripeSubscriptionId: subscriptionId },
@@ -168,7 +216,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
 }
 
 async function handlePaymentFailed(invoice: Stripe.Invoice) {
-  const subscriptionId = await getInvoiceSubscriptionId(invoice);
+  const subscriptionId = getInvoiceSubscriptionId(invoice);
   if (subscriptionId) {
     await prisma.subscription.updateMany({
       where: { stripeSubscriptionId: subscriptionId },

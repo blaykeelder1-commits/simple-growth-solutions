@@ -412,7 +412,6 @@ model Client {
   @@unique([organizationId, externalId])
   @@index([organizationId])
   @@index([organizationId, paymentScore])
-  @@index([organizationId, totalOutstanding])
   @@map("clients")
 }
 
@@ -469,7 +468,6 @@ model Invoice {
   @@index([organizationId, status])
   @@index([organizationId, dueDate])
   @@index([clientId])
-  @@index([dueDate])
   @@map("invoices")
 }
 

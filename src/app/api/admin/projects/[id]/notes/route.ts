@@ -1,7 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/options";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { withAdmin } from "@/lib/api/with-auth";
+import { apiError } from "@/lib/api/errors";
+import { sendProjectNoteEmail } from "@/lib/email";
+import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
 
 const noteSchema = z.object({
@@ -10,34 +12,10 @@ const noteSchema = z.object({
 });
 
 // POST /api/admin/projects/[id]/notes - Add a project note
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const POST = withAdmin(async (req, ctx, session) => {
   try {
-    const session = await getServerSession(authOptions);
-    const { id: projectId } = await params;
-
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
-    // Check admin role
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-    });
-
-    if (user?.role !== "admin") {
-      return NextResponse.json(
-        { success: false, message: "Admin access required" },
-        { status: 403 }
-      );
-    }
-
-    const body = await request.json();
+    const { id: projectId } = await ctx.params;
+    const body = await req.json();
     const validatedData = noteSchema.parse(body);
 
     const note = await prisma.projectNote.create({
@@ -49,17 +27,32 @@ export async function POST(
       },
     });
 
+    // If client-visible note, notify the customer
+    if (!validatedData.isInternal) {
+      prisma.websiteProject.findUnique({
+        where: { id: projectId },
+        include: {
+          organization: {
+            include: { users: { select: { email: true, name: true } } },
+          },
+        },
+      })
+        .then((project) => {
+          if (!project?.organization?.users.length) return;
+          const emails = project.organization.users.map((u) => u.email);
+          const primaryName = project.organization.users[0].name || project.organization.users[0].email;
+          return sendProjectNoteEmail(
+            emails,
+            primaryName,
+            { id: project.id, projectName: project.projectName },
+            validatedData.content
+          );
+        })
+        .catch((e) => apiLogger.warn({ err: e }, "Failed to send project note notification"));
+    }
+
     return NextResponse.json({ success: true, note }, { status: 201 });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { success: false, message: "Invalid data", errors: error.issues },
-        { status: 400 }
-      );
-    }
-    return NextResponse.json(
-      { success: false, message: "Failed to create note" },
-      { status: 500 }
-    );
+    return apiError(error, "Failed to create note");
   }
-}
+});

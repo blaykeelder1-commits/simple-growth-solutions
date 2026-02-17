@@ -17,6 +17,8 @@ function InlineContent({ segments }: { segments: InlineSegment[] }) {
 }
 
 export function SafeMarkdown({ content }: { content: string }) {
+  if (!content) return null;
+
   const segments = parseMarkdown(content);
 
   return (
@@ -49,6 +51,8 @@ export function SafeMarkdown({ content }: { content: string }) {
                 <InlineContent segments={seg.content} />
               </p>
             );
+          default:
+            return null;
         }
       })}
     </>

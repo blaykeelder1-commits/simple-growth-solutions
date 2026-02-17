@@ -1,7 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/options";
 import { prisma } from "@/lib/db/prisma";
+import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/api/with-auth";
+import { apiError } from "@/lib/api/errors";
+import { getAdminEmails, sendNewChangeRequestNotification } from "@/lib/email";
+import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
 
 const createChangeRequestSchema = z.object({
@@ -12,20 +14,9 @@ const createChangeRequestSchema = z.object({
 });
 
 // POST /api/projects/[id]/change-requests - Create a change request
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const POST = withAuth(async (req, ctx, session) => {
   try {
-    const session = await getServerSession(authOptions);
-    const { id: projectId } = await params;
-
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const { id: projectId } = await ctx.params;
 
     // Verify project exists and user has access
     const user = await prisma.user.findUnique({
@@ -43,7 +34,6 @@ export async function POST(
       );
     }
 
-    // Check access
     if (user?.role !== "admin" && project.organizationId !== user?.organizationId) {
       return NextResponse.json(
         { success: false, message: "Access denied" },
@@ -51,7 +41,7 @@ export async function POST(
       );
     }
 
-    const body = await request.json();
+    const body = await req.json();
     const validatedData = createChangeRequestSchema.parse(body);
 
     const changeRequest = await prisma.changeRequest.create({
@@ -66,20 +56,23 @@ export async function POST(
       },
     });
 
+    // Notify admins of new change request
+    getAdminEmails()
+      .then((emails) =>
+        sendNewChangeRequestNotification(
+          emails,
+          { title: validatedData.title, type: validatedData.type, priority: validatedData.priority, description: validatedData.description },
+          { id: project.id, projectName: project.projectName },
+          session.user.name || session.user.email || "A customer"
+        )
+      )
+      .catch((e) => apiLogger.warn({ err: e }, "Failed to send change request notification"));
+
     return NextResponse.json(
       { success: true, changeRequest },
       { status: 201 }
     );
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { success: false, message: "Invalid data", errors: error.issues },
-        { status: 400 }
-      );
-    }
-    return NextResponse.json(
-      { success: false, message: "Failed to create change request" },
-      { status: 500 }
-    );
+    return apiError(error, "Failed to create change request");
   }
-}
+});

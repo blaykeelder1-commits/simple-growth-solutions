@@ -4,6 +4,8 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import { prisma } from "@/lib/db/prisma";
 import bcrypt from "bcryptjs";
+// Import env to trigger environment variable validation on first auth request
+import "@/lib/env";
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as NextAuthOptions["adapter"],

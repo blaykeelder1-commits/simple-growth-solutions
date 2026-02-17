@@ -21,7 +21,7 @@ export const GET = withAuth(async (request: NextRequest, _ctx, session) => {
 
     const { searchParams } = new URL(request.url);
     const cursor = searchParams.get("cursor");
-    const take = Math.min(parseInt(searchParams.get("take") || "20"), 100);
+    const take = Math.min(Math.max(1, parseInt(searchParams.get("take") || "20") || 20), 100);
 
     const results = await prisma.invoice.findMany({
       take: take + 1,

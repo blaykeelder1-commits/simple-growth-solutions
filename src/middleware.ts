@@ -31,7 +31,7 @@ export function middleware() {
       "Content-Security-Policy",
       [
         "default-src 'self'",
-        "script-src 'self' https://js.stripe.com",
+        "script-src 'self' 'unsafe-inline' https://js.stripe.com", // unsafe-inline required for Next.js App Router inline scripts
         "style-src 'self' 'unsafe-inline'", // unsafe-inline needed for Tailwind/inline styles
         "img-src 'self' data: https: blob:",
         "font-src 'self' data:",

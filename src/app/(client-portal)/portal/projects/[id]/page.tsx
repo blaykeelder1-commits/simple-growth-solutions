@@ -109,7 +109,8 @@ export default function ProjectDetailPage() {
     if (params.id) {
       fetchProject();
     }
-  }, [params.id, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.id]);
 
   if (loading) {
     return (
@@ -137,7 +138,15 @@ export default function ProjectDetailPage() {
   const currentStatus = statusConfig[project.status] || statusConfig.submitted;
   const StatusIcon = currentStatus.icon;
   const currentStatusIndex = statusOrder.indexOf(project.status);
-  const features = project.desiredFeatures ? JSON.parse(project.desiredFeatures) : [];
+  let features: string[] = [];
+  if (project.desiredFeatures) {
+    try {
+      const parsed = JSON.parse(project.desiredFeatures);
+      features = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      // Invalid JSON in desiredFeatures — treat as empty
+    }
+  }
   const clientNotes = project.projectNotes?.filter((n) => !n.isInternal) || [];
 
   return (

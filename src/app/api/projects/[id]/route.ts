@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { withAuth, withAdmin } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
+import { sendProjectStatusUpdateEmail } from "@/lib/email";
+import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
 
 const updateProjectSchema = z.object({
@@ -91,6 +93,27 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
         }),
       },
     });
+
+    // Notify customer if status changed
+    if (validatedData.status && oldProject?.status !== validatedData.status) {
+      prisma.organization.findUnique({
+        where: { id: project.organizationId },
+        include: { users: { select: { email: true, name: true } } },
+      })
+        .then((org) => {
+          if (!org?.users.length) return;
+          const emails = org.users.map((u) => u.email);
+          const primaryName = org.users[0].name || org.users[0].email;
+          return sendProjectStatusUpdateEmail(
+            emails,
+            primaryName,
+            { id: project.id, projectName: project.projectName },
+            oldProject?.status || "submitted",
+            validatedData.status!
+          );
+        })
+        .catch((e) => apiLogger.warn({ err: e }, "Failed to send project status notification"));
+    }
 
     // Audit log
     await prisma.auditLog.create({

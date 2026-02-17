@@ -7,21 +7,30 @@ import { apiError } from "@/lib/api/errors";
 export const GET = withAuth(async (req, _ctx, session) => {
   try {
     const { searchParams } = new URL(req.url);
-    const limit = Math.min(Math.max(1, parseInt(searchParams.get("limit") || "50")), 100);
+    const limit = Math.min(Math.max(1, parseInt(searchParams.get("limit") || "50") || 50), 100);
+
+    const isAdmin = session.user.role === "admin";
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
     });
 
-    if (!user?.organizationId && user?.role !== "admin") {
+    if (!user) {
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    if (!isAdmin && !user.organizationId) {
       return NextResponse.json({ success: true, requests: [] });
     }
 
-    const whereClause = user?.role === "admin"
+    const whereClause = isAdmin
       ? {}
       : {
           project: {
-            organizationId: user?.organizationId || undefined,
+            organizationId: user.organizationId!,
           },
         };
 

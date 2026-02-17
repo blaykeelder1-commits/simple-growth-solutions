@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { withAuth } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
+import { getAdminEmails, sendNewProjectNotification } from "@/lib/email";
+import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
 
 const createProjectSchema = z.object({
@@ -22,8 +24,8 @@ const createProjectSchema = z.object({
 export const GET = withAuth(async (req, _ctx, session) => {
   try {
     const { searchParams } = new URL(req.url);
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
-    const limit = Math.min(Math.max(1, parseInt(searchParams.get("limit") || "50")), 100);
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1") || 1);
+    const limit = Math.min(Math.max(1, parseInt(searchParams.get("limit") || "50") || 50), 100);
     const skip = (page - 1) * limit;
 
     const user = await prisma.user.findUnique({
@@ -112,6 +114,17 @@ export const POST = withAuth(async (req, _ctx, session) => {
         },
       });
     }
+
+    // Notify admins of new project submission
+    getAdminEmails()
+      .then((emails) =>
+        sendNewProjectNotification(
+          emails,
+          { id: project.id, projectName: project.projectName, projectType: project.projectType },
+          session.user.name || session.user.email || "A customer"
+        )
+      )
+      .catch((e) => apiLogger.warn({ err: e }, "Failed to send new project notification"));
 
     return NextResponse.json(
       { success: true, project },

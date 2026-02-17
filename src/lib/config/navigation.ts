@@ -50,7 +50,6 @@ export const dashboardNavigation = [
     icon: Shield,
     children: [
       { name: "Dashboard", href: "/dashboard/security", icon: LayoutDashboard },
-      { name: "Scans", href: "/dashboard/security/scans", icon: Shield },
     ],
   },
 ] as const;

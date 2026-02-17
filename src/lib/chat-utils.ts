@@ -17,7 +17,7 @@ export type InlineSegment =
  */
 export function parseInline(text: string): InlineSegment[] {
   const segments: InlineSegment[] = [];
-  const regex = /\*\*(.*?)\*\*/g;
+  const regex = /\*\*(.+?)\*\*/g;
   let lastIndex = 0;
   let match;
 
@@ -40,6 +40,7 @@ export function parseInline(text: string): InlineSegment[] {
  * Parse markdown text into structured segments for safe rendering.
  */
 export function parseMarkdown(text: string): MarkdownSegment[] {
+  if (!text) return [];
   const lines = text.split("\n");
   const segments: MarkdownSegment[] = [];
   let currentListItems: InlineSegment[][] = [];

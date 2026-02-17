@@ -26,15 +26,18 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [expandedSections, setExpandedSections] = useState<string[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("sgs-sidebar-sections");
-        if (saved) return JSON.parse(saved);
-      } catch { /* ignore */ }
-    }
-    return ["Cash Flow AI"];
-  });
+  const [expandedSections, setExpandedSections] = useState<string[]>(["Cash Flow AI"]);
+
+  // Restore sidebar state from localStorage after hydration to avoid SSR mismatch
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("sgs-sidebar-sections");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) setExpandedSections(parsed);
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   useEffect(() => {
     if (status === "unauthenticated") {

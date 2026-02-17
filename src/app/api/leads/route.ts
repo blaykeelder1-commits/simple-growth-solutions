@@ -112,8 +112,8 @@ export async function POST(req: NextRequest) {
 export const GET = withAdmin(async (req) => {
   try {
     const { searchParams } = new URL(req.url);
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
-    const limit = Math.min(Math.max(1, parseInt(searchParams.get("limit") || "50")), 100);
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1") || 1);
+    const limit = Math.min(Math.max(1, parseInt(searchParams.get("limit") || "50") || 50), 100);
     const skip = (page - 1) * limit;
 
     const [leads, total] = await Promise.all([

@@ -9,7 +9,11 @@ import { apiError } from '@/lib/api/errors';
 
 export const GET = withAuth(async (_req, _ctx, session) => {
   try {
-    const organizationId = session.user.organizationId;
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+    });
+
+    const organizationId = user?.organizationId;
 
     if (!organizationId) {
       return NextResponse.json({
@@ -20,7 +24,7 @@ export const GET = withAuth(async (_req, _ctx, session) => {
       });
     }
 
-    // Get all clients with their invoice data
+    // Get all clients with their outstanding and paid invoice data in one query
     const clients = await prisma.client.findMany({
       where: { organizationId },
       include: {
@@ -30,15 +34,42 @@ export const GET = withAuth(async (_req, _ctx, session) => {
           },
           orderBy: { dueDate: 'asc' },
         },
+        payments: {
+          orderBy: { paidAt: 'desc' },
+          take: 20,
+        },
       },
     });
 
-    // Get payment data for each client
+    // Batch-fetch paid invoices for late-payment-rate calculation (avoids N+1)
+    const clientIds = clients.filter(c => c.invoices.length > 0).map(c => c.id);
+    const paidInvoicesAll = clientIds.length > 0
+      ? await prisma.invoice.findMany({
+          where: {
+            clientId: { in: clientIds },
+            status: 'paid',
+            paidDate: { not: null },
+          },
+          select: { clientId: true, paidDate: true, dueDate: true },
+        })
+      : [];
+
+    // Group paid invoices by clientId
+    const paidInvoicesByClient = new Map<string, typeof paidInvoicesAll>();
+    for (const inv of paidInvoicesAll) {
+      if (!inv.clientId) continue;
+      const list = paidInvoicesByClient.get(inv.clientId) || [];
+      list.push(inv);
+      paidInvoicesByClient.set(inv.clientId, list);
+    }
+
     const allRecommendations: Array<{
       clientId: string;
       clientName: string;
       recommendations: Recommendation[];
     }> = [];
+
+    const today = new Date();
 
     for (const client of clients) {
       if (client.invoices.length === 0) continue;
@@ -50,7 +81,6 @@ export const GET = withAuth(async (_req, _ctx, session) => {
       );
 
       // Find the most overdue invoice
-      const today = new Date();
       const mostOverdueInvoice = client.invoices
         .map(inv => {
           const dueDate = new Date(inv.dueDate);
@@ -61,29 +91,11 @@ export const GET = withAuth(async (_req, _ctx, session) => {
 
       if (!mostOverdueInvoice) continue;
 
-      // Get payment history
-      const payments = await prisma.payment.findMany({
-        where: {
-          invoice: { clientId: client.id },
-        },
-        orderBy: { paidAt: 'desc' },
-        take: 20,
-      });
+      // Use pre-fetched payment data from the include
+      const totalPaid = client.payments.reduce((sum, p) => sum + Number(p.amount) * 100, 0);
 
-      const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount) * 100, 0);
-
-      // Calculate late payment rate
-      const paidInvoicesData = await prisma.invoice.findMany({
-        where: {
-          clientId: client.id,
-          status: 'paid',
-          paidDate: { not: null },
-        },
-        select: {
-          paidDate: true,
-          dueDate: true,
-        },
-      });
+      // Use pre-fetched paid invoices for late payment rate
+      const paidInvoicesData = paidInvoicesByClient.get(client.id) || [];
       const paidInvoices = paidInvoicesData.length;
       const lateInvoices = paidInvoicesData.filter(
         inv => inv.paidDate && inv.paidDate > inv.dueDate
