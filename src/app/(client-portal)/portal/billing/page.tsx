@@ -31,10 +31,26 @@ interface Subscription {
 }
 
 const planInfo: Record<string, { name: string; icon: React.ElementType; color: string }> = {
-  website_management: { name: "Website Management + Automation", icon: Zap, color: "from-blue-500 to-indigo-600" },
+  // Website tiers
+  website_managed: { name: "Managed Website", icon: Zap, color: "from-blue-500 to-indigo-600" },
+  website_pro: { name: "Managed Pro", icon: Zap, color: "from-purple-500 to-indigo-600" },
+  website_premium: { name: "Managed Premium", icon: Zap, color: "from-amber-500 to-orange-600" },
+  // AR
+  cashflow_ai: { name: "AR Collection (8%)", icon: BarChart3, color: "from-emerald-500 to-teal-600" },
+  ar_proactive: { name: "Proactive AR", icon: BarChart3, color: "from-emerald-500 to-green-600" },
+  // GEO
+  geo_starter: { name: "GEO Starter", icon: BarChart3, color: "from-violet-500 to-purple-600" },
+  geo_pro: { name: "GEO Pro", icon: BarChart3, color: "from-violet-500 to-pink-600" },
+  geo_enterprise: { name: "GEO Enterprise", icon: BarChart3, color: "from-violet-500 to-rose-600" },
+  // Bundles
+  starter_bundle: { name: "Starter Bundle", icon: Sparkles, color: "from-blue-500 to-purple-600" },
+  growth_bundle: { name: "Growth Bundle", icon: Sparkles, color: "from-purple-500 to-pink-600" },
+  full_suite: { name: "Full Suite", icon: Sparkles, color: "from-amber-500 to-rose-600" },
+  enterprise_suite: { name: "Enterprise Suite", icon: Sparkles, color: "from-rose-500 to-red-600" },
+  // Legacy (for existing subscriptions)
+  website_management: { name: "Website Management", icon: Zap, color: "from-blue-500 to-indigo-600" },
   cybersecurity: { name: "Cybersecurity Shield", icon: Shield, color: "from-emerald-500 to-teal-600" },
   chauffeur: { name: "Business Chauffeur", icon: BarChart3, color: "from-purple-500 to-pink-600" },
-  cashflow_ai: { name: "Cash Flow AI", icon: BarChart3, color: "from-orange-500 to-red-500" },
 };
 
 const statusColors: Record<string, { color: string; bgColor: string }> = {

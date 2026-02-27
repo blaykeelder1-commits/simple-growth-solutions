@@ -28,7 +28,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     // In production, this would come from the organization's subscription status
     const orgTier = (session?.user as { subscriptionTier?: string })?.subscriptionTier;
 
-    if (orgTier && ['free', 'cashflow_ai', 'business_chauffeur', 'enterprise'].includes(orgTier)) {
+    if (orgTier && Object.keys(TIER_FEATURES).includes(orgTier)) {
       setTier(orgTier as SubscriptionTier);
     } else {
       setTier('free');
@@ -54,7 +54,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     if (canAccess(feature)) return null;
 
     // Find the lowest tier that has this feature
-    const tiers: SubscriptionTier[] = ['free', 'cashflow_ai', 'business_chauffeur', 'enterprise'];
+    // Walk tiers from lowest to highest, return first that has the feature
+    const tiers = Object.keys(TIER_FEATURES) as SubscriptionTier[];
     for (const t of tiers) {
       const tierFeatures = TIER_FEATURES[t];
       const value = tierFeatures[feature];
@@ -62,7 +63,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       if (hasFeature) return t;
     }
 
-    return 'business_chauffeur'; // Default upgrade target
+    return 'geo_pro'; // Default upgrade target
   };
 
   return (

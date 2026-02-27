@@ -25,13 +25,19 @@ export function Header() {
             href="#services"
             className="text-sm font-medium text-gray-600 transition-colors hover:text-blue-600"
           >
-            Services
+            Products
           </Link>
           <Link
             href="#how-it-works"
             className="text-sm font-medium text-gray-600 transition-colors hover:text-purple-600"
           >
             How It Works
+          </Link>
+          <Link
+            href="/pricing"
+            className="text-sm font-medium text-gray-600 transition-colors hover:text-emerald-600"
+          >
+            Pricing
           </Link>
           <Link
             href="#testimonials"
@@ -76,7 +82,7 @@ export function Header() {
               className="text-sm font-medium text-gray-600 transition-colors hover:text-blue-600 py-2"
               onClick={() => setMobileMenuOpen(false)}
             >
-              Services
+              Products
             </Link>
             <Link
               href="#how-it-works"
@@ -84,6 +90,13 @@ export function Header() {
               onClick={() => setMobileMenuOpen(false)}
             >
               How It Works
+            </Link>
+            <Link
+              href="/pricing"
+              className="text-sm font-medium text-gray-600 transition-colors hover:text-emerald-600 py-2"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Pricing
             </Link>
             <Link
               href="#testimonials"

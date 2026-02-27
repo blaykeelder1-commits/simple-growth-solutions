@@ -26,10 +26,13 @@ export function Footer() {
           {/* Links */}
           <nav className="flex flex-wrap items-center justify-center gap-6 text-sm">
             <Link href="#services" className="text-gray-600 hover:text-blue-600 transition-colors font-medium">
-              Services
+              Products
             </Link>
             <Link href="#how-it-works" className="text-gray-600 hover:text-purple-600 transition-colors font-medium">
               How It Works
+            </Link>
+            <Link href="/pricing" className="text-gray-600 hover:text-emerald-600 transition-colors font-medium">
+              Pricing
             </Link>
             <Link href="#testimonials" className="text-gray-600 hover:text-pink-600 transition-colors font-medium">
               Testimonials

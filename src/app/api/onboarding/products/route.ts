@@ -6,28 +6,41 @@ import { z } from "zod";
 
 const productsSchema = z.object({
   products: z.array(
-    z.enum(["website_management", "cashflow_ai", "cybersecurity", "chauffeur"])
+    z.enum([
+      // Website tiers
+      "website_managed",
+      "website_pro",
+      "website_premium",
+      // AR
+      "cashflow_ai",
+      "ar_proactive",
+      // GEO tiers
+      "geo_starter",
+      "geo_pro",
+      "geo_enterprise",
+      // Bundles
+      "starter_bundle",
+      "growth_bundle",
+      "full_suite",
+      "enterprise_suite",
+    ])
   ),
 });
 
 // Product pricing configuration
-const productConfig = {
-  website_management: {
-    name: "Website Management",
-    priceMonthly: 7900, // $79.00 in cents
-  },
-  cashflow_ai: {
-    name: "Cash Flow AI",
-    priceMonthly: 0, // Success fee only
-  },
-  cybersecurity: {
-    name: "Cybersecurity Shield",
-    priceMonthly: 3900, // $39.00 in cents
-  },
-  chauffeur: {
-    name: "Business Chauffeur",
-    priceMonthly: 19900, // $199.00 in cents
-  },
+const productConfig: Record<string, { name: string; priceMonthly: number }> = {
+  website_managed: { name: "Managed Website", priceMonthly: 4900 },
+  website_pro: { name: "Managed Pro", priceMonthly: 7900 },
+  website_premium: { name: "Managed Premium", priceMonthly: 12900 },
+  cashflow_ai: { name: "AR Collection", priceMonthly: 0 }, // 8% success fee
+  ar_proactive: { name: "Proactive AR", priceMonthly: 4900 },
+  geo_starter: { name: "GEO Starter", priceMonthly: 7900 },
+  geo_pro: { name: "GEO Pro", priceMonthly: 14900 },
+  geo_enterprise: { name: "GEO Enterprise", priceMonthly: 24900 },
+  starter_bundle: { name: "Starter Bundle", priceMonthly: 9900 },
+  growth_bundle: { name: "Growth Bundle", priceMonthly: 17900 },
+  full_suite: { name: "Full Suite", priceMonthly: 22900 },
+  enterprise_suite: { name: "Enterprise Suite", priceMonthly: 29900 },
 };
 
 export async function POST(request: NextRequest) {

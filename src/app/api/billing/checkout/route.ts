@@ -2,11 +2,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/options";
 import { prisma } from "@/lib/db/prisma";
-import { createCheckoutSession, PlanType } from "@/lib/billing/stripe";
+import { createCheckoutSession, type CheckoutPlanType } from "@/lib/billing/stripe";
 import { z } from "zod";
 
 const checkoutSchema = z.object({
-  plan: z.enum(["website_management", "cybersecurity", "chauffeur"]),
+  plan: z.enum([
+    // Website tiers
+    "website_managed",
+    "website_pro",
+    "website_premium",
+    // AR
+    "ar_proactive",
+    // GEO tiers
+    "geo_starter",
+    "geo_pro",
+    "geo_enterprise",
+    // Bundles
+    "starter_bundle",
+    "growth_bundle",
+    "full_suite",
+    "enterprise_suite",
+  ]),
 });
 
 // POST /api/billing/checkout - Create Stripe checkout session
@@ -64,7 +80,7 @@ export async function POST(request: NextRequest) {
 
     const checkoutSession = await createCheckoutSession({
       organizationId: user.organizationId,
-      plan: plan as Exclude<PlanType, "cashflow_ai">,
+      plan: plan as CheckoutPlanType,
       customerId: stripeCustomerId || undefined,
       successUrl: `${baseUrl}/portal/billing?success=true`,
       cancelUrl: `${baseUrl}/portal/billing?canceled=true`,

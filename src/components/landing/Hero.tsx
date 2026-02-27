@@ -17,7 +17,7 @@ export function Hero() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(236,72,153,0.15),transparent_40%)]" />
       </div>
 
-      {/* Floating decorative elements - More prominent */}
+      {/* Floating decorative elements */}
       <div className="absolute top-16 left-10 float opacity-40">
         <div className="h-32 w-32 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 blur-2xl" />
       </div>
@@ -40,7 +40,7 @@ export function Hero() {
           <ScrollAnimation animation="fade-scale" delay={0}>
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-purple-200 bg-gradient-to-r from-purple-100 to-blue-100 px-4 py-1.5 text-sm font-medium text-purple-700 shadow-sm">
               <Sparkles className="h-4 w-4 text-purple-500" />
-              <span>Free Website Analysis</span>
+              <span>Free Website + AI-Powered Business Tools</span>
               <Star className="h-4 w-4 text-yellow-500 fill-yellow-400" />
             </div>
           </ScrollAnimation>
@@ -48,9 +48,9 @@ export function Hero() {
           {/* Headline */}
           <ScrollAnimation animation="fade-up" delay={100}>
             <h1 className="mb-6 text-4xl font-bold tracking-tight text-gray-900 md:text-5xl lg:text-6xl">
-              Discover What&apos;s{" "}
+              Your Website. Your Cash Flow.{" "}
               <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-emerald-500 bg-clip-text text-transparent">
-                Holding Your Website Back
+                Your AI Business Mentor.
               </span>
             </h1>
           </ScrollAnimation>
@@ -58,8 +58,9 @@ export function Hero() {
           {/* Subheadline */}
           <ScrollAnimation animation="fade-up" delay={200}>
             <p className="mx-auto mb-8 max-w-2xl text-lg text-gray-600 md:text-xl">
-              Paste your URL below for an instant AI analysis. See exactly what&apos;s costing you
-              customers and how we can fix it for free.
+              We build your website for free, collect your overdue invoices at
+              8% (agencies charge 25-40%), and give you a 24/7 AI mentor that
+              knows your business inside out.
             </p>
           </ScrollAnimation>
 
@@ -68,7 +69,7 @@ export function Hero() {
             <UrlAnalyzer />
           </ScrollAnimation>
 
-          {/* Alternative CTA for users who prefer traditional flow */}
+          {/* Alternative CTAs */}
           <ScrollAnimation animation="fade-up" delay={400}>
             <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
               <span className="text-sm text-gray-500">Or skip the analysis:</span>
@@ -83,13 +84,13 @@ export function Hero() {
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
-              <Link href="#how-it-works">
+              <Link href="/pricing">
                 <Button
                   variant="ghost"
                   size="lg"
                   className="text-gray-600 hover:text-purple-600"
                 >
-                  See How It Works
+                  See Pricing
                 </Button>
               </Link>
             </div>
@@ -100,15 +101,15 @@ export function Hero() {
             <div className="mt-10 flex flex-wrap items-center justify-center gap-6 text-sm text-gray-500">
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-emerald-500" />
-                <span>No credit card required</span>
+                <span>Free website, no catch</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-emerald-500" />
-                <span>100% free to start</span>
+                <span>8% AR — half the industry rate</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-emerald-500" />
-                <span>Launch in days</span>
+                <span>AI mentor from $79/mo</span>
               </div>
             </div>
           </ScrollAnimation>

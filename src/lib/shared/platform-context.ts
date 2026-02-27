@@ -11,8 +11,20 @@ import type { CrossSystemData } from "@/lib/insights/cross-system";
 // Platform subscription types
 export type PlatformSubscription =
   | "free_website"
-  | "website_management"
+  | "website_managed"
+  | "website_pro"
+  | "website_premium"
   | "cashflow_ai"
+  | "ar_proactive"
+  | "geo_starter"
+  | "geo_pro"
+  | "geo_enterprise"
+  | "starter_bundle"
+  | "growth_bundle"
+  | "full_suite"
+  | "enterprise_suite"
+  // Legacy plan names (for existing subscriptions)
+  | "website_management"
   | "business_chauffeur"
   | "cybersecurity";
 

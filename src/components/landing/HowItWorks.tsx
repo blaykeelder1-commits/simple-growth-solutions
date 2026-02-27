@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardList, Palette, Rocket, ArrowDown } from "lucide-react";
+import { ClipboardList, Globe, Brain, ArrowDown } from "lucide-react";
 import { ScrollAnimation } from "@/components/ui/scroll-animation";
 
 const steps = [
@@ -9,27 +9,27 @@ const steps = [
     icon: ClipboardList,
     title: "Tell Us About Your Business",
     description:
-      "Fill out a quick questionnaire so we understand your goals, industry, and what you're looking for.",
+      "Fill out a quick questionnaire about your goals, industry, and challenges. We'll analyze your current web presence for free.",
     color: "from-blue-500 to-cyan-500",
     bgColor: "bg-blue-100",
     textColor: "text-blue-600",
   },
   {
     number: "02",
-    icon: Palette,
-    title: "We Build Your Website",
+    icon: Globe,
+    title: "We Build Your Website — Free",
     description:
-      "Our team designs and develops a professional website tailored to your brand—completely free.",
+      "Our team designs and builds a professional website for your business at no cost. Add managed services starting at $49/mo when you're ready.",
     color: "from-purple-500 to-pink-500",
     bgColor: "bg-purple-100",
     textColor: "text-purple-600",
   },
   {
     number: "03",
-    icon: Rocket,
-    title: "Launch When You're Ready",
+    icon: Brain,
+    title: "Grow with AI-Powered Tools",
     description:
-      "Review your site, request changes, and go live. You only pay for hosting when you decide to launch.",
+      "Collect past-due invoices at 8%, get cash flow predictions, and let Geoffrey — your AI business mentor — guide smarter decisions with your real data.",
     color: "from-emerald-500 to-teal-500",
     bgColor: "bg-emerald-100",
     textColor: "text-emerald-600",
@@ -42,7 +42,7 @@ export function HowItWorks() {
       id="how-it-works"
       className="relative py-20 md:py-28 bg-gradient-to-br from-cyan-50 via-blue-100 to-indigo-100 overflow-hidden"
     >
-      {/* Background decorations - More colorful */}
+      {/* Background decorations */}
       <div className="absolute inset-0">
         <div className="absolute -top-20 -right-20 h-96 w-96 rounded-full bg-gradient-to-br from-blue-300/40 to-cyan-300/40 blur-3xl" />
         <div className="absolute -bottom-20 -left-20 h-96 w-96 rounded-full bg-gradient-to-br from-purple-300/40 to-pink-300/40 blur-3xl" />
@@ -65,13 +65,13 @@ export function HowItWorks() {
           </ScrollAnimation>
           <ScrollAnimation animation="fade-up" delay={200}>
             <p className="text-lg text-gray-600">
-              Getting your free website is simple. Three easy steps and you&apos;re on
-              your way to a stronger online presence.
+              Start with a free website, then layer on cash flow recovery and AI
+              mentoring as your business grows.
             </p>
           </ScrollAnimation>
         </div>
 
-        {/* Steps - Modern card layout */}
+        {/* Steps */}
         <div className="mx-auto max-w-5xl">
           <div className="grid gap-8 md:grid-cols-3">
             {steps.map((step, index) => (
