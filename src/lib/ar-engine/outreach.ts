@@ -3,6 +3,7 @@
 
 import { prisma } from '@/lib/db/prisma';
 import { sendEmail } from '@/lib/email';
+import { sendSMS } from '@/lib/integrations/twilio';
 import { arEngineLogger as logger } from '@/lib/logger';
 import { ScheduledAction, OutreachContent, IncentiveOffer } from './types';
 
@@ -143,60 +144,36 @@ export async function sendOutreachEmail(
   }
 }
 
-// Send SMS via Twilio
+// Send SMS via Twilio integration
 export async function sendOutreachSMS(
   to: string,
   content: OutreachContent,
   invoiceId: string,
   paymentLink?: string
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
-  const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-  const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
-
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER) {
-    return { success: false, error: 'SMS not configured - missing Twilio credentials' };
-  }
-
   try {
-    // Replace payment link placeholder
+    // Replace payment link placeholder in content body
     let body = content.body;
     if (paymentLink) {
       body = body.replace('[PAYMENT_LINK]', paymentLink);
     }
 
-    // Truncate SMS to 160 characters if needed (with link consideration)
-    const maxLength = paymentLink ? 120 : 160; // Leave room for link
-    if (body.length > maxLength) {
-      body = body.substring(0, maxLength - 3) + '...';
-    }
-
-    // Add payment link at end if present
-    if (paymentLink) {
+    // If body still has no link and one was provided, append it
+    if (paymentLink && !body.includes(paymentLink)) {
       body += `\n\nPay now: ${paymentLink}`;
     }
 
-    // Format phone number (ensure E.164 format)
-    let formattedPhone = to.replace(/[^\d+]/g, '');
-    if (!formattedPhone.startsWith('+')) {
-      // Assume US number if no country code
-      formattedPhone = '+1' + formattedPhone.replace(/^1/, '');
+    // Send via Twilio integration
+    const result = await sendSMS(to, body);
+
+    if (!result.success) {
+      return result;
     }
-
-    // Dynamic import of Twilio client
-    const twilio = (await import('twilio')).default;
-    const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-
-    const message = await client.messages.create({
-      body,
-      from: TWILIO_PHONE_NUMBER,
-      to: formattedPhone,
-    });
 
     // Log the communication
     const invoice = await prisma.invoice.findUnique({
       where: { id: invoiceId },
-      select: { clientId: true },
+      select: { clientId: true, organizationId: true },
     });
 
     if (invoice?.clientId) {
@@ -206,16 +183,60 @@ export async function sendOutreachSMS(
           type: 'sms',
           direction: 'outbound',
           content: body,
-          emailMessageId: message.sid, // Using emailMessageId field for SMS SID as well
+          emailMessageId: result.messageId, // Using emailMessageId field for SMS SID
         },
       });
+
+      // Track SMS effectiveness if communicationEffectiveness table exists
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (prisma as any).communicationEffectiveness?.create({
+          data: {
+            organizationId: invoice.organizationId,
+            clientId: invoice.clientId,
+            invoiceId,
+            channel: 'sms',
+            messageId: result.messageId,
+            sentAt: new Date(),
+          },
+        });
+      } catch {
+        // Table may not exist yet - graceful degradation
+      }
     }
 
-    return { success: true, messageId: message.sid };
+    return { success: true, messageId: result.messageId };
   } catch (error) {
     logger.error({ err: error }, '[AR Engine] Failed to send SMS');
     return { success: false, error: String(error) };
   }
+}
+
+// Send both email and SMS for maximum reach
+export async function sendOutreachBoth(
+  email: string | null,
+  phone: string | null,
+  content: OutreachContent,
+  invoiceId: string,
+  paymentLink?: string,
+  incentive?: IncentiveOffer
+): Promise<{ emailResult?: { success: boolean; messageId?: string; error?: string }; smsResult?: { success: boolean; messageId?: string; error?: string } }> {
+  const results: {
+    emailResult?: { success: boolean; messageId?: string; error?: string };
+    smsResult?: { success: boolean; messageId?: string; error?: string };
+  } = {};
+
+  // Send email if address available
+  if (email) {
+    results.emailResult = await sendOutreachEmail(email, content, invoiceId, paymentLink, incentive);
+  }
+
+  // Send SMS if phone available
+  if (phone) {
+    results.smsResult = await sendOutreachSMS(phone, content, invoiceId, paymentLink);
+  }
+
+  return results;
 }
 
 // Execute a scheduled action
@@ -248,11 +269,36 @@ export async function executeAction(
       paymentLink = result.url;
     }
 
+    // Determine channel preference from the action
+    const channel = action.channel;
+
     // Execute based on type
     switch (action.type) {
       case 'email':
       case 'discount_offer':
       case 'payment_plan':
+        // If channel is 'both', send via both email and SMS
+        if (channel === 'both' && clientEmail && clientPhone) {
+          const bothResult = await sendOutreachBoth(
+            clientEmail,
+            clientPhone,
+            action.content,
+            invoiceId,
+            paymentLink,
+            action.incentive
+          );
+          const emailOk = bothResult.emailResult?.success ?? false;
+          const smsOk = bothResult.smsResult?.success ?? false;
+          return {
+            success: emailOk || smsOk,
+            error: !emailOk && !smsOk ? 'Both email and SMS failed' : undefined,
+          };
+        }
+        // If channel is 'sms' (or no email available but phone exists), send SMS instead
+        if (channel === 'sms' || (!clientEmail && clientPhone)) {
+          const smsAlt = await sendOutreachSMS(clientPhone!, action.content, invoiceId, paymentLink);
+          return smsAlt;
+        }
         if (!clientEmail) {
           return { success: false, error: 'No email address' };
         }
@@ -263,10 +309,19 @@ export async function executeAction(
           paymentLink,
           action.incentive
         );
+        // Also send SMS follow-up for urgent/final tones if phone available
+        if (clientPhone && (action.content.tone === 'urgent' || action.content.tone === 'final')) {
+          await sendOutreachSMS(clientPhone, action.content, invoiceId, paymentLink);
+        }
         return emailResult;
 
       case 'sms':
         if (!clientPhone) {
+          // Fall back to email if no phone but email exists
+          if (clientEmail) {
+            logger.info('[AR Engine] No phone for SMS action, falling back to email');
+            return sendOutreachEmail(clientEmail, action.content, invoiceId, paymentLink, action.incentive);
+          }
           return { success: false, error: 'No phone number' };
         }
         const smsResult = await sendOutreachSMS(

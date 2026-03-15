@@ -4,8 +4,8 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { withRateLimit } from "@/lib/rate-limit";
 import { sendWelcomeEmail } from "@/lib/email";
+import { runInBackground } from "@/lib/queue";
 import { apiError } from "@/lib/api/errors";
-import { apiLogger } from "@/lib/logger";
 
 const signupSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -66,10 +66,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Send welcome email (async, don't wait)
-    sendWelcomeEmail(user.email, user.name || "there").catch((e) => {
-      apiLogger.warn({ err: e }, "Email send failed");
-    });
+    // Send welcome email in background (non-blocking)
+    runInBackground(
+      () => sendWelcomeEmail(user.email, user.name || "there"),
+      "welcome-email"
+    );
 
     return NextResponse.json(
       {

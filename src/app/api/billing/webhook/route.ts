@@ -40,6 +40,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Process webhook events resiliently — always return 200 to Stripe so it
+  // doesn't retry endlessly. Individual handler failures are logged but don't
+  // cause a 500 response. For higher scale, consider moving event processing
+  // to a queue-based approach (e.g., Vercel Cron + DB queue table).
   try {
     switch (event.type) {
       case "checkout.session.completed": {
@@ -73,15 +77,16 @@ export async function POST(request: NextRequest) {
         break;
       }
     }
-
-    return NextResponse.json({ received: true });
   } catch (err) {
-    apiLogger.error({ err, eventType: event.type }, "Stripe webhook handler failed");
-    return NextResponse.json(
-      { error: "Webhook handler failed" },
-      { status: 500 }
+    // Log the error but still return 200 to Stripe to prevent infinite retries.
+    // The event details are logged so we can investigate and replay if needed.
+    apiLogger.error(
+      { err, eventType: event.type, eventId: event.id },
+      "Stripe webhook handler failed — returning 200 to prevent retries"
     );
   }
+
+  return NextResponse.json({ received: true });
 }
 
 async function handleCheckoutComplete(session: Stripe.Checkout.Session) {

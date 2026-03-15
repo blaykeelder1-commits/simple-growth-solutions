@@ -300,6 +300,20 @@ function generateRecommendedActions(
         expectedResponseRate: 0.15,
       });
     }
+
+    // SMS for urgent/final notices - higher open rate than email
+    if (data.clientPhone) {
+      const smsDate = new Date(nextContactDate);
+      smsDate.setDate(smsDate.getDate() + 1); // Send SMS day after call attempt
+      actions.push({
+        type: 'sms',
+        priority: 9,
+        scheduledFor: smsDate,
+        message: 'Final notice SMS with payment link',
+        reasoning: 'SMS has 98% open rate vs 20% for email - critical for final notices',
+        expectedResponseRate: 0.35,
+      });
+    }
   }
 
   return actions.sort((a, b) => b.priority - a.priority);

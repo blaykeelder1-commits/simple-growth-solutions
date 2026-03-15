@@ -198,11 +198,18 @@ model Lead {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
+  // Nurture sequence tracking
+  nurtureStatus String   @default("new") @map("nurture_status") // new, nurturing, completed, converted, unsubscribed
+  nurtureStep   Int      @default(0) @map("nurture_step") // 0=not started, 1=welcome, 2=case_study, 3=free_offer, 4=last_chance
+  lastNurtureAt DateTime? @map("last_nurture_at")
+  nextNurtureAt DateTime? @map("next_nurture_at")
+
   // Conversion to organization
   convertedToOrgId String? @map("converted_to_org_id")
 
   @@index([status])
   @@index([createdAt])
+  @@index([nurtureStatus, nextNurtureAt])
   @@map("leads")
 }
 

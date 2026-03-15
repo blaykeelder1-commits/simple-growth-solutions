@@ -1,5 +1,8 @@
 // Security scanner for websites
 import { promises as dns } from "dns";
+import { checkSSLExpiration } from "./ssl-monitor";
+import { checkEmailSecurity } from "./email-security";
+import { checkUptime } from "./uptime-check";
 
 export interface SecurityCheckResult {
   passed: boolean;
@@ -165,6 +168,9 @@ export interface SecurityScanResult {
   };
   vulnerabilities: Vulnerability[];
   scannedAt: Date;
+  sslExpiration?: { expiresAt: Date | null; daysUntilExpiry: number; issuer: string | null };
+  emailSecurity?: { spf: { found: boolean }; dmarc: { found: boolean }; dkim: { found: boolean }; score: number; issues: string[] };
+  uptime?: { up: boolean; responseTimeMs: number };
 }
 
 export interface Vulnerability {
@@ -444,21 +450,32 @@ export async function runSecurityScan(url: string): Promise<SecurityScanResult> 
   }
   const targetUrl = validation.normalizedUrl;
 
+  // Extract domain for email security checks
+  const urlObj = new URL(targetUrl);
+  const domain = urlObj.hostname;
+
   // Run all checks in parallel
-  const [ssl, headers, https, cookies] = await Promise.all([
+  const [ssl, headers, https, cookies, sslExpiration, emailSecurity, uptimeResult] = await Promise.all([
     checkSSL(targetUrl),
     checkSecurityHeaders(targetUrl),
     checkHTTPSEnforcement(targetUrl),
     checkCookieSecurity(targetUrl),
+    checkSSLExpiration(targetUrl),
+    checkEmailSecurity(domain),
+    checkUptime(targetUrl),
   ]);
 
   // Calculate overall score (weighted average)
-  const weights = { ssl: 30, headers: 30, https: 20, cookies: 20 };
+  // Weights: ssl 25%, headers 25%, https 15%, cookies 15%, emailSecurity 10%, uptime 10%
+  const weights = { ssl: 25, headers: 25, https: 15, cookies: 15, emailSecurity: 10, uptime: 10 };
+  const uptimeScore = uptimeResult.up ? 100 : 0;
   const overallScore = Math.round(
     (ssl.score * weights.ssl +
       headers.score * weights.headers +
       https.score * weights.https +
-      cookies.score * weights.cookies) /
+      cookies.score * weights.cookies +
+      emailSecurity.score * weights.emailSecurity +
+      uptimeScore * weights.uptime) /
       100
   );
 
@@ -486,11 +503,80 @@ export async function runSecurityScan(url: string): Promise<SecurityScanResult> 
   addVulnerability(https, "configuration", "HTTPS Enforcement");
   addVulnerability(cookies, "cookies", "Cookie Security");
 
+  // SSL expiration vulnerability
+  if (sslExpiration.daysUntilExpiry > 0 && sslExpiration.daysUntilExpiry <= 30) {
+    vulnerabilities.push({
+      category: "ssl",
+      severity: "high",
+      title: "SSL Certificate Expiring Soon",
+      description: `SSL certificate expires in ${sslExpiration.daysUntilExpiry} days (${sslExpiration.expiresAt?.toISOString().split("T")[0] || "unknown"})`,
+      remediation: "Renew your SSL certificate before it expires to avoid service disruption and security warnings.",
+    });
+  } else if (sslExpiration.daysUntilExpiry <= 0 && sslExpiration.expiresAt !== null) {
+    vulnerabilities.push({
+      category: "ssl",
+      severity: "critical",
+      title: "SSL Certificate Expired",
+      description: `SSL certificate expired ${Math.abs(sslExpiration.daysUntilExpiry)} days ago.`,
+      remediation: "Your SSL certificate has expired. Renew it immediately to restore secure connections.",
+    });
+  }
+
+  // Email security vulnerabilities
+  if (!emailSecurity.spf.found) {
+    vulnerabilities.push({
+      category: "email",
+      severity: "medium",
+      title: "Missing SPF Record",
+      description: "No SPF (Sender Policy Framework) record found for this domain.",
+      remediation: "Add an SPF TXT record to your DNS to specify which mail servers are authorized to send email for your domain.",
+    });
+  }
+
+  if (!emailSecurity.dmarc.found) {
+    vulnerabilities.push({
+      category: "email",
+      severity: "medium",
+      title: "Missing DMARC Record",
+      description: "No DMARC (Domain-based Message Authentication, Reporting & Conformance) record found.",
+      remediation: "Add a DMARC TXT record at _dmarc.yourdomain.com to protect against email spoofing and phishing.",
+    });
+  }
+
+  // Uptime vulnerability
+  if (!uptimeResult.up) {
+    vulnerabilities.push({
+      category: "availability",
+      severity: "critical",
+      title: "Site Unreachable",
+      description: uptimeResult.error
+        ? `Site is not responding: ${uptimeResult.error}`
+        : "Site is not responding to requests.",
+      remediation: "Check your server status, DNS configuration, and firewall rules to ensure the site is accessible.",
+    });
+  }
+
   return {
     url: targetUrl,
     overallScore,
     checks: { ssl, headers, cookies, https },
     vulnerabilities,
     scannedAt: new Date(),
+    sslExpiration: {
+      expiresAt: sslExpiration.expiresAt,
+      daysUntilExpiry: sslExpiration.daysUntilExpiry,
+      issuer: sslExpiration.issuer,
+    },
+    emailSecurity: {
+      spf: { found: emailSecurity.spf.found },
+      dmarc: { found: emailSecurity.dmarc.found },
+      dkim: { found: emailSecurity.dkim.found },
+      score: emailSecurity.score,
+      issues: emailSecurity.issues,
+    },
+    uptime: {
+      up: uptimeResult.up,
+      responseTimeMs: uptimeResult.responseTimeMs,
+    },
   };
 }

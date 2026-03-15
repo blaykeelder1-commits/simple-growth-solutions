@@ -149,14 +149,21 @@ export async function POST(request: NextRequest) {
     try {
       const result = await runSecurityScan(url);
 
-      // Update scan with results
+      // Update scan with results (include extended data in JSON detail fields)
       const updatedScan = await prisma.securityScan.update({
         where: { id: scan.id },
         data: {
           status: "completed",
           overallScore: result.overallScore,
-          sslDetails: JSON.stringify(result.checks.ssl),
-          headerDetails: JSON.stringify(result.checks.headers),
+          sslDetails: JSON.stringify({
+            ...result.checks.ssl,
+            sslExpiration: result.sslExpiration,
+          }),
+          headerDetails: JSON.stringify({
+            ...result.checks.headers,
+            emailSecurity: result.emailSecurity,
+            uptime: result.uptime,
+          }),
           criticalCount: result.vulnerabilities.filter((v) => v.severity === "critical")
             .length,
           highCount: result.vulnerabilities.filter((v) => v.severity === "high").length,

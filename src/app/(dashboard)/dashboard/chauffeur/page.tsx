@@ -23,6 +23,7 @@ import {
   Users,
   Brain,
 } from "lucide-react";
+import { SubscriptionGate } from "@/components/subscription-gate";
 
 interface DashboardStats {
   revenueToday: number;
@@ -113,6 +114,7 @@ export default function ChauffeurDashboard() {
         </div>
       </div>
 
+      <SubscriptionGate requiredPlan="chauffeur">
       {/* Integration status banner */}
       {stats?.integrationsConnected === 0 && (
         <Card variant="gradient" className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 overflow-hidden relative">
@@ -390,6 +392,7 @@ export default function ChauffeurDashboard() {
           </div>
         </CardContent>
       </Card>
+      </SubscriptionGate>
     </div>
   );
 }

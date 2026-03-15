@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { withAdmin } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
 import { withRateLimit } from "@/lib/rate-limit";
+import { startNurtureForLead } from "@/lib/nurture/engine";
 import { z } from "zod";
 
 // Full lead schema for questionnaire form
@@ -83,6 +84,11 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      // Start nurture sequence (fire-and-forget, don't block response)
+      startNurtureForLead(lead.id, prisma).catch((err) =>
+        console.error("Failed to start nurture for lead", lead.id, err)
+      );
+
       return NextResponse.json({ success: true, lead }, { status: 201 });
     }
 
@@ -101,6 +107,11 @@ export async function POST(req: NextRequest) {
         challenges: validated.challenges || null,
       },
     });
+
+    // Start nurture sequence (fire-and-forget, don't block response)
+    startNurtureForLead(lead.id, prisma).catch((err) =>
+      console.error("Failed to start nurture for lead", lead.id, err)
+    );
 
     return NextResponse.json({ success: true, lead }, { status: 201 });
   } catch (error) {

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import crypto from "crypto";
 import { withRateLimit } from "@/lib/rate-limit";
 import { sendPasswordResetEmail } from "@/lib/email";
+import { runInBackground } from "@/lib/queue";
 import { z } from "zod";
 
 const forgotPasswordSchema = z.object({
@@ -63,7 +64,11 @@ export async function POST(request: NextRequest) {
     const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
     const resetUrl = `${baseUrl}/reset-password?token=${token}`;
 
-    await sendPasswordResetEmail(email, resetUrl);
+    // Send password reset email in background (non-blocking)
+    runInBackground(
+      () => sendPasswordResetEmail(email, resetUrl),
+      "password-reset-email"
+    );
 
     // Log the request
     await prisma.auditLog.create({

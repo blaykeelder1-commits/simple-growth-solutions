@@ -68,19 +68,7 @@ export default function BookPage() {
 
             {/* Cal.com Embed Placeholder */}
             <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-              {/*
-                Replace this placeholder with your Cal.com embed.
-
-                Example using Cal.com inline embed:
-
-                1. Install: npm install @calcom/embed-react
-                2. Import: import Cal from "@calcom/embed-react"
-                3. Use: <Cal calLink="your-username/30min" />
-
-                Or use the script embed:
-                <Script src="https://cal.com/embed.js" />
-                <div data-cal-link="your-username/30min" />
-              */}
+              {/* Cal.com embed: install @calcom/embed-react, then use <Cal calLink="your-username/30min" /> */}
               <div className="flex min-h-[500px] flex-col items-center justify-center p-8 text-center">
                 <div className="mb-4 rounded-full bg-primary/10 p-4">
                   <Calendar className="h-10 w-10 text-primary" />

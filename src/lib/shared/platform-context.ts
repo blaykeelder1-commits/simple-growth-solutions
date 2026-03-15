@@ -121,6 +121,25 @@ export interface UnifiedPlatformContext {
     }[];
   };
 
+  // Security Posture
+  security?: {
+    lastScore: number;
+    previousScore: number | null;
+    scoresTrend: number[]; // last 12 scan scores
+    improving: boolean;
+    criticalIssues: number;
+    highIssues: number;
+    totalOpenVulnerabilities: number;
+    sslExpiresIn: number | null; // days until SSL cert expires
+    emailSecurity: {
+      spfConfigured: boolean;
+      dmarcConfigured: boolean;
+      dkimConfigured: boolean;
+    } | null;
+    lastScanDate: string | null;
+    targetUrl: string | null;
+  };
+
   // Bank/Financial Data (Plaid)
   bankData?: {
     connectedAccounts: number;
@@ -471,6 +490,122 @@ async function buildBusinessChauffeurContext(
   }
 }
 
+// Build security posture context
+async function buildSecurityContext(
+  organizationId: string
+): Promise<UnifiedPlatformContext["security"] | undefined> {
+  try {
+    // Get the last 12 completed scans
+    const scans = await prisma.securityScan.findMany({
+      where: {
+        organizationId,
+        status: "completed",
+        overallScore: { not: null },
+      },
+      select: {
+        overallScore: true,
+        completedAt: true,
+        sslDetails: true,
+        headerDetails: true,
+        targetUrl: true,
+        criticalCount: true,
+        highCount: true,
+      },
+      orderBy: { completedAt: "desc" },
+      take: 12,
+    });
+
+    if (scans.length === 0) {
+      return undefined;
+    }
+
+    const latestScan = scans[0];
+    const previousScan = scans.length > 1 ? scans[1] : null;
+    const lastScore = latestScan.overallScore!;
+    const previousScore = previousScan?.overallScore ?? null;
+
+    // Scores trend: oldest to newest
+    const scoresTrend = scans
+      .filter(s => s.overallScore !== null)
+      .map(s => s.overallScore!)
+      .reverse();
+
+    const improving = previousScore !== null ? lastScore > previousScore : false;
+
+    // Count open vulnerabilities
+    const openVulns = await prisma.vulnerability.groupBy({
+      by: ["severity"],
+      where: {
+        scan: { organizationId },
+        status: "open",
+      },
+      _count: { id: true },
+    });
+
+    const criticalIssues = openVulns.find(v => v.severity === "critical")?._count.id ?? 0;
+    const highIssues = openVulns.find(v => v.severity === "high")?._count.id ?? 0;
+    const totalOpenVulnerabilities = openVulns.reduce((sum, v) => sum + v._count.id, 0);
+
+    // Extract SSL expiration from latest scan's sslDetails JSON
+    let sslExpiresIn: number | null = null;
+    if (latestScan.sslDetails) {
+      try {
+        const sslData = JSON.parse(latestScan.sslDetails);
+        if (sslData.validTo) {
+          const expiryDate = new Date(sslData.validTo);
+          const now = new Date();
+          sslExpiresIn = Math.ceil(
+            (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+          );
+        } else if (sslData.daysUntilExpiry !== undefined) {
+          sslExpiresIn = sslData.daysUntilExpiry;
+        }
+      } catch {
+        // Invalid JSON, skip
+      }
+    }
+
+    // Extract email security from latest scan's headerDetails JSON
+    let emailSecurity: {
+      spfConfigured: boolean;
+      dmarcConfigured: boolean;
+      dkimConfigured: boolean;
+    } | null = null;
+    if (latestScan.headerDetails) {
+      try {
+        const headerData = JSON.parse(latestScan.headerDetails);
+        // Look for email-related security headers/findings
+        if (headerData.emailSecurity || headerData.spf !== undefined || headerData.dmarc !== undefined) {
+          emailSecurity = {
+            spfConfigured: headerData.emailSecurity?.spf ?? headerData.spf ?? false,
+            dmarcConfigured: headerData.emailSecurity?.dmarc ?? headerData.dmarc ?? false,
+            dkimConfigured: headerData.emailSecurity?.dkim ?? headerData.dkim ?? false,
+          };
+        }
+      } catch {
+        // Invalid JSON, skip
+      }
+    }
+
+    return {
+      lastScore,
+      previousScore,
+      scoresTrend,
+      improving,
+      criticalIssues,
+      highIssues,
+      totalOpenVulnerabilities,
+      sslExpiresIn,
+      emailSecurity,
+      lastScanDate: latestScan.completedAt?.toISOString() ?? null,
+      targetUrl: latestScan.targetUrl ?? null,
+    };
+  } catch (error) {
+    console.error("[Platform Context] Error building security context:", error);
+    return undefined;
+  }
+}
+
 // Build bank data context from Plaid
 async function buildBankDataContext(
   organizationId: string
@@ -592,7 +727,7 @@ export async function buildUnifiedContext(
     const platforms = await getOrganizationPlatforms(organizationId);
 
     // Build contexts in parallel for active platforms
-    const [cashFlowContext, chauffeurContext, bankContext] = await Promise.all([
+    const [cashFlowContext, chauffeurContext, bankContext, securityContext] = await Promise.all([
       platforms.activePlatforms.includes("cashflow_ai")
         ? buildCashFlowContext(organizationId)
         : Promise.resolve(undefined),
@@ -600,6 +735,7 @@ export async function buildUnifiedContext(
         ? buildBusinessChauffeurContext(organizationId)
         : Promise.resolve(undefined),
       buildBankDataContext(organizationId),
+      buildSecurityContext(organizationId),
     ]);
 
     // Determine data quality
@@ -607,10 +743,11 @@ export async function buildUnifiedContext(
     const hasData = cashFlowContext || chauffeurContext;
     const hasIntegrations = chauffeurContext?.integrations?.some(i => i.status === "connected");
     const hasBankData = !!bankContext;
+    const hasSecurityData = !!securityContext;
 
     if (hasData && (hasIntegrations || hasBankData)) {
       dataQuality = "high";
-    } else if (hasData || hasBankData) {
+    } else if (hasData || hasBankData || hasSecurityData) {
       dataQuality = "medium";
     }
 
@@ -623,6 +760,7 @@ export async function buildUnifiedContext(
       },
       cashFlowAI: cashFlowContext,
       businessChauffeur: chauffeurContext,
+      security: securityContext,
       bankData: bankContext,
       lastUpdated: new Date().toISOString(),
       dataQuality,
@@ -732,6 +870,49 @@ export function formatContextForAI(context: UnifiedPlatformContext): string {
         const sign = tx.amount > 0 ? "-" : "+";
         lines.push(`  - ${tx.description}: ${sign}$${(Math.abs(tx.amount) / 100).toLocaleString()} (${tx.category})`);
       });
+    }
+    lines.push("");
+  }
+
+  if (context.security) {
+    const sec = context.security;
+    const trendLabel = sec.improving ? "Improving" : "Needs attention";
+    lines.push(`## Security Status`);
+    lines.push(`- Overall Score: ${sec.lastScore}/100 (${trendLabel})`);
+    if (sec.previousScore !== null) {
+      const diff = sec.lastScore - sec.previousScore;
+      const diffLabel = diff >= 0 ? `+${diff}` : `${diff}`;
+      lines.push(`- Previous Score: ${sec.previousScore}/100 (${diffLabel} change)`);
+    }
+    lines.push(`- Open Vulnerabilities: ${sec.totalOpenVulnerabilities} (${sec.criticalIssues} critical, ${sec.highIssues} high)`);
+
+    if (sec.sslExpiresIn !== null) {
+      if (sec.sslExpiresIn <= 0) {
+        lines.push(`- SSL Certificate: EXPIRED`);
+      } else if (sec.sslExpiresIn <= 30) {
+        lines.push(`- SSL Certificate: Expires in ${sec.sslExpiresIn} days (URGENT)`);
+      } else {
+        lines.push(`- SSL Certificate: Expires in ${sec.sslExpiresIn} days`);
+      }
+    } else {
+      lines.push(`- SSL Certificate: Not monitored`);
+    }
+
+    if (sec.emailSecurity) {
+      const spf = sec.emailSecurity.spfConfigured ? "configured" : "MISSING";
+      const dmarc = sec.emailSecurity.dmarcConfigured ? "configured" : "MISSING";
+      const dkim = sec.emailSecurity.dkimConfigured ? "configured" : "MISSING";
+      lines.push(`- Email Security: SPF ${spf} | DMARC ${dmarc} | DKIM ${dkim}`);
+    }
+
+    if (sec.lastScanDate) {
+      lines.push(`- Last Scan: ${sec.lastScanDate}`);
+    }
+    if (sec.targetUrl) {
+      lines.push(`- Monitored URL: ${sec.targetUrl}`);
+    }
+    if (sec.scoresTrend.length > 1) {
+      lines.push(`- Score History (oldest to newest): ${sec.scoresTrend.join(" → ")}`);
     }
     lines.push("");
   }

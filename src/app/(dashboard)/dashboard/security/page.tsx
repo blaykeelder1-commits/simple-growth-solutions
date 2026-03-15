@@ -22,7 +22,15 @@ import {
   Search,
   Zap,
   Activity,
+  Lock,
+  Mail,
+  Wifi,
+  TrendingUp,
+  TrendingDown,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
+import { SubscriptionGate } from "@/components/subscription-gate";
 
 interface SecurityScan {
   id: string;
@@ -42,6 +50,36 @@ interface DashboardStats {
   avgScore: number;
   openVulnerabilities: number;
   lastScanDate: string | null;
+}
+
+interface TrendPoint {
+  date: string;
+  score: number;
+}
+
+interface TrendsData {
+  trends: TrendPoint[];
+  improving: boolean;
+}
+
+// Extended scan result from the API (includes new fields stored as JSON)
+interface ScanResultExtended {
+  sslExpiration?: {
+    expiresAt: string | null;
+    daysUntilExpiry: number;
+    issuer: string | null;
+  };
+  emailSecurity?: {
+    spf: { found: boolean };
+    dmarc: { found: boolean };
+    dkim: { found: boolean };
+    score: number;
+    issues: string[];
+  };
+  uptime?: {
+    up: boolean;
+    responseTimeMs: number;
+  };
 }
 
 const getScoreGradient = (score: number | null) => {
@@ -75,19 +113,297 @@ const getScoreLabel = (score: number | null) => {
   return "Critical";
 };
 
+function ScoreTrendChart({ trends, improving }: TrendsData) {
+  if (trends.length === 0) return null;
+
+  const maxScore = 100;
+  const chartHeight = 120;
+
+  return (
+    <Card variant="professional">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Activity className="h-5 w-5 text-blue-500" />
+              Score Trend
+            </CardTitle>
+            <CardDescription>Last {trends.length} scans</CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            {improving ? (
+              <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-200">
+                <TrendingUp className="h-3 w-3 mr-1" />
+                Improving
+              </Badge>
+            ) : (
+              <Badge className="bg-orange-100 text-orange-800 border border-orange-200">
+                <TrendingDown className="h-3 w-3 mr-1" />
+                Declining
+              </Badge>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-end gap-1" style={{ height: chartHeight }}>
+          {trends.map((point, index) => {
+            const barHeight = Math.max(4, (point.score / maxScore) * chartHeight);
+            const barColor =
+              point.score >= 80
+                ? "bg-emerald-500"
+                : point.score >= 60
+                ? "bg-yellow-500"
+                : point.score >= 40
+                ? "bg-orange-500"
+                : "bg-red-500";
+
+            return (
+              <div
+                key={index}
+                className="flex-1 flex flex-col items-center justify-end gap-1 group relative"
+              >
+                {/* Tooltip */}
+                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">
+                  {point.score}/100
+                  <br />
+                  {new Date(point.date).toLocaleDateString()}
+                </div>
+                {/* Bar */}
+                <div
+                  className={`w-full ${barColor} rounded-t transition-all duration-300 hover:opacity-80 min-w-[8px]`}
+                  style={{ height: barHeight }}
+                />
+              </div>
+            );
+          })}
+        </div>
+        {/* X-axis labels */}
+        <div className="flex items-center gap-1 mt-2">
+          {trends.map((point, index) => (
+            <div key={index} className="flex-1 text-center">
+              {index === 0 || index === trends.length - 1 ? (
+                <span className="text-[10px] text-gray-400">
+                  {new Date(point.date).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SSLExpiryCard({
+  sslExpiration,
+}: {
+  sslExpiration: ScanResultExtended["sslExpiration"];
+}) {
+  if (!sslExpiration || sslExpiration.expiresAt === null) return null;
+
+  const days = sslExpiration.daysUntilExpiry;
+  const isUrgent = days <= 7;
+  const isWarning = days <= 30;
+
+  const bgColor = isUrgent
+    ? "from-red-50 to-red-100 border-red-200"
+    : isWarning
+    ? "from-amber-50 to-yellow-100 border-amber-200"
+    : "from-emerald-50 to-green-100 border-emerald-200";
+
+  const textColor = isUrgent
+    ? "text-red-700"
+    : isWarning
+    ? "text-amber-700"
+    : "text-emerald-700";
+
+  const iconColor = isUrgent
+    ? "text-red-500"
+    : isWarning
+    ? "text-amber-500"
+    : "text-emerald-500";
+
+  return (
+    <Card variant="professional" hover="lift">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-sm font-medium text-gray-500">
+          SSL Certificate
+        </CardTitle>
+        <div className={`p-2 rounded-lg bg-gradient-to-br ${bgColor}`}>
+          <Lock className={`h-5 w-5 ${iconColor}`} />
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className={`text-3xl font-bold ${textColor}`}>
+          {days > 0 ? `${days}d` : "Expired"}
+        </div>
+        <p className="text-sm text-gray-500 mt-1">
+          {days > 0 ? "until expiry" : "Certificate has expired"}
+        </p>
+        {sslExpiration.issuer && (
+          <p className="text-xs text-gray-400 mt-2 truncate">
+            Issued by: {sslExpiration.issuer}
+          </p>
+        )}
+        {sslExpiration.expiresAt && (
+          <p className="text-xs text-gray-400 mt-1">
+            Expires: {new Date(sslExpiration.expiresAt).toLocaleDateString()}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmailSecurityCard({
+  emailSecurity,
+}: {
+  emailSecurity: ScanResultExtended["emailSecurity"];
+}) {
+  if (!emailSecurity) return null;
+
+  const checks = [
+    { label: "SPF", found: emailSecurity.spf.found },
+    { label: "DMARC", found: emailSecurity.dmarc.found },
+    { label: "DKIM", found: emailSecurity.dkim.found },
+  ];
+
+  const passedCount = checks.filter((c) => c.found).length;
+
+  return (
+    <Card variant="professional" hover="lift">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-sm font-medium text-gray-500">
+          Email Security
+        </CardTitle>
+        <div className="p-2 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-100 border border-blue-200">
+          <Mail className={`h-5 w-5 ${passedCount === 3 ? "text-emerald-500" : passedCount >= 1 ? "text-amber-500" : "text-red-500"}`} />
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className={`text-3xl font-bold ${passedCount === 3 ? "text-emerald-600" : passedCount >= 1 ? "text-amber-600" : "text-red-600"}`}>
+          {passedCount}/3
+        </div>
+        <p className="text-sm text-gray-500 mt-1">checks passed</p>
+        <div className="mt-3 space-y-1.5">
+          {checks.map((check) => (
+            <div key={check.label} className="flex items-center gap-2">
+              {check.found ? (
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              ) : (
+                <XCircle className="h-4 w-4 text-red-400" />
+              )}
+              <span
+                className={`text-sm ${
+                  check.found ? "text-gray-700" : "text-gray-400"
+                }`}
+              >
+                {check.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function UptimeCard({
+  uptime,
+}: {
+  uptime: ScanResultExtended["uptime"];
+}) {
+  if (!uptime) return null;
+
+  return (
+    <Card variant="professional" hover="lift">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-sm font-medium text-gray-500">
+          Uptime Status
+        </CardTitle>
+        <div
+          className={`p-2 rounded-lg bg-gradient-to-br ${
+            uptime.up
+              ? "from-emerald-50 to-green-100 border border-emerald-200"
+              : "from-red-50 to-red-100 border border-red-200"
+          }`}
+        >
+          <Wifi
+            className={`h-5 w-5 ${
+              uptime.up ? "text-emerald-500" : "text-red-500"
+            }`}
+          />
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center gap-2">
+          <div
+            className={`h-3 w-3 rounded-full ${
+              uptime.up ? "bg-emerald-500 animate-pulse" : "bg-red-500"
+            }`}
+          />
+          <span
+            className={`text-2xl font-bold ${
+              uptime.up ? "text-emerald-600" : "text-red-600"
+            }`}
+          >
+            {uptime.up ? "Online" : "Down"}
+          </span>
+        </div>
+        <p className="text-sm text-gray-500 mt-2">
+          Response time: {uptime.responseTimeMs}ms
+        </p>
+        {uptime.responseTimeMs > 0 && (
+          <div className="mt-2">
+            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  uptime.responseTimeMs < 500
+                    ? "bg-emerald-500"
+                    : uptime.responseTimeMs < 1500
+                    ? "bg-yellow-500"
+                    : "bg-red-500"
+                }`}
+                style={{
+                  width: `${Math.min(100, (uptime.responseTimeMs / 3000) * 100)}%`,
+                }}
+              />
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              {uptime.responseTimeMs < 500
+                ? "Fast"
+                : uptime.responseTimeMs < 1500
+                ? "Moderate"
+                : "Slow"}
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function SecurityDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentScans, setRecentScans] = useState<SecurityScan[]>([]);
   const [loading, setLoading] = useState(true);
   const [scanUrl, setScanUrl] = useState("");
   const [scanning, setScanning] = useState(false);
+  const [trends, setTrends] = useState<TrendsData | null>(null);
+  const [latestScanExtended, setLatestScanExtended] =
+    useState<ScanResultExtended | null>(null);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [statsRes, scansRes] = await Promise.all([
+        const [statsRes, scansRes, trendsRes] = await Promise.all([
           fetch("/api/security/stats"),
           fetch("/api/security/scans?limit=5"),
+          fetch("/api/security/trends"),
         ]);
 
         if (statsRes.ok) {
@@ -98,6 +414,43 @@ export default function SecurityDashboard() {
         if (scansRes.ok) {
           const data = await scansRes.json();
           setRecentScans(data.scans || []);
+
+          // Try to extract extended data from the most recent scan's JSON details
+          if (data.scans && data.scans.length > 0) {
+            const latestScan = data.scans[0];
+            try {
+              const extended: ScanResultExtended = {};
+              if (latestScan.sslDetails) {
+                const sslData = JSON.parse(latestScan.sslDetails);
+                // The sslDetails stores the SSL check result, but we also
+                // store extended data if available
+                if (sslData.sslExpiration) {
+                  extended.sslExpiration = sslData.sslExpiration;
+                }
+              }
+              if (latestScan.headerDetails) {
+                const headerData = JSON.parse(latestScan.headerDetails);
+                if (headerData.emailSecurity) {
+                  extended.emailSecurity = headerData.emailSecurity;
+                }
+                if (headerData.uptime) {
+                  extended.uptime = headerData.uptime;
+                }
+              }
+              if (Object.keys(extended).length > 0) {
+                setLatestScanExtended(extended);
+              }
+            } catch {
+              // Failed to parse extended data - not critical
+            }
+          }
+        }
+
+        if (trendsRes.ok) {
+          const data = await trendsRes.json();
+          if (data.trends && data.trends.length > 0) {
+            setTrends({ trends: data.trends, improving: data.improving });
+          }
         }
       } catch {
         // Failed to fetch security data
@@ -124,6 +477,22 @@ export default function SecurityDashboard() {
         const data = await res.json();
         setRecentScans((prev) => [data.scan, ...prev.slice(0, 4)]);
         setScanUrl("");
+
+        // Refresh trends
+        try {
+          const trendsRes = await fetch("/api/security/trends");
+          if (trendsRes.ok) {
+            const trendsData = await trendsRes.json();
+            if (trendsData.trends && trendsData.trends.length > 0) {
+              setTrends({
+                trends: trendsData.trends,
+                improving: trendsData.improving,
+              });
+            }
+          }
+        } catch {
+          // Non-critical
+        }
       }
     } catch {
       // Scan failed
@@ -152,6 +521,7 @@ export default function SecurityDashboard() {
         </Link>
       </div>
 
+      <SubscriptionGate requiredPlan="cybersecurity">
       {/* Security score hero */}
       {stats && (
         <Card variant="gradient" className={`bg-gradient-to-br ${getScoreGradient(stats.avgScore)} overflow-hidden relative`}>
@@ -163,7 +533,7 @@ export default function SecurityDashboard() {
                   <div className="w-28 h-28 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm border-4 border-white/30">
                     <div className="text-center">
                       <span className="text-5xl font-bold text-white">
-                        {stats.avgScore ?? "—"}
+                        {stats.avgScore ?? "\u2014"}
                       </span>
                     </div>
                   </div>
@@ -239,6 +609,20 @@ export default function SecurityDashboard() {
         </CardContent>
       </Card>
 
+      {/* Score trend chart */}
+      {trends && trends.trends.length >= 2 && (
+        <ScoreTrendChart trends={trends.trends} improving={trends.improving} />
+      )}
+
+      {/* New monitoring cards: SSL, Email Security, Uptime */}
+      {latestScanExtended && (
+        <div className="grid gap-5 md:grid-cols-3">
+          <SSLExpiryCard sslExpiration={latestScanExtended.sslExpiration} />
+          <EmailSecurityCard emailSecurity={latestScanExtended.emailSecurity} />
+          <UptimeCard uptime={latestScanExtended.uptime} />
+        </div>
+      )}
+
       {/* Stats grid */}
       <div className="grid gap-5 md:grid-cols-4">
         <Card variant="professional" hover="lift" className="stat-card stat-card-green">
@@ -252,7 +636,7 @@ export default function SecurityDashboard() {
           </CardHeader>
           <CardContent>
             <div className={`text-3xl font-bold ${getScoreColor(stats?.avgScore ?? null)}`}>
-              {stats?.avgScore ?? "—"}
+              {stats?.avgScore ?? "\u2014"}
             </div>
             <p className="text-sm text-gray-500 mt-1">
               {getScoreLabel(stats?.avgScore ?? null)}
@@ -305,7 +689,7 @@ export default function SecurityDashboard() {
             <div className="text-2xl font-bold text-gray-900">
               {stats?.lastScanDate
                 ? new Date(stats.lastScanDate).toLocaleDateString()
-                : "—"}
+                : "\u2014"}
             </div>
             <p className="text-sm text-gray-500 mt-1">
               {stats?.lastScanDate ? "Completed" : "No scans yet"}
@@ -413,6 +797,7 @@ export default function SecurityDashboard() {
           )}
         </CardContent>
       </Card>
+      </SubscriptionGate>
     </div>
   );
 }

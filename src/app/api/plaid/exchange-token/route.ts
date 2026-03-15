@@ -11,6 +11,7 @@ import {
   getAccountBalances,
   getInstitution,
 } from "@/lib/integrations/plaid";
+import { encrypt } from "@/lib/encryption";
 
 export async function POST(request: Request) {
   try {
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
     const plaidItem = await prisma.plaidItem.create({
       data: {
         organizationId: user.organizationId,
-        accessToken, // In production, encrypt this!
+        accessToken: encrypt(accessToken),
         itemId,
         institutionId: institutionId || null,
         institutionName,

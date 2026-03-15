@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import crypto from "crypto";
 import { withRateLimit } from "@/lib/rate-limit";
 import { sendVerificationEmail } from "@/lib/email";
+import { runInBackground } from "@/lib/queue";
 
 // POST /api/auth/verify-email - Verify email with token
 export async function POST(request: NextRequest) {
@@ -129,7 +130,11 @@ export async function PUT(request: NextRequest) {
     const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
     const verifyUrl = `${baseUrl}/verify-email?token=${token}`;
 
-    await sendVerificationEmail(email, user.name || "there", verifyUrl);
+    // Send verification email in background (non-blocking)
+    runInBackground(
+      () => sendVerificationEmail(email, user.name || "there", verifyUrl),
+      "verification-email"
+    );
 
     return NextResponse.json({
       success: true,

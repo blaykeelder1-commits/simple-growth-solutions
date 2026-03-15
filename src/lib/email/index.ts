@@ -8,7 +8,7 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
 const FROM_EMAIL = process.env.EMAIL_FROM || 'Simple Growth Solutions <noreply@simplegrowthsolutions.com>';
 
 /** Escape HTML special characters to prevent XSS in email templates */
-function escapeHtml(str: string): string {
+export function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -57,7 +57,7 @@ export async function sendEmail({ to, subject, html, text, replyTo }: EmailOptio
 // SHARED EMAIL TEMPLATE WRAPPER
 // ===========================================
 
-function emailLayout(content: string, subtitle?: string): string {
+export function emailLayout(content: string, subtitle?: string): string {
   return `<!DOCTYPE html>
 <html>
   <head>

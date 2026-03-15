@@ -32,14 +32,34 @@ export async function generateActionPlan(
   const invoiceActions: InvoiceActionPlan[] = invoiceAnalyses
     .filter(analysis => analysis.urgencyScore > 20 || analysis.daysOverdue > 0)
     .map(analysis => {
-      const scheduledActions: ScheduledAction[] = analysis.recommendedActions.map(rec => ({
-        id: generateId(),
-        type: rec.type,
-        scheduledFor: rec.scheduledFor,
-        status: 'scheduled',
-        content: generateOutreachContent(analysis, rec),
-        incentive: rec.incentive,
-      }));
+      const scheduledActions: ScheduledAction[] = analysis.recommendedActions.map(rec => {
+        // Determine optimal channel based on action type, client info, and urgency
+        let channel: 'email' | 'sms' | 'both' = 'email';
+        if (rec.type === 'sms') {
+          channel = 'sms';
+        } else if (analysis.clientPhone && analysis.clientEmail) {
+          // For urgent/final notices with phone available, use both channels (higher reach)
+          if (analysis.daysOverdue > 30 || rec.type === 'call') {
+            channel = 'both';
+          }
+          // For moderately overdue, recommend SMS for follow-ups (higher open rate)
+          else if (analysis.daysOverdue > 14 && rec.type === 'email') {
+            channel = 'both';
+          }
+        } else if (analysis.clientPhone && !analysis.clientEmail) {
+          channel = 'sms';
+        }
+
+        return {
+          id: generateId(),
+          type: rec.type,
+          channel,
+          scheduledFor: rec.scheduledFor,
+          status: 'scheduled' as const,
+          content: generateOutreachContent(analysis, rec),
+          incentive: rec.incentive,
+        };
+      });
 
       return {
         invoiceId: analysis.invoiceId,

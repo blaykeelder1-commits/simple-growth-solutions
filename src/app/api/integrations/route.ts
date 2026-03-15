@@ -29,6 +29,7 @@ export async function GET() {
         id: true,
         provider: true,
         status: true,
+        externalAccountId: true,
         lastSyncAt: true,
         lastSyncStatus: true,
         syncError: true,

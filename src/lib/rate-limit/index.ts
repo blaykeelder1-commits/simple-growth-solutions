@@ -36,7 +36,7 @@ export const rateLimiters = {
   signup: redis
     ? new Ratelimit({
         redis,
-        limiter: Ratelimit.slidingWindow(3, '1 h'), // 3 signups per hour per IP
+        limiter: Ratelimit.slidingWindow(20, '1 h'), // 20 signups per hour per IP
         analytics: true,
         prefix: 'ratelimit:signup',
       })

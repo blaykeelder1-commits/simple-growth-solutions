@@ -1,10 +1,49 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
+import { getToken } from "next-auth/jwt";
 
-export function middleware() {
-  // Get the response
+// Routes that require authentication
+const protectedPrefixes = ["/dashboard", "/portal", "/admin", "/onboarding"];
+
+// Routes that additionally require admin/owner role
+const adminPrefixes = ["/admin"];
+
+function isProtectedRoute(pathname: string): boolean {
+  return protectedPrefixes.some(
+    (prefix) => pathname === prefix || pathname.startsWith(prefix + "/")
+  );
+}
+
+function isAdminRoute(pathname: string): boolean {
+  return adminPrefixes.some(
+    (prefix) => pathname === prefix || pathname.startsWith(prefix + "/")
+  );
+}
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // --- Auth checks for protected routes ---
+  if (isProtectedRoute(pathname)) {
+    const token = await getToken({ req: request });
+
+    if (!token) {
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("callbackUrl", request.url);
+      return NextResponse.redirect(loginUrl);
+    }
+
+    // Admin routes require admin or owner role
+    if (isAdminRoute(pathname)) {
+      const role = token.role as string | undefined;
+      if (role !== "admin" && role !== "owner") {
+        // Redirect unauthorized users to dashboard
+        return NextResponse.redirect(new URL("/dashboard", request.url));
+      }
+    }
+  }
+
+  // --- Security Headers ---
   const response = NextResponse.next();
-
-  // Security Headers
   const headers = response.headers;
 
   // Prevent clickjacking

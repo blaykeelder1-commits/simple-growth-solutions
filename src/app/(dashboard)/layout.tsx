@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
 import { SubscriptionProvider } from "@/lib/subscription/context";
+import { UpgradeBanner } from "@/components/upgrade-banner";
 import { dashboardNavigation as navigation } from "@/lib/config/navigation";
 
 export default function DashboardLayout({
@@ -179,6 +180,7 @@ export default function DashboardLayout({
 
         <main className="p-6 lg:p-8">
           <SubscriptionProvider>
+            <UpgradeBanner />
             {children}
           </SubscriptionProvider>
         </main>

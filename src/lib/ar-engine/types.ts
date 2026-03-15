@@ -115,6 +115,7 @@ export interface InvoiceActionPlan {
 export interface ScheduledAction {
   id: string;
   type: ActionType;
+  channel?: 'email' | 'sms' | 'both';
   scheduledFor: Date;
   status: 'scheduled' | 'sent' | 'delivered' | 'opened' | 'clicked' | 'responded' | 'failed';
   content: OutreachContent;

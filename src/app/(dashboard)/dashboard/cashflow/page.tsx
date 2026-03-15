@@ -22,6 +22,7 @@ import {
   Play,
   Zap,
 } from "lucide-react";
+import { SubscriptionGate } from "@/components/subscription-gate";
 
 interface DashboardStats {
   totalReceivables: number;
@@ -133,6 +134,7 @@ export default function CashFlowDashboard() {
         </div>
       </div>
 
+      <SubscriptionGate requiredPlan="cashflow_ai">
       {/* Health score banner */}
       {stats && (
         <Card variant="gradient" className={`bg-gradient-to-br ${getHealthColor(stats.healthScore)} overflow-hidden relative`}>
@@ -390,6 +392,7 @@ export default function CashFlowDashboard() {
           </div>
         </CardContent>
       </Card>
+      </SubscriptionGate>
     </div>
   );
 }

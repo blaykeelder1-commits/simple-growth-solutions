@@ -11,6 +11,7 @@ import {
   getTransactions,
   generateBankInsights,
 } from "@/lib/integrations/plaid";
+import { decrypt } from "@/lib/encryption";
 
 // GET - List all connected bank accounts
 export async function GET(request: Request) {
@@ -140,7 +141,7 @@ export async function GET(request: Request) {
           for (const item of plaidItems) {
             const transactions = await getTransactions(
               config,
-              item.accessToken,
+              decrypt(item.accessToken),
               startDate,
               endDate
             );
@@ -240,7 +241,7 @@ export async function POST(request: Request) {
     }
 
     // Refresh account balances
-    const accounts = await getAccountBalances(config, plaidItem.accessToken);
+    const accounts = await getAccountBalances(config, decrypt(plaidItem.accessToken));
 
     let updatedCount = 0;
 
@@ -278,7 +279,7 @@ export async function POST(request: Request) {
 
     const transactions = await getTransactions(
       config,
-      plaidItem.accessToken,
+      decrypt(plaidItem.accessToken),
       startDate,
       endDate
     );

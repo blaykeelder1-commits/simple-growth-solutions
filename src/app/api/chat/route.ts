@@ -68,8 +68,12 @@ You have access to data from multiple integrated platforms:
    - Identifies seasonal patterns
    - Benchmarks against regional competitors
 
-3. **Cybersecurity Platform** (coming soon)
-   - Security monitoring and protection
+3. **Cybersecurity Platform** - Website security monitoring
+   - Scans websites for vulnerabilities
+   - Monitors SSL certificate expiration
+   - Checks email authentication (SPF, DMARC, DKIM)
+   - Scores overall security posture (0-100)
+   - Tracks security improvement over time
 
 ## Industry Intelligence Capabilities
 
@@ -78,6 +82,20 @@ When the user's industry is known, you can provide:
 - **Seasonal Pattern Insights**: "This is typically a slow period - running specials could increase revenue by 15-20%"
 - **Regional Benchmarking**: "Your pricing puts you in the top X% for your area"
 - **Growth Strategies**: Industry-specific tactics with potential impact estimates
+
+## Security Posture
+When the user has security scan data, you can:
+- Report on their current security score and trend
+- Warn about SSL certificate expiration
+- Recommend fixing missing email security (SPF, DMARC, DKIM)
+- Explain vulnerabilities in plain language
+- Suggest remediation steps
+- Celebrate improvements in security score
+
+Always frame security in business terms:
+- "Your SSL expires in 5 days — this will show a warning to customers and hurt sales"
+- "Your email isn't authenticated — customers might see your emails as spam"
+- "Your security score improved from 65 to 82 — great progress!"
 
 ## Your Personality
 
@@ -154,6 +172,20 @@ function generateSuggestions(
     suggestions.push("Is this a slow season for my business?");
     suggestions.push("How do my prices compare to others in my area?");
     suggestions.push("What could I do to increase revenue this month?");
+  }
+
+  // Security suggestions
+  if (context.security) {
+    suggestions.push("How's my website security looking?");
+    if (context.security.criticalIssues > 0) {
+      suggestions.push("What critical security issues do I need to address?");
+    }
+    if (context.security.sslExpiresIn !== null && context.security.sslExpiresIn <= 30) {
+      suggestions.push("Tell me about my SSL certificate status");
+    }
+    if (context.security.emailSecurity && (!context.security.emailSecurity.spfConfigured || !context.security.emailSecurity.dmarcConfigured)) {
+      suggestions.push("How can I improve my email deliverability?");
+    }
   }
 
   // Bank data suggestions
@@ -264,6 +296,22 @@ function generateActions(
       label: "View Payroll Analytics",
       action: "navigate",
       params: { path: "/dashboard/payroll" },
+    });
+  }
+
+  // If discussing security
+  if (
+    userMessage.toLowerCase().includes("security") ||
+    userMessage.toLowerCase().includes("ssl") ||
+    userMessage.toLowerCase().includes("vulnerabilit") ||
+    userMessage.toLowerCase().includes("cyber") ||
+    response.toLowerCase().includes("security score") ||
+    response.toLowerCase().includes("ssl")
+  ) {
+    actions.push({
+      label: "View Security Dashboard",
+      action: "navigate",
+      params: { path: "/dashboard/security" },
     });
   }
 

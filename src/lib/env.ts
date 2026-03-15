@@ -29,6 +29,13 @@ const envSchema = z.object({
   // Google Gemini AI
   GOOGLE_GEMINI_API_KEY: z.string().optional(),
 
+  // Encryption
+  ENCRYPTION_KEY: z
+    .string()
+    .length(64, "ENCRYPTION_KEY must be 64 hex characters (32 bytes)")
+    .regex(/^[0-9a-fA-F]+$/, "ENCRYPTION_KEY must be a hex string")
+    .optional(),
+
   // Plaid (optional)
   PLAID_CLIENT_ID: z.string().optional(),
   PLAID_SECRET: z.string().optional(),
