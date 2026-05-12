@@ -17,30 +17,31 @@ datasource db {
 // ==========================================
 
 model User {
-  id             String    @id @default(cuid())
-  email          String    @unique
-  emailVerified  DateTime? @map("email_verified")
-  password       String?   // Nullable for OAuth users
+  id             String        @id @default(cuid())
+  email          String        @unique
+  emailVerified  DateTime?     @map("email_verified")
+  password       String? // Nullable for OAuth users
   name           String?
   image          String?
-  role           String    @default("user") // admin, user, client, owner, analyst, viewer
-  authProvider   String    @default("email") @map("auth_provider") // email, google
-  organizationId String?   @map("organization_id")
+  role           String        @default("user") // admin, user, client, owner, analyst, viewer
+  authProvider   String        @default("email") @map("auth_provider") // email, google
+  organizationId String?       @map("organization_id")
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  lastLoginAt    DateTime? @map("last_login_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  lastLoginAt    DateTime?     @map("last_login_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
 
   // NextAuth relations
-  accounts       Account[]
-  sessions       Session[]
+  accounts Account[]
+  sessions Session[]
 
   // Business relations
-  changeRequests    ChangeRequest[]
-  aiRecommendations AIRecommendation[] @relation("ActionedBy")
-  followUpActions   FollowUpAction[]
-  communicationLogs CommunicationLog[]
-  auditLogs         AuditLog[]
+  changeRequests       ChangeRequest[] @relation("ChangeRequestRequester")
+  assignedChangeRequests ChangeRequest[] @relation("ChangeRequestAssignee")
+  aiRecommendations    AIRecommendation[] @relation("ActionedBy")
+  followUpActions      FollowUpAction[]
+  communicationLogs    CommunicationLog[]
+  auditLogs            AuditLog[]
 
   @@index([organizationId])
   @@map("users")
@@ -88,33 +89,42 @@ model VerificationToken {
 }
 
 model Organization {
-  id                 String   @id @default(cuid())
+  id                 String  @id @default(cuid())
   name               String
   industry           String?
-  annualRevenueTier  String?  @map("annual_revenue_tier") // '100k-500k', '500k-1m', '1m-5m', '5m-20m'
-  timezone           String   @default("America/New_York")
-  currency           String   @default("USD")
-  logoUrl            String?  @map("logo_url")
-  subscriptionTier   String   @default("starter") @map("subscription_tier")
-  subscriptionStatus String   @default("trial") @map("subscription_status")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  annualRevenueTier  String? @map("annual_revenue_tier") // '100k-500k', '500k-1m', '1m-5m', '5m-20m'
+  timezone           String  @default("America/New_York")
+  currency           String  @default("USD")
+  logoUrl            String? @map("logo_url")
+  subscriptionTier   String  @default("starter") @map("subscription_tier")
+  subscriptionStatus String  @default("trial") @map("subscription_status")
+
+  // Customer Journey Tracking
+  // Stages: lead → website_analysis → website_build → website_managed → cybersecurity → cashflow → chauffeur
+  customerStage       String    @default("lead") @map("customer_stage")
+  stageStartedAt      DateTime  @default(now()) @map("stage_started_at")
+  stageCompletedAt    DateTime? @map("stage_completed_at")
+  nextStagePromptedAt DateTime? @map("next_stage_prompted_at")
+  sourceLeadId        String?   @map("source_lead_id") // Links back to original Lead record
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Core relations
-  users              User[]
-  subscriptions      Subscription[]
+  users         User[]
+  subscriptions Subscription[]
 
   // Website Management
-  websiteProjects    WebsiteProject[]
+  websiteProjects WebsiteProject[]
 
   // Cash Flow AI
-  clients            Client[]
-  invoices           Invoice[]
-  cashFlowSnapshots  CashFlowSnapshot[]
-  aiRecommendations  AIRecommendation[]
-  followUpActions    FollowUpAction[]
-  recoveryEvents     RecoveryEvent[]
-  billingCycles      BillingCycle[]
+  clients           Client[]
+  invoices          Invoice[]
+  cashFlowSnapshots CashFlowSnapshot[]
+  aiRecommendations AIRecommendation[]
+  followUpActions   FollowUpAction[]
+  recoveryEvents    RecoveryEvent[]
+  billingCycles     BillingCycle[]
 
   // Business Chauffeur
   integrations       Integration[]
@@ -123,56 +133,80 @@ model Organization {
   businessInsights   BusinessInsight[]
 
   // Cybersecurity
-  securityScans      SecurityScan[]
+  securityScans SecurityScan[]
 
   // HR & Payroll
-  employees          Employee[]
-  payrollSnapshots   PayrollSnapshot[]
+  employees             Employee[]
+  payrollSnapshots      PayrollSnapshot[]
   hiringRecommendations HiringRecommendation[]
 
   // Analytics
   communicationEffectiveness CommunicationEffectiveness[]
-  paymentMethodStats PaymentMethodStats[]
-  auditLogs          AuditLog[]
+  paymentMethodStats         PaymentMethodStats[]
+  auditLogs                  AuditLog[]
 
   // AI Chat
-  chatMessages       ChatMessage[]
+  chatMessages ChatMessage[]
 
   // Bank Accounts (Plaid)
-  plaidItems         PlaidItem[]
-  bankAccounts       BankAccount[]
-  bankTransactions   BankTransaction[]
+  plaidItems       PlaidItem[]
+  bankAccounts     BankAccount[]
+  bankTransactions BankTransaction[]
 
   // Settings
-  settings           OrganizationSettings?
+  settings OrganizationSettings?
 
+  // Journey tracking
+  journeyEvents JourneyEvent[]
+
+  // One-off charges (rush fees, upcharges, setup fees)
+  oneOffCharges OneOffCharge[]
+
+  @@index([customerStage])
   @@map("organizations")
+}
+
+// Tracks each stage transition for funnel analytics
+model JourneyEvent {
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  fromStage   String?  @map("from_stage") // null for initial lead creation
+  toStage     String   @map("to_stage")
+  triggeredBy String?  @map("triggered_by") // user action, admin, automated
+  metadata    String?  @db.Text // JSON: any extra context (analysis score, template chosen, etc.)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId])
+  @@index([toStage, createdAt])
+  @@map("journey_events")
 }
 
 // Organization Settings for Business Intelligence
 model OrganizationSettings {
-  id              String   @id @default(cuid())
-  organizationId  String   @unique @map("organization_id")
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id             String       @id @default(cuid())
+  organizationId String       @unique @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   // Industry classification
-  industryCategory String?  @map("industry_category") // services, food_beverage, automotive, etc.
-  industrySubtype  String?  @map("industry_subtype") // pet_grooming, hair_salon, fast_casual, auto_repair
+  industryCategory String? @map("industry_category") // services, food_beverage, automotive, etc.
+  industrySubtype  String? @map("industry_subtype") // pet_grooming, hair_salon, fast_casual, auto_repair
 
   // Location for regional benchmarking
-  region           String?  // "Austin, TX", "CA", zip code, etc.
+  region String? // "Austin, TX", "CA", zip code, etc.
 
   // Business profile
-  businessSize     String?  @map("business_size") // small, medium, large
-  yearsInBusiness  Int?     @map("years_in_business")
+  businessSize    String? @map("business_size") // small, medium, large
+  yearsInBusiness Int?    @map("years_in_business")
 
   // Preferences
-  notificationEmail    Boolean @default(true) @map("notification_email")
-  weeklyDigest         Boolean @default(true) @map("weekly_digest")
-  proactiveInsights    Boolean @default(true) @map("proactive_insights")
+  notificationEmail Boolean @default(true) @map("notification_email")
+  weeklyDigest      Boolean @default(true) @map("weekly_digest")
+  proactiveInsights Boolean @default(true) @map("proactive_insights")
 
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("organization_settings")
 }
@@ -199,8 +233,8 @@ model Lead {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   // Nurture sequence tracking
-  nurtureStatus String   @default("new") @map("nurture_status") // new, nurturing, completed, converted, unsubscribed
-  nurtureStep   Int      @default(0) @map("nurture_step") // 0=not started, 1=welcome, 2=case_study, 3=free_offer, 4=last_chance
+  nurtureStatus String    @default("new") @map("nurture_status") // new, nurturing, completed, converted, unsubscribed
+  nurtureStep   Int       @default(0) @map("nurture_step") // 0=not started, 1=welcome, 2=case_study, 3=free_offer, 4=last_chance
   lastNurtureAt DateTime? @map("last_nurture_at")
   nextNurtureAt DateTime? @map("next_nurture_at")
 
@@ -218,51 +252,106 @@ model Lead {
 // ==========================================
 
 model Subscription {
-  id                   String   @id @default(cuid())
-  organizationId       String   @map("organization_id")
-  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  stripeCustomerId     String?  @map("stripe_customer_id")
-  stripeSubscriptionId String?  @map("stripe_subscription_id")
-  stripePriceId        String?  @map("stripe_price_id")
+  // Which payment processor handles this subscription. New customer-facing
+  // subscriptions go through Square; the Stripe columns remain populated only
+  // for legacy subs created before the Square migration.
+  processor String @default("stripe") // stripe | square
 
-  plan                 String   // website_management, cybersecurity, chauffeur, cashflow_ai
-  status               String   @default("pending") // pending, trialing, active, past_due, canceled
-  priceMonthly         Int      @default(0) @map("price_monthly") // in cents
+  // Stripe (legacy)
+  stripeCustomerId     String? @map("stripe_customer_id")
+  stripeSubscriptionId String? @map("stripe_subscription_id")
+  stripePriceId        String? @map("stripe_price_id")
 
-  trialStartDate       DateTime? @map("trial_start_date")
-  trialEndDate         DateTime? @map("trial_end_date")
-  currentPeriodStart   DateTime? @map("current_period_start")
-  currentPeriodEnd     DateTime? @map("current_period_end")
-  canceledAt           DateTime? @map("canceled_at")
+  // Square (current)
+  squareCustomerId      String? @map("square_customer_id")
+  squareSubscriptionId  String? @map("square_subscription_id")
+  squareCardId          String? @map("square_card_id")
+  squarePlanVariationId String? @map("square_plan_variation_id")
+  // Payment Link used to capture the customer's card for the first month;
+  // populated until the customer pays and we provision the auto-renewing sub.
+  squarePaymentLinkId   String? @map("square_payment_link_id")
+  squarePaymentLinkUrl  String? @map("square_payment_link_url") @db.Text
 
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+  plan         String // website_managed, website_pro, etc.
+  status       String @default("pending") // pending, awaiting_payment, trialing, active, past_due, canceled
+  priceMonthly Int    @default(0) @map("price_monthly") // in cents
+
+  trialStartDate     DateTime? @map("trial_start_date")
+  trialEndDate       DateTime? @map("trial_end_date")
+  currentPeriodStart DateTime? @map("current_period_start")
+  currentPeriodEnd   DateTime? @map("current_period_end")
+  canceledAt         DateTime? @map("canceled_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  successFeeBillings   SuccessFeeBilling[]
+  successFeeBillings SuccessFeeBilling[]
 
   @@index([organizationId])
   @@index([stripeCustomerId])
+  @@index([squareCustomerId])
+  @@index([squareSubscriptionId])
   @@map("subscriptions")
 }
 
+// One-off charges (rush ticket fees, custom upcharges, setup fees).
+// Tracked here so we can surface payment status in the portal and reconcile
+// against Square webhooks. Auto-issued via Square Payment Links.
+model OneOffCharge {
+  id             String          @id @default(cuid())
+  organizationId String          @map("organization_id")
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId      String?         @map("project_id")
+  project        WebsiteProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  kind        String // rush_fee | upcharge | setup_fee | other
+  description String @db.Text
+  amountCents Int    @map("amount_cents")
+
+  // Square fields
+  squarePaymentLinkId  String? @map("square_payment_link_id")
+  squarePaymentLinkUrl String? @map("square_payment_link_url") @db.Text
+  squareOrderId        String? @map("square_order_id")
+  squarePaymentId      String? @map("square_payment_id")
+
+  status   String    @default("pending") // pending | paid | failed | canceled
+  paidAt   DateTime? @map("paid_at")
+  metadata String?   @db.Text // JSON
+
+  // Backreference for rush ticket charges
+  changeRequest   ChangeRequest? @relation(fields: [changeRequestId], references: [id], onDelete: SetNull)
+  changeRequestId String?        @unique @map("change_request_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([status])
+  @@map("one_off_charges")
+}
+
 model SuccessFeeBilling {
-  id              String   @id @default(cuid())
-  subscriptionId  String   @map("subscription_id")
-  subscription    Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-  invoiceId       String?  @map("invoice_id")
-  invoice         Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  id             String       @id @default(cuid())
+  subscriptionId String       @map("subscription_id")
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  invoiceId      String?      @map("invoice_id")
+  invoice        Invoice?     @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
 
-  recoveredAmount Int      @map("recovered_amount") // Amount recovered in cents
-  feePercentage   Float    @default(0.08) @map("fee_percentage") // 8%
-  feeAmount       Int      @map("fee_amount") // Calculated fee in cents
+  recoveredAmount Int   @map("recovered_amount") // Amount recovered in cents
+  feePercentage   Float @default(0.08) @map("fee_percentage") // 8%
+  feeAmount       Int   @map("fee_amount") // Calculated fee in cents
 
-  status          String   @default("pending") // pending, invoiced, paid
-  stripeInvoiceId String?  @map("stripe_invoice_id")
+  status          String  @default("pending") // pending, invoiced, paid
+  stripeInvoiceId String? @map("stripe_invoice_id")
 
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([subscriptionId])
   @@map("success_fee_billings")
@@ -273,14 +362,14 @@ model SuccessFeeBilling {
 // ==========================================
 
 model WebsiteProject {
-  id             String   @id @default(cuid())
-  organizationId String   @map("organization_id")
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   // Project Info
-  projectName    String   @map("project_name")
-  projectType    String   @map("project_type") // new_build, redesign, migration
-  existingUrl    String?  @map("existing_url")
+  projectName String  @map("project_name")
+  projectType String  @map("project_type") // new_build, redesign, migration
+  existingUrl String? @map("existing_url")
 
   // Requirements (stored as JSON strings)
   desiredFeatures   String? @map("desired_features") @db.Text // JSON: ["e-commerce", "booking", "blog", etc.]
@@ -289,8 +378,18 @@ model WebsiteProject {
   competitors       String? @db.Text // JSON: array of competitor URLs
 
   // Status tracking
-  status            String   @default("submitted") // submitted, reviewing, approved, in_progress, review_ready, revision, deployed, completed
-  priority          Int      @default(0)
+  // Free build flow: queued → in_progress → ready_for_demo → demo_scheduled → accepted → deployed → completed
+  // Paid flow: submitted → reviewing → approved → in_progress → review_ready → revision → deployed → completed
+  status   String @default("submitted")
+  priority Int    @default(0)
+
+  // Free build pipeline
+  isFreeuild      Boolean   @default(false) @map("is_free_build")
+  templateId      String?   @map("template_id") // industry template used for free builds
+  sourceLeadId    String?   @map("source_lead_id") // original Lead record that triggered this build
+  demoScheduledAt DateTime? @map("demo_scheduled_at")
+  demoCompletedAt DateTime? @map("demo_completed_at")
+  demoOutcome     String?   @map("demo_outcome") // accepted, declined, rescheduled
 
   // Deployment
   deploymentPlatform String? @map("deployment_platform") // vercel, netlify, custom
@@ -301,13 +400,14 @@ model WebsiteProject {
   estimatedCompletion DateTime? @map("estimated_completion")
   actualCompletion    DateTime? @map("actual_completion")
 
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  changeRequests     ChangeRequest[]
-  projectNotes       ProjectNote[]
-  projectFiles       ProjectFile[]
+  changeRequests ChangeRequest[]
+  projectNotes   ProjectNote[]
+  projectFiles   ProjectFile[]
+  oneOffCharges  OneOffCharge[]
 
   @@index([organizationId])
   @@index([status])
@@ -315,36 +415,50 @@ model WebsiteProject {
 }
 
 model ChangeRequest {
-  id          String   @id @default(cuid())
-  projectId   String   @map("project_id")
+  id          String         @id @default(cuid())
+  projectId   String         @map("project_id")
   project     WebsiteProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  requesterId String   @map("requester_id")
-  requester   User     @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+  requesterId String         @map("requester_id")
+  requester   User           @relation("ChangeRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+
+  // Operator assigned to handle this CR. NULL = unassigned.
+  // Multiple operators can pull from the same queue without colliding.
+  assigneeId String? @map("assignee_id")
+  assignee   User?   @relation("ChangeRequestAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
 
   title       String
-  description String   @db.Text
-  type        String   @default("feature") // feature, bug, content, design
-  priority    String   @default("normal") // low, normal, high, urgent
+  description String @db.Text
+  type        String @default("feature") // feature, bug, content, design
+  priority    String @default("normal") // low, normal, high, urgent
 
-  status      String   @default("pending") // pending, approved, in_progress, completed, rejected
-  resolution  String?  @db.Text
+  // Status: pending, awaiting_payment, approved, in_progress, completed, rejected
+  status     String  @default("pending")
+  resolution String? @db.Text
 
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  // SLA + rush
+  isRush       Boolean       @default(false) @map("is_rush")
+  slaDueAt     DateTime?     @map("sla_due_at")
+  // Back-link to the rush-fee charge (if isRush). The forward link is on
+  // OneOffCharge.changeRequestId — defined as @unique so this is 1:1.
+  oneOffCharge OneOffCharge?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([projectId])
   @@index([status])
+  @@index([assigneeId, status])
   @@map("change_requests")
 }
 
 model ProjectNote {
-  id        String   @id @default(cuid())
-  projectId String   @map("project_id")
+  id        String         @id @default(cuid())
+  projectId String         @map("project_id")
   project   WebsiteProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  content   String   @db.Text
+  content    String  @db.Text
   isInternal Boolean @default(true) @map("is_internal") // Internal notes vs client-visible
-  authorId  String?  @map("author_id")
+  authorId   String? @map("author_id")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -354,14 +468,14 @@ model ProjectNote {
 }
 
 model ProjectFile {
-  id        String   @id @default(cuid())
-  projectId String   @map("project_id")
+  id        String         @id @default(cuid())
+  projectId String         @map("project_id")
   project   WebsiteProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  filename  String
-  fileUrl   String   @map("file_url")
-  fileType  String   @map("file_type") // design, asset, document
-  fileSize  Int?     @map("file_size")
+  filename String
+  fileUrl  String @map("file_url")
+  fileType String @map("file_type") // design, asset, document
+  fileSize Int?   @map("file_size")
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -374,47 +488,47 @@ model ProjectFile {
 // ==========================================
 
 model Client {
-  id                   String   @id @default(cuid())
-  organizationId       String   @map("organization_id")
-  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  name                 String
-  email                String?
-  phone                String?
-  address              String?
-  industry             String?  // Client's industry for benchmarking
+  name     String
+  email    String?
+  phone    String?
+  address  String?
+  industry String? // Client's industry for benchmarking
 
   // External IDs for integrations
-  externalId           String?  @map("external_id") // ID from accounting system
-  quickbooksId         String?  @map("quickbooks_id")
-  xeroId               String?  @map("xero_id")
+  externalId   String? @map("external_id") // ID from accounting system
+  quickbooksId String? @map("quickbooks_id")
+  xeroId       String? @map("xero_id")
 
   // Payment behavior metrics (computed by AI service)
-  paymentScore         Int?     @map("payment_score") // 0-100 score based on payment history
-  paymentBehaviorTier  String?  @map("payment_behavior_tier") // A, B, C, D
-  avgDaysToPayment     Decimal? @map("avg_days_to_payment") @db.Decimal(5, 1)
-  totalOutstanding     Decimal  @default(0) @map("total_outstanding") @db.Decimal(15, 2)
-  totalPaid            Decimal  @default(0) @map("total_paid") @db.Decimal(15, 2)
-  totalInvoiced        Decimal  @default(0) @map("total_invoiced") @db.Decimal(15, 2)
+  paymentScore        Int?     @map("payment_score") // 0-100 score based on payment history
+  paymentBehaviorTier String?  @map("payment_behavior_tier") // A, B, C, D
+  avgDaysToPayment    Decimal? @map("avg_days_to_payment") @db.Decimal(5, 1)
+  totalOutstanding    Decimal  @default(0) @map("total_outstanding") @db.Decimal(15, 2)
+  totalPaid           Decimal  @default(0) @map("total_paid") @db.Decimal(15, 2)
+  totalInvoiced       Decimal  @default(0) @map("total_invoiced") @db.Decimal(15, 2)
 
   // Enhanced AI fields
-  industryBenchmarkDelta   Int?     @map("industry_benchmark_delta") // How they compare to industry avg (-50 to +50)
-  preferredPaymentMethod   String?  @map("preferred_payment_method") // ach, check, credit_card, wire
-  bestContactDay           String?  @map("best_contact_day") // monday, tuesday, etc.
-  bestContactHour          Int?     @map("best_contact_hour") // 0-23
-  seasonalPaymentPattern   String?  @map("seasonal_payment_pattern") @db.Text // JSON string of monthly patterns
+  industryBenchmarkDelta Int?    @map("industry_benchmark_delta") // How they compare to industry avg (-50 to +50)
+  preferredPaymentMethod String? @map("preferred_payment_method") // ach, check, credit_card, wire
+  bestContactDay         String? @map("best_contact_day") // monday, tuesday, etc.
+  bestContactHour        Int?    @map("best_contact_hour") // 0-23
+  seasonalPaymentPattern String? @map("seasonal_payment_pattern") @db.Text // JSON string of monthly patterns
 
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  invoices             Invoice[]
-  payments             Payment[]
-  communicationLogs    CommunicationLog[]
-  aiRecommendations    AIRecommendation[]
-  followUpActions      FollowUpAction[]
-  seasonalPatterns     ClientSeasonalPattern[]
-  recoveryEvents       RecoveryEvent[]
+  invoices          Invoice[]
+  payments          Payment[]
+  communicationLogs CommunicationLog[]
+  aiRecommendations AIRecommendation[]
+  followUpActions   FollowUpAction[]
+  seasonalPatterns  ClientSeasonalPattern[]
+  recoveryEvents    RecoveryEvent[]
 
   @@unique([organizationId, externalId])
   @@index([organizationId])
@@ -423,50 +537,50 @@ model Client {
 }
 
 model Invoice {
-  id             String   @id @default(cuid())
-  organizationId String   @map("organization_id")
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  clientId       String?  @map("client_id")
-  client         Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientId       String?      @map("client_id")
+  client         Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
-  invoiceNumber  String   @map("invoice_number")
-  amount         Decimal  @db.Decimal(15, 2) // in cents or dollars depending on preference
-  amountPaid     Decimal  @default(0) @map("amount_paid") @db.Decimal(15, 2)
-  currency       String   @default("USD")
+  invoiceNumber String  @map("invoice_number")
+  amount        Decimal @db.Decimal(15, 2) // in cents or dollars depending on preference
+  amountPaid    Decimal @default(0) @map("amount_paid") @db.Decimal(15, 2)
+  currency      String  @default("USD")
 
-  dueDate        DateTime @map("due_date") @db.Date
-  issueDate      DateTime @default(now()) @map("issue_date") @db.Date
-  paidDate       DateTime? @map("paid_date") @db.Date
+  dueDate   DateTime  @map("due_date") @db.Date
+  issueDate DateTime  @default(now()) @map("issue_date") @db.Date
+  paidDate  DateTime? @map("paid_date") @db.Date
 
-  status         String   @default("draft") // draft, sent, viewed, partial, paid, overdue, written_off
-  daysOverdue    Int      @default(0) @map("days_overdue")
+  status      String @default("draft") // draft, sent, viewed, partial, paid, overdue, written_off
+  daysOverdue Int    @default(0) @map("days_overdue")
 
   // External IDs
-  externalId     String?  @map("external_id")
-  quickbooksId   String?  @map("quickbooks_id")
-  xeroId         String?  @map("xero_id")
+  externalId   String? @map("external_id")
+  quickbooksId String? @map("quickbooks_id")
+  xeroId       String? @map("xero_id")
 
   // AI predictions
-  predictedPaymentDate DateTime? @map("predicted_payment_date") @db.Date
-  recoveryLikelihood   Decimal?  @map("recovery_likelihood") @db.Decimal(5, 4) // 0.0000 - 1.0000
-  riskLevel            String?   @map("risk_level") // low, medium, high, critical
-  recommendedAction    String?   @map("recommended_action")
+  predictedPaymentDate  DateTime? @map("predicted_payment_date") @db.Date
+  recoveryLikelihood    Decimal?  @map("recovery_likelihood") @db.Decimal(5, 4) // 0.0000 - 1.0000
+  riskLevel             String?   @map("risk_level") // low, medium, high, critical
+  recommendedAction     String?   @map("recommended_action")
   recommendedActionDate DateTime? @map("recommended_action_date") @db.Date
 
   // Line items stored as JSON
-  lineItems      String?  @map("line_items") @db.Text // JSON array
-  notes          String?  @db.Text
-  source         String   @default("manual") // sync, manual, csv
+  lineItems String? @map("line_items") @db.Text // JSON array
+  notes     String? @db.Text
+  source    String  @default("manual") // sync, manual, csv
 
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  payments          Payment[]
-  invoicePayments   InvoicePayment[]
-  recoveryEvents    RecoveryEvent[]
-  followUpActions   FollowUpAction[]
-  aiRecommendations AIRecommendation[]
+  payments           Payment[]
+  invoicePayments    InvoicePayment[]
+  recoveryEvents     RecoveryEvent[]
+  followUpActions    FollowUpAction[]
+  aiRecommendations  AIRecommendation[]
   successFeeBillings SuccessFeeBilling[]
   paymentPredictions PaymentPrediction[]
 
@@ -479,15 +593,15 @@ model Invoice {
 }
 
 model Payment {
-  id        String   @id @default(cuid())
-  invoiceId String   @map("invoice_id")
-  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  clientId  String   @map("client_id")
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  invoiceId String  @map("invoice_id")
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  clientId  String  @map("client_id")
+  client    Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-  amount    Decimal  @db.Decimal(15, 2) // in cents
-  method    String?  // check, ach, credit_card, cash, wire, other
-  reference String?  // Check number, transaction ID, etc.
+  amount    Decimal @db.Decimal(15, 2) // in cents
+  method    String? // check, ach, credit_card, cash, wire, other
+  reference String? // Check number, transaction ID, etc.
 
   // External IDs
   quickbooksId String? @map("quickbooks_id")
@@ -503,9 +617,9 @@ model Payment {
 
 // Enhanced payment tracking from CFA
 model InvoicePayment {
-  id            String   @id @default(cuid())
-  invoiceId     String   @map("invoice_id")
-  invoice       Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  invoiceId String  @map("invoice_id")
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   amount        Decimal  @db.Decimal(15, 2)
   paymentDate   DateTime @map("payment_date") @db.Date
@@ -513,58 +627,58 @@ model InvoicePayment {
   externalId    String?  @map("external_id")
 
   // Payment timing analytics
-  dayOfWeek     Int?     @map("day_of_week") // 0-6 (Sunday-Saturday)
-  hourOfDay     Int?     @map("hour_of_day") // 0-23
-  daysFromDue   Int?     @map("days_from_due") // Negative = early, Positive = late
+  dayOfWeek   Int? @map("day_of_week") // 0-6 (Sunday-Saturday)
+  hourOfDay   Int? @map("hour_of_day") // 0-23
+  daysFromDue Int? @map("days_from_due") // Negative = early, Positive = late
 
-  createdAt     DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([invoiceId])
   @@map("invoice_payments")
 }
 
 model RecoveryEvent {
-  id               String   @id @default(cuid())
-  organizationId   String   @map("organization_id")
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  invoiceId        String   @map("invoice_id")
-  invoice          Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  clientId         String?  @map("client_id")
-  client           Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoiceId      String       @map("invoice_id")
+  invoice        Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  clientId       String?      @map("client_id")
+  client         Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   // Event classification
-  eventType        String   @map("event_type") // payment_received, partial_payment, promise_to_pay, dispute, overdue_recovery, accelerated_payment, gap_avoided
+  eventType String @map("event_type") // payment_received, partial_payment, promise_to_pay, dispute, overdue_recovery, accelerated_payment, gap_avoided
 
   // Financial details
-  invoiceAmount    Decimal  @default(0) @map("invoice_amount") @db.Decimal(15, 2)
-  recoveredAmount  Decimal  @default(0) @map("recovered_amount") @db.Decimal(15, 2)
-  amount           Int      @default(0) // Legacy: in cents
+  invoiceAmount   Decimal @default(0) @map("invoice_amount") @db.Decimal(15, 2)
+  recoveredAmount Decimal @default(0) @map("recovered_amount") @db.Decimal(15, 2)
+  amount          Int     @default(0) // Legacy: in cents
 
   // For tiered pricing
-  daysOverdue      Int?     @map("days_overdue") // At time of recovery
-  daysAccelerated  Int?     @map("days_accelerated") // If paid early, how many days
+  daysOverdue     Int? @map("days_overdue") // At time of recovery
+  daysAccelerated Int? @map("days_accelerated") // If paid early, how many days
 
   // Platform fee calculation
-  feePercentage    Decimal  @default(0.08) @map("fee_percentage") @db.Decimal(5, 4) // e.g., 0.08 for 8%
-  platformFee      Decimal  @default(0) @map("platform_fee") @db.Decimal(15, 2)
+  feePercentage Decimal @default(0.08) @map("fee_percentage") @db.Decimal(5, 4) // e.g., 0.08 for 8%
+  platformFee   Decimal @default(0) @map("platform_fee") @db.Decimal(15, 2)
 
   // Attribution - what led to recovery?
-  attributedTo     String?  @map("attributed_to") // ai_recommendation, follow_up, automatic
-  recommendationId String?  @map("recommendation_id")
-  followUpActionId String?  @map("follow_up_action_id")
+  attributedTo     String? @map("attributed_to") // ai_recommendation, follow_up, automatic
+  recommendationId String? @map("recommendation_id")
+  followUpActionId String? @map("follow_up_action_id")
 
-  notes            String?  @db.Text
+  notes String? @db.Text
 
   // Status
-  status           String   @default("pending") // pending, confirmed, disputed, paid_out
-  confirmedAt      DateTime? @map("confirmed_at")
+  status      String    @default("pending") // pending, confirmed, disputed, paid_out
+  confirmedAt DateTime? @map("confirmed_at")
 
   // Billing cycle reference
-  billingCycleId   String?  @map("billing_cycle_id")
-  billingCycle     BillingCycle? @relation(fields: [billingCycleId], references: [id])
+  billingCycleId String?       @map("billing_cycle_id")
+  billingCycle   BillingCycle? @relation(fields: [billingCycleId], references: [id])
 
-  eventDate        DateTime @default(now()) @map("event_date")
-  createdAt        DateTime @default(now()) @map("created_at")
+  eventDate DateTime @default(now()) @map("event_date")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([organizationId, eventDate])
   @@index([organizationId, status])
@@ -574,37 +688,37 @@ model RecoveryEvent {
 }
 
 model CashFlowSnapshot {
-  id             String   @id @default(cuid())
-  organizationId String   @map("organization_id")
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  snapshotDate   DateTime @map("snapshot_date") @db.Date
+  snapshotDate DateTime @map("snapshot_date") @db.Date
 
   // Balances
-  totalReceivables     Decimal? @map("total_receivables") @db.Decimal(15, 2)
-  totalPayables        Decimal? @map("total_payables") @db.Decimal(15, 2)
-  overdueReceivables   Decimal? @map("overdue_receivables") @db.Decimal(15, 2)
-  totalOverdue         Decimal? @map("total_overdue") @db.Decimal(15, 2)
-  overdue30Days        Decimal? @map("overdue_30_days") @db.Decimal(15, 2)
-  overdue60Days        Decimal? @map("overdue_60_days") @db.Decimal(15, 2)
-  overdue90PlusDays    Decimal? @map("overdue_90_plus_days") @db.Decimal(15, 2)
+  totalReceivables   Decimal? @map("total_receivables") @db.Decimal(15, 2)
+  totalPayables      Decimal? @map("total_payables") @db.Decimal(15, 2)
+  overdueReceivables Decimal? @map("overdue_receivables") @db.Decimal(15, 2)
+  totalOverdue       Decimal? @map("total_overdue") @db.Decimal(15, 2)
+  overdue30Days      Decimal? @map("overdue_30_days") @db.Decimal(15, 2)
+  overdue60Days      Decimal? @map("overdue_60_days") @db.Decimal(15, 2)
+  overdue90PlusDays  Decimal? @map("overdue_90_plus_days") @db.Decimal(15, 2)
 
   // Forecasts
-  projectedInflow30d   Decimal? @map("projected_inflow_30d") @db.Decimal(15, 2)
-  projectedOutflow30d  Decimal? @map("projected_outflow_30d") @db.Decimal(15, 2)
-  projectedInflow60d   Decimal? @map("projected_inflow_60d") @db.Decimal(15, 2)
-  projectedOutflow60d  Decimal? @map("projected_outflow_60d") @db.Decimal(15, 2)
-  projectedInflow90d   Decimal? @map("projected_inflow_90d") @db.Decimal(15, 2)
-  projectedOutflow90d  Decimal? @map("projected_outflow_90d") @db.Decimal(15, 2)
-  forecast7Day         Decimal? @map("forecast_7_day") @db.Decimal(15, 2)
-  forecast14Day        Decimal? @map("forecast_14_day") @db.Decimal(15, 2)
-  forecast30Day        Decimal? @map("forecast_30_day") @db.Decimal(15, 2)
-  predictedGapDate     DateTime? @map("predicted_gap_date") @db.Date
-  predictedGapAmount   Decimal? @map("predicted_gap_amount") @db.Decimal(15, 2)
+  projectedInflow30d  Decimal?  @map("projected_inflow_30d") @db.Decimal(15, 2)
+  projectedOutflow30d Decimal?  @map("projected_outflow_30d") @db.Decimal(15, 2)
+  projectedInflow60d  Decimal?  @map("projected_inflow_60d") @db.Decimal(15, 2)
+  projectedOutflow60d Decimal?  @map("projected_outflow_60d") @db.Decimal(15, 2)
+  projectedInflow90d  Decimal?  @map("projected_inflow_90d") @db.Decimal(15, 2)
+  projectedOutflow90d Decimal?  @map("projected_outflow_90d") @db.Decimal(15, 2)
+  forecast7Day        Decimal?  @map("forecast_7_day") @db.Decimal(15, 2)
+  forecast14Day       Decimal?  @map("forecast_14_day") @db.Decimal(15, 2)
+  forecast30Day       Decimal?  @map("forecast_30_day") @db.Decimal(15, 2)
+  predictedGapDate    DateTime? @map("predicted_gap_date") @db.Date
+  predictedGapAmount  Decimal?  @map("predicted_gap_amount") @db.Decimal(15, 2)
 
   // Health metrics
-  cashFlowHealthScore  Int? @map("cash_flow_health_score") // 0-100
-  runwayDays           Int? @map("runway_days")
+  cashFlowHealthScore Int? @map("cash_flow_health_score") // 0-100
+  runwayDays          Int? @map("runway_days")
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -614,36 +728,36 @@ model CashFlowSnapshot {
 }
 
 model AIRecommendation {
-  id             String   @id @default(cuid())
-  organizationId String   @map("organization_id")
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  invoiceId      String?  @map("invoice_id")
-  invoice        Invoice? @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  clientId       String?  @map("client_id")
-  client         Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  invoiceId      String?      @map("invoice_id")
+  invoice        Invoice?     @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  clientId       String?      @map("client_id")
+  client         Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
-  type               String   // collection_strategy, payment_terms, client_risk, cash_flow, follow_up, escalate, prioritize, deprioritize
+  type               String // collection_strategy, payment_terms, client_risk, cash_flow, follow_up, escalate, prioritize, deprioritize
   title              String
-  description        String   @db.Text
-  recommendationText String?  @map("recommendation_text") @db.Text
-  priority           String   @default("medium") // low, medium, high, critical
+  description        String  @db.Text
+  recommendationText String? @map("recommendation_text") @db.Text
+  priority           String  @default("medium") // low, medium, high, critical
 
   // AI metadata
-  confidence         Decimal? @db.Decimal(5, 4) // 0.0000 - 1.0000
-  confidenceScore    Decimal? @map("confidence_score") @db.Decimal(3, 2) // 0.00-1.00
-  reasoning          String?  @db.Text // JSON explaining the recommendation
+  confidence      Decimal? @db.Decimal(5, 4) // 0.0000 - 1.0000
+  confidenceScore Decimal? @map("confidence_score") @db.Decimal(3, 2) // 0.00-1.00
+  reasoning       String?  @db.Text // JSON explaining the recommendation
 
-  status             String   @default("pending") // pending, accepted, dismissed, completed, expired
-  actionTakenBy      String?  @map("action_taken_by")
-  actionTakenById    String?  @map("action_taken_by_id")
-  actionTakenByUser  User?    @relation("ActionedBy", fields: [actionTakenById], references: [id], onDelete: SetNull)
-  actionTakenAt      DateTime? @map("action_taken_at")
-  actionedAt         DateTime? @map("actioned_at")
-  actionedBy         String?  @map("actioned_by")
-  expiresAt          DateTime? @map("expires_at")
+  status            String    @default("pending") // pending, accepted, dismissed, completed, expired
+  actionTakenBy     String?   @map("action_taken_by")
+  actionTakenById   String?   @map("action_taken_by_id")
+  actionTakenByUser User?     @relation("ActionedBy", fields: [actionTakenById], references: [id], onDelete: SetNull)
+  actionTakenAt     DateTime? @map("action_taken_at")
+  actionedAt        DateTime? @map("actioned_at")
+  actionedBy        String?   @map("actioned_by")
+  expiresAt         DateTime? @map("expires_at")
 
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([organizationId])
   @@index([organizationId, status])
@@ -651,34 +765,34 @@ model AIRecommendation {
 }
 
 model FollowUpAction {
-  id             String   @id @default(cuid())
-  organizationId String   @map("organization_id")
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  invoiceId      String?  @map("invoice_id")
-  invoice        Invoice? @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  clientId       String?  @map("client_id")
-  client         Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  assignedToId   String?  @map("assigned_to_id")
-  assignedTo     User?    @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  invoiceId      String?      @map("invoice_id")
+  invoice        Invoice?     @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  clientId       String?      @map("client_id")
+  client         Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  assignedToId   String?      @map("assigned_to_id")
+  assignedTo     User?        @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
 
-  type           String   // email, call, letter, final_notice, meeting, escalation, sms
-  scheduledFor   DateTime? @map("scheduled_for")
-  actionDate     DateTime @default(now()) @map("action_date")
+  type         String // email, call, letter, final_notice, meeting, escalation, sms
+  scheduledFor DateTime? @map("scheduled_for")
+  actionDate   DateTime  @default(now()) @map("action_date")
 
-  status         String   @default("scheduled") // scheduled, completed, skipped
-  completedAt    DateTime? @map("completed_at")
-  outcome        String?  // no_response, promised_payment, dispute, partial_payment, paid, escalated
-  notes          String?  @db.Text
+  status      String    @default("scheduled") // scheduled, completed, skipped
+  completedAt DateTime? @map("completed_at")
+  outcome     String? // no_response, promised_payment, dispute, partial_payment, paid, escalated
+  notes       String?   @db.Text
 
   // Communication timing analytics
-  dayOfWeek       Int?     @map("day_of_week") // 0-6 (Sunday-Saturday)
-  hourOfDay       Int?     @map("hour_of_day") // 0-23
-  responseTimeMs  Int?     @map("response_time_ms") // How long until they responded
-  ledToPayment    Boolean  @default(false) @map("led_to_payment") // Did this action result in payment?
-  daysToPayment   Int?     @map("days_to_payment") // If ledToPayment, how many days?
+  dayOfWeek      Int?    @map("day_of_week") // 0-6 (Sunday-Saturday)
+  hourOfDay      Int?    @map("hour_of_day") // 0-23
+  responseTimeMs Int?    @map("response_time_ms") // How long until they responded
+  ledToPayment   Boolean @default(false) @map("led_to_payment") // Did this action result in payment?
+  daysToPayment  Int?    @map("days_to_payment") // If ledToPayment, how many days?
 
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([organizationId])
   @@index([organizationId, type, outcome])
@@ -689,16 +803,16 @@ model FollowUpAction {
 }
 
 model CommunicationLog {
-  id        String   @id @default(cuid())
-  clientId  String   @map("client_id")
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  userId    String?  @map("user_id")
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id       String  @id @default(cuid())
+  clientId String  @map("client_id")
+  client   Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId   String? @map("user_id")
+  user     User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  type      String   // email, call, sms, letter
-  direction String   // inbound, outbound
+  type      String // email, call, sms, letter
+  direction String // inbound, outbound
   subject   String?
-  content   String?  @db.Text
+  content   String? @db.Text
 
   // Email specifics
   emailMessageId String? @map("email_message_id")
@@ -710,19 +824,19 @@ model CommunicationLog {
 }
 
 model PaymentPrediction {
-  id          String   @id @default(cuid())
-  invoiceId   String   @map("invoice_id")
-  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  invoiceId String  @map("invoice_id")
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
-  predictedDate     DateTime @map("predicted_date")
-  predictedAmount   Decimal  @map("predicted_amount") @db.Decimal(15, 2) // in cents
-  confidence        Decimal  @db.Decimal(5, 4) // 0.0000 - 1.0000
-  modelVersion      String?  @map("model_version")
+  predictedDate   DateTime @map("predicted_date")
+  predictedAmount Decimal  @map("predicted_amount") @db.Decimal(15, 2) // in cents
+  confidence      Decimal  @db.Decimal(5, 4) // 0.0000 - 1.0000
+  modelVersion    String?  @map("model_version")
 
   // Factors that influenced prediction (JSON)
-  factors     String?  @db.Text
+  factors String? @db.Text
 
-  createdAt   DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([invoiceId])
   @@map("payment_predictions")
@@ -733,127 +847,127 @@ model PaymentPrediction {
 // ==========================================
 
 model IndustryBenchmark {
-  id                    String   @id @default(cuid())
-  industry              String   @unique // technology, healthcare, retail, manufacturing, etc.
+  id       String @id @default(cuid())
+  industry String @unique // technology, healthcare, retail, manufacturing, etc.
 
   // Payment behavior benchmarks
-  avgDaysToPay          Decimal  @map("avg_days_to_pay") @db.Decimal(5, 1)
-  medianDaysToPay       Decimal  @map("median_days_to_pay") @db.Decimal(5, 1)
-  stdDevDaysToPay       Decimal  @map("std_dev_days_to_pay") @db.Decimal(5, 1)
+  avgDaysToPay    Decimal @map("avg_days_to_pay") @db.Decimal(5, 1)
+  medianDaysToPay Decimal @map("median_days_to_pay") @db.Decimal(5, 1)
+  stdDevDaysToPay Decimal @map("std_dev_days_to_pay") @db.Decimal(5, 1)
 
   // Risk distribution
-  pctPayOnTime          Decimal  @map("pct_pay_on_time") @db.Decimal(5, 2) // % that pay by due date
-  pctPay30Days          Decimal  @map("pct_pay_30_days") @db.Decimal(5, 2) // % that pay within 30 days overdue
-  pctPay60Days          Decimal  @map("pct_pay_60_days") @db.Decimal(5, 2)
-  pctPay90Plus          Decimal  @map("pct_pay_90_plus") @db.Decimal(5, 2)
+  pctPayOnTime Decimal @map("pct_pay_on_time") @db.Decimal(5, 2) // % that pay by due date
+  pctPay30Days Decimal @map("pct_pay_30_days") @db.Decimal(5, 2) // % that pay within 30 days overdue
+  pctPay60Days Decimal @map("pct_pay_60_days") @db.Decimal(5, 2)
+  pctPay90Plus Decimal @map("pct_pay_90_plus") @db.Decimal(5, 2)
 
   // Seasonal patterns (JSON: {"Q1": 1.1, "Q2": 0.9, "Q3": 0.95, "Q4": 1.05})
-  seasonalMultipliers   String?  @map("seasonal_multipliers") @db.Text
+  seasonalMultipliers String? @map("seasonal_multipliers") @db.Text
 
   // Economic sensitivity (how much this industry is affected by economic conditions)
-  economicSensitivity   Decimal  @map("economic_sensitivity") @db.Decimal(3, 2) // 0.0-2.0 multiplier
+  economicSensitivity Decimal @map("economic_sensitivity") @db.Decimal(3, 2) // 0.0-2.0 multiplier
 
-  sampleSize            Int      @map("sample_size") // Number of data points
-  lastUpdated           DateTime @map("last_updated") @updatedAt
-  createdAt             DateTime @default(now()) @map("created_at")
+  sampleSize  Int      @map("sample_size") // Number of data points
+  lastUpdated DateTime @updatedAt @map("last_updated")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   @@map("industry_benchmarks")
 }
 
 model ClientSeasonalPattern {
-  id             String   @id @default(cuid())
-  clientId       String   @unique @map("client_id")
-  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  clientId String @unique @map("client_id")
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   // Monthly payment behavior multipliers (1.0 = normal, 1.2 = 20% faster, 0.8 = 20% slower)
-  januaryMultiplier     Decimal  @default(1.0) @map("january_multiplier") @db.Decimal(3, 2)
-  februaryMultiplier    Decimal  @default(1.0) @map("february_multiplier") @db.Decimal(3, 2)
-  marchMultiplier       Decimal  @default(1.0) @map("march_multiplier") @db.Decimal(3, 2)
-  aprilMultiplier       Decimal  @default(1.0) @map("april_multiplier") @db.Decimal(3, 2)
-  mayMultiplier         Decimal  @default(1.0) @map("may_multiplier") @db.Decimal(3, 2)
-  juneMultiplier        Decimal  @default(1.0) @map("june_multiplier") @db.Decimal(3, 2)
-  julyMultiplier        Decimal  @default(1.0) @map("july_multiplier") @db.Decimal(3, 2)
-  augustMultiplier      Decimal  @default(1.0) @map("august_multiplier") @db.Decimal(3, 2)
-  septemberMultiplier   Decimal  @default(1.0) @map("september_multiplier") @db.Decimal(3, 2)
-  octoberMultiplier     Decimal  @default(1.0) @map("october_multiplier") @db.Decimal(3, 2)
-  novemberMultiplier    Decimal  @default(1.0) @map("november_multiplier") @db.Decimal(3, 2)
-  decemberMultiplier    Decimal  @default(1.0) @map("december_multiplier") @db.Decimal(3, 2)
+  januaryMultiplier   Decimal @default(1.0) @map("january_multiplier") @db.Decimal(3, 2)
+  februaryMultiplier  Decimal @default(1.0) @map("february_multiplier") @db.Decimal(3, 2)
+  marchMultiplier     Decimal @default(1.0) @map("march_multiplier") @db.Decimal(3, 2)
+  aprilMultiplier     Decimal @default(1.0) @map("april_multiplier") @db.Decimal(3, 2)
+  mayMultiplier       Decimal @default(1.0) @map("may_multiplier") @db.Decimal(3, 2)
+  juneMultiplier      Decimal @default(1.0) @map("june_multiplier") @db.Decimal(3, 2)
+  julyMultiplier      Decimal @default(1.0) @map("july_multiplier") @db.Decimal(3, 2)
+  augustMultiplier    Decimal @default(1.0) @map("august_multiplier") @db.Decimal(3, 2)
+  septemberMultiplier Decimal @default(1.0) @map("september_multiplier") @db.Decimal(3, 2)
+  octoberMultiplier   Decimal @default(1.0) @map("october_multiplier") @db.Decimal(3, 2)
+  novemberMultiplier  Decimal @default(1.0) @map("november_multiplier") @db.Decimal(3, 2)
+  decemberMultiplier  Decimal @default(1.0) @map("december_multiplier") @db.Decimal(3, 2)
 
   // Quarterly patterns for quick lookups
-  q1Multiplier          Decimal  @default(1.0) @map("q1_multiplier") @db.Decimal(3, 2)
-  q2Multiplier          Decimal  @default(1.0) @map("q2_multiplier") @db.Decimal(3, 2)
-  q3Multiplier          Decimal  @default(1.0) @map("q3_multiplier") @db.Decimal(3, 2)
-  q4Multiplier          Decimal  @default(1.0) @map("q4_multiplier") @db.Decimal(3, 2)
+  q1Multiplier Decimal @default(1.0) @map("q1_multiplier") @db.Decimal(3, 2)
+  q2Multiplier Decimal @default(1.0) @map("q2_multiplier") @db.Decimal(3, 2)
+  q3Multiplier Decimal @default(1.0) @map("q3_multiplier") @db.Decimal(3, 2)
+  q4Multiplier Decimal @default(1.0) @map("q4_multiplier") @db.Decimal(3, 2)
 
   // Confidence based on data points
-  dataPoints            Int      @default(0) @map("data_points")
-  confidenceScore       Decimal  @default(0) @map("confidence_score") @db.Decimal(3, 2)
+  dataPoints      Int     @default(0) @map("data_points")
+  confidenceScore Decimal @default(0) @map("confidence_score") @db.Decimal(3, 2)
 
-  lastUpdated           DateTime @map("last_updated") @updatedAt
-  createdAt             DateTime @default(now()) @map("created_at")
+  lastUpdated DateTime @updatedAt @map("last_updated")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   @@map("client_seasonal_patterns")
 }
 
 model EconomicIndicator {
-  id                String   @id @default(cuid())
-  indicatorDate     DateTime @unique @map("indicator_date") @db.Date
+  id            String   @id @default(cuid())
+  indicatorDate DateTime @unique @map("indicator_date") @db.Date
 
   // Key economic metrics
-  fedFundsRate      Decimal? @map("fed_funds_rate") @db.Decimal(5, 2)
-  unemploymentRate  Decimal? @map("unemployment_rate") @db.Decimal(5, 2)
-  inflationRate     Decimal? @map("inflation_rate") @db.Decimal(5, 2)
-  gdpGrowthRate     Decimal? @map("gdp_growth_rate") @db.Decimal(5, 2)
+  fedFundsRate       Decimal? @map("fed_funds_rate") @db.Decimal(5, 2)
+  unemploymentRate   Decimal? @map("unemployment_rate") @db.Decimal(5, 2)
+  inflationRate      Decimal? @map("inflation_rate") @db.Decimal(5, 2)
+  gdpGrowthRate      Decimal? @map("gdp_growth_rate") @db.Decimal(5, 2)
   consumerConfidence Decimal? @map("consumer_confidence") @db.Decimal(6, 2)
 
   // Business-specific indicators
-  businessConfidence   Decimal? @map("business_confidence") @db.Decimal(6, 2)
-  creditAvailability   Decimal? @map("credit_availability") @db.Decimal(5, 2) // Index 0-100
-  supplyChainStress    Decimal? @map("supply_chain_stress") @db.Decimal(5, 2) // Index 0-100
+  businessConfidence Decimal? @map("business_confidence") @db.Decimal(6, 2)
+  creditAvailability Decimal? @map("credit_availability") @db.Decimal(5, 2) // Index 0-100
+  supplyChainStress  Decimal? @map("supply_chain_stress") @db.Decimal(5, 2) // Index 0-100
 
   // Calculated impact score (-1.0 to 1.0, negative = harder to collect)
-  paymentImpactScore   Decimal  @map("payment_impact_score") @db.Decimal(4, 3)
+  paymentImpactScore Decimal @map("payment_impact_score") @db.Decimal(4, 3)
 
-  source            String?  // fed, bls, census, calculated
-  createdAt         DateTime @default(now()) @map("created_at")
+  source    String? // fed, bls, census, calculated
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([indicatorDate])
   @@map("economic_indicators")
 }
 
 model CommunicationEffectiveness {
-  id               String   @id @default(cuid())
-  organizationId   String   @map("organization_id")
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   // Segmentation
-  clientTier       String?  @map("client_tier") // A, B, C, D or null for aggregate
-  industry         String?  // null for aggregate across industries
-  actionType       String   @map("action_type") // email, call, sms, meeting
+  clientTier String? @map("client_tier") // A, B, C, D or null for aggregate
+  industry   String? // null for aggregate across industries
+  actionType String  @map("action_type") // email, call, sms, meeting
 
   // Day of week effectiveness (% that led to payment)
-  sundayRate       Decimal  @default(0) @map("sunday_rate") @db.Decimal(5, 4)
-  mondayRate       Decimal  @default(0) @map("monday_rate") @db.Decimal(5, 4)
-  tuesdayRate      Decimal  @default(0) @map("tuesday_rate") @db.Decimal(5, 4)
-  wednesdayRate    Decimal  @default(0) @map("wednesday_rate") @db.Decimal(5, 4)
-  thursdayRate     Decimal  @default(0) @map("thursday_rate") @db.Decimal(5, 4)
-  fridayRate       Decimal  @default(0) @map("friday_rate") @db.Decimal(5, 4)
-  saturdayRate     Decimal  @default(0) @map("saturday_rate") @db.Decimal(5, 4)
+  sundayRate    Decimal @default(0) @map("sunday_rate") @db.Decimal(5, 4)
+  mondayRate    Decimal @default(0) @map("monday_rate") @db.Decimal(5, 4)
+  tuesdayRate   Decimal @default(0) @map("tuesday_rate") @db.Decimal(5, 4)
+  wednesdayRate Decimal @default(0) @map("wednesday_rate") @db.Decimal(5, 4)
+  thursdayRate  Decimal @default(0) @map("thursday_rate") @db.Decimal(5, 4)
+  fridayRate    Decimal @default(0) @map("friday_rate") @db.Decimal(5, 4)
+  saturdayRate  Decimal @default(0) @map("saturday_rate") @db.Decimal(5, 4)
 
   // Hour of day effectiveness (JSON: {"9": 0.15, "10": 0.18, ...})
-  hourlyRates      String?  @map("hourly_rates") @db.Text
+  hourlyRates String? @map("hourly_rates") @db.Text
 
   // Best performing combinations
-  bestDay          String?  @map("best_day")
-  bestHour         Int?     @map("best_hour")
-  bestDayHourRate  Decimal? @map("best_day_hour_rate") @db.Decimal(5, 4)
+  bestDay         String?  @map("best_day")
+  bestHour        Int?     @map("best_hour")
+  bestDayHourRate Decimal? @map("best_day_hour_rate") @db.Decimal(5, 4)
 
   // Sample sizes for confidence
-  totalAttempts    Int      @default(0) @map("total_attempts")
-  successfulAttempts Int    @default(0) @map("successful_attempts")
+  totalAttempts      Int @default(0) @map("total_attempts")
+  successfulAttempts Int @default(0) @map("successful_attempts")
 
-  lastUpdated      DateTime @map("last_updated") @updatedAt
-  createdAt        DateTime @default(now()) @map("created_at")
+  lastUpdated DateTime @updatedAt @map("last_updated")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   @@unique([organizationId, clientTier, industry, actionType])
   @@index([organizationId])
@@ -861,31 +975,31 @@ model CommunicationEffectiveness {
 }
 
 model PaymentMethodStats {
-  id               String   @id @default(cuid())
-  organizationId   String   @map("organization_id")
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  paymentMethod    String   @map("payment_method") // ach, check, credit_card, wire, other
+  paymentMethod String @map("payment_method") // ach, check, credit_card, wire, other
 
   // Performance metrics
-  avgDaysToPay     Decimal  @map("avg_days_to_pay") @db.Decimal(5, 1)
-  medianDaysToPay  Decimal  @map("median_days_to_pay") @db.Decimal(5, 1)
-  onTimeRate       Decimal  @map("on_time_rate") @db.Decimal(5, 4) // % paid on time
+  avgDaysToPay    Decimal @map("avg_days_to_pay") @db.Decimal(5, 1)
+  medianDaysToPay Decimal @map("median_days_to_pay") @db.Decimal(5, 1)
+  onTimeRate      Decimal @map("on_time_rate") @db.Decimal(5, 4) // % paid on time
 
   // Failure/bounce rates
-  failureRate      Decimal  @default(0) @map("failure_rate") @db.Decimal(5, 4)
-  avgRetryDays     Decimal? @map("avg_retry_days") @db.Decimal(5, 1) // Days to successful retry after failure
+  failureRate  Decimal  @default(0) @map("failure_rate") @db.Decimal(5, 4)
+  avgRetryDays Decimal? @map("avg_retry_days") @db.Decimal(5, 1) // Days to successful retry after failure
 
   // Volume metrics
-  totalPayments    Int      @default(0) @map("total_payments")
-  totalAmount      Decimal  @default(0) @map("total_amount") @db.Decimal(15, 2)
-  avgPaymentAmount Decimal  @default(0) @map("avg_payment_amount") @db.Decimal(15, 2)
+  totalPayments    Int     @default(0) @map("total_payments")
+  totalAmount      Decimal @default(0) @map("total_amount") @db.Decimal(15, 2)
+  avgPaymentAmount Decimal @default(0) @map("avg_payment_amount") @db.Decimal(15, 2)
 
   // Reliability score (0-100)
-  reliabilityScore Int      @default(50) @map("reliability_score")
+  reliabilityScore Int @default(50) @map("reliability_score")
 
-  lastUpdated      DateTime @map("last_updated") @updatedAt
-  createdAt        DateTime @default(now()) @map("created_at")
+  lastUpdated DateTime @updatedAt @map("last_updated")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   @@unique([organizationId, paymentMethod])
   @@index([organizationId])
@@ -893,44 +1007,44 @@ model PaymentMethodStats {
 }
 
 model BillingCycle {
-  id               String   @id @default(cuid())
-  organizationId   String   @map("organization_id")
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   // Billing period
-  periodStart      DateTime @map("period_start") @db.Date
-  periodEnd        DateTime @map("period_end") @db.Date
+  periodStart DateTime @map("period_start") @db.Date
+  periodEnd   DateTime @map("period_end") @db.Date
 
   // Totals
-  totalRecovered   Decimal  @default(0) @map("total_recovered") @db.Decimal(15, 2)
-  totalFees        Decimal  @default(0) @map("total_fees") @db.Decimal(15, 2)
+  totalRecovered Decimal @default(0) @map("total_recovered") @db.Decimal(15, 2)
+  totalFees      Decimal @default(0) @map("total_fees") @db.Decimal(15, 2)
 
   // Breakdown by type
-  overdueRecovery90Plus  Decimal @default(0) @map("overdue_recovery_90_plus") @db.Decimal(15, 2)
-  overdueRecovery30to90  Decimal @default(0) @map("overdue_recovery_30_to_90") @db.Decimal(15, 2)
-  acceleratedPayments    Decimal @default(0) @map("accelerated_payments") @db.Decimal(15, 2)
-  gapsAvoided            Decimal @default(0) @map("gaps_avoided") @db.Decimal(15, 2)
+  overdueRecovery90Plus Decimal @default(0) @map("overdue_recovery_90_plus") @db.Decimal(15, 2)
+  overdueRecovery30to90 Decimal @default(0) @map("overdue_recovery_30_to_90") @db.Decimal(15, 2)
+  acceleratedPayments   Decimal @default(0) @map("accelerated_payments") @db.Decimal(15, 2)
+  gapsAvoided           Decimal @default(0) @map("gaps_avoided") @db.Decimal(15, 2)
 
   // Fee breakdown
-  fee90Plus        Decimal  @default(0) @map("fee_90_plus") @db.Decimal(15, 2)
-  fee30to90        Decimal  @default(0) @map("fee_30_to_90") @db.Decimal(15, 2)
-  feeAccelerated   Decimal  @default(0) @map("fee_accelerated") @db.Decimal(15, 2)
-  feeGapsAvoided   Decimal  @default(0) @map("fee_gaps_avoided") @db.Decimal(15, 2)
+  fee90Plus      Decimal @default(0) @map("fee_90_plus") @db.Decimal(15, 2)
+  fee30to90      Decimal @default(0) @map("fee_30_to_90") @db.Decimal(15, 2)
+  feeAccelerated Decimal @default(0) @map("fee_accelerated") @db.Decimal(15, 2)
+  feeGapsAvoided Decimal @default(0) @map("fee_gaps_avoided") @db.Decimal(15, 2)
 
   // Status
-  status           String   @default("open") // open, closed, invoiced, paid
-  invoicedAt       DateTime? @map("invoiced_at")
-  paidAt           DateTime? @map("paid_at")
+  status     String    @default("open") // open, closed, invoiced, paid
+  invoicedAt DateTime? @map("invoiced_at")
+  paidAt     DateTime? @map("paid_at")
 
   // Payment details
-  stripeInvoiceId  String?  @map("stripe_invoice_id")
-  stripePaymentId  String?  @map("stripe_payment_id")
+  stripeInvoiceId String? @map("stripe_invoice_id")
+  stripePaymentId String? @map("stripe_payment_id")
 
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  recoveryEvents   RecoveryEvent[]
+  recoveryEvents RecoveryEvent[]
 
   @@unique([organizationId, periodStart])
   @@index([organizationId, status])
@@ -938,28 +1052,28 @@ model BillingCycle {
 }
 
 model ModelTrainingLog {
-  id               String   @id @default(cuid())
-  modelType        String   @map("model_type") // payment_prediction, recovery_likelihood, communication_timing
+  id        String @id @default(cuid())
+  modelType String @map("model_type") // payment_prediction, recovery_likelihood, communication_timing
 
   // Training metrics
-  trainingDataSize Int      @map("training_data_size")
-  validationScore  Decimal  @map("validation_score") @db.Decimal(5, 4) // 0-1 accuracy/F1
+  trainingDataSize Int     @map("training_data_size")
+  validationScore  Decimal @map("validation_score") @db.Decimal(5, 4) // 0-1 accuracy/F1
 
   // Feature importance (JSON)
   featureImportance String? @map("feature_importance") @db.Text
 
   // Hyperparameters (JSON)
-  hyperparameters   String?  @db.Text
+  hyperparameters String? @db.Text
 
   // Performance tracking
   productionAccuracy Decimal? @map("production_accuracy") @db.Decimal(5, 4)
   predictionCount    Int      @default(0) @map("prediction_count")
 
-  trainedAt        DateTime @map("trained_at")
-  deployedAt       DateTime? @map("deployed_at")
-  retiredAt        DateTime? @map("retired_at")
+  trainedAt  DateTime  @map("trained_at")
+  deployedAt DateTime? @map("deployed_at")
+  retiredAt  DateTime? @map("retired_at")
 
-  createdAt        DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([modelType, trainedAt])
   @@map("model_training_logs")
@@ -970,18 +1084,18 @@ model ModelTrainingLog {
 // ==========================================
 
 model Integration {
-  id             String   @id @default(cuid())
-  organizationId String   @map("organization_id")
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  provider       String   // quickbooks, xero, square, clover, toast, google_business, yelp, freshbooks
-  status         String   @default("disconnected") // disconnected, connected, active, error, expired, revoked
+  provider String // quickbooks, xero, square, clover, toast, google_business, yelp, freshbooks
+  status   String @default("disconnected") // disconnected, connected, active, error, expired, revoked
 
   // OAuth tokens (encrypted in production)
-  accessToken           String? @map("access_token") @db.Text
-  accessTokenEncrypted  String? @map("access_token_encrypted") @db.Text
-  refreshToken          String? @map("refresh_token") @db.Text
-  refreshTokenEncrypted String? @map("refresh_token_encrypted") @db.Text
+  accessToken           String?   @map("access_token") @db.Text
+  accessTokenEncrypted  String?   @map("access_token_encrypted") @db.Text
+  refreshToken          String?   @map("refresh_token") @db.Text
+  refreshTokenEncrypted String?   @map("refresh_token_encrypted") @db.Text
   tokenExpiresAt        DateTime? @map("token_expires_at")
 
   // Provider-specific IDs
@@ -993,8 +1107,8 @@ model Integration {
   syncError      String?   @map("sync_error") @db.Text
   syncCursor     String?   @map("sync_cursor")
 
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([organizationId, provider])
   @@index([organizationId])
@@ -1002,33 +1116,33 @@ model Integration {
 }
 
 model BusinessMetric {
-  id             String   @id @default(cuid())
-  organizationId String   @map("organization_id")
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  metricDate     DateTime @map("metric_date") @db.Date
-  period         String   @default("daily") // daily, weekly, monthly
-  source         String   // pos, accounting, reviews, manual
+  metricDate DateTime @map("metric_date") @db.Date
+  period     String   @default("daily") // daily, weekly, monthly
+  source     String // pos, accounting, reviews, manual
 
   // Revenue metrics
-  revenue        Decimal? @db.Decimal(15, 2)
-  transactions   Int?
-  avgTicket      Decimal? @map("avg_ticket") @db.Decimal(15, 2)
+  revenue      Decimal? @db.Decimal(15, 2)
+  transactions Int?
+  avgTicket    Decimal? @map("avg_ticket") @db.Decimal(15, 2)
 
   // Cost metrics
-  laborCost      Decimal? @map("labor_cost") @db.Decimal(15, 2)
-  inventoryCost  Decimal? @map("inventory_cost") @db.Decimal(15, 2)
-  overheadCost   Decimal? @map("overhead_cost") @db.Decimal(15, 2)
+  laborCost     Decimal? @map("labor_cost") @db.Decimal(15, 2)
+  inventoryCost Decimal? @map("inventory_cost") @db.Decimal(15, 2)
+  overheadCost  Decimal? @map("overhead_cost") @db.Decimal(15, 2)
 
   // Review metrics
-  reviewCount    Int?     @map("review_count")
-  avgRating      Decimal? @map("avg_rating") @db.Decimal(3, 2)
+  reviewCount Int?     @map("review_count")
+  avgRating   Decimal? @map("avg_rating") @db.Decimal(3, 2)
 
   // Custom metrics stored as JSON
-  customMetrics  String?  @map("custom_metrics") @db.Text
+  customMetrics String? @map("custom_metrics") @db.Text
 
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([organizationId, metricDate, period, source])
   @@index([organizationId, metricDate])
@@ -1036,55 +1150,55 @@ model BusinessMetric {
 }
 
 model CompetitorAnalysis {
-  id             String   @id @default(cuid())
-  organizationId String   @map("organization_id")
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  competitorName String   @map("competitor_name")
-  competitorUrl  String?  @map("competitor_url")
+  competitorName String  @map("competitor_name")
+  competitorUrl  String? @map("competitor_url")
 
   // Metrics
-  reviewCount    Int?     @map("review_count")
-  avgRating      Decimal? @map("avg_rating") @db.Decimal(3, 2)
-  priceLevel     String?  @map("price_level") // $, $$, $$$, $$$$
+  reviewCount Int?     @map("review_count")
+  avgRating   Decimal? @map("avg_rating") @db.Decimal(3, 2)
+  priceLevel  String?  @map("price_level") // $, $$, $$$, $$$$
 
   // Analysis
-  strengths      String?  @db.Text // JSON array
-  weaknesses     String?  @db.Text // JSON array
-  opportunities  String?  @db.Text // JSON array
+  strengths     String? @db.Text // JSON array
+  weaknesses    String? @db.Text // JSON array
+  opportunities String? @db.Text // JSON array
 
-  lastUpdated    DateTime @default(now()) @map("last_updated")
-  createdAt      DateTime @default(now()) @map("created_at")
+  lastUpdated DateTime @default(now()) @map("last_updated")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   @@index([organizationId])
   @@map("competitor_analyses")
 }
 
 model BusinessInsight {
-  id             String   @id @default(cuid())
-  organizationId String   @map("organization_id")
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  category       String   // sales, costs, staffing, marketing, competitors
-  type           String   // trend, alert, opportunity, recommendation
-  title          String
-  description    String   @db.Text
+  category    String // sales, costs, staffing, marketing, competitors
+  type        String // trend, alert, opportunity, recommendation
+  title       String
+  description String @db.Text
 
   // AI metadata
-  confidence     Decimal? @db.Decimal(5, 4)
-  dataPoints     String?  @map("data_points") @db.Text // JSON array of supporting data
+  confidence Decimal? @db.Decimal(5, 4)
+  dataPoints String?  @map("data_points") @db.Text // JSON array of supporting data
 
   // Action
-  actionRequired Boolean  @default(false) @map("action_required")
-  actionTaken    Boolean  @default(false) @map("action_taken")
-  actionDetails  String?  @map("action_details") @db.Text
+  actionRequired Boolean @default(false) @map("action_required")
+  actionTaken    Boolean @default(false) @map("action_taken")
+  actionDetails  String? @map("action_details") @db.Text
 
   // Timing
-  relevantFrom   DateTime? @map("relevant_from")
-  relevantTo     DateTime? @map("relevant_to")
+  relevantFrom DateTime? @map("relevant_from")
+  relevantTo   DateTime? @map("relevant_to")
 
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([organizationId])
   @@index([organizationId, category])
@@ -1096,30 +1210,30 @@ model BusinessInsight {
 // ==========================================
 
 model SecurityScan {
-  id             String   @id @default(cuid())
-  organizationId String   @map("organization_id")
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  targetUrl      String   @map("target_url")
-  scanType       String   @default("full") @map("scan_type") // full, ssl, headers, quick
+  targetUrl String @map("target_url")
+  scanType  String @default("full") @map("scan_type") // full, ssl, headers, quick
 
   // Results
-  overallScore   Int?     @map("overall_score") // 0-100
-  status         String   @default("pending") // pending, running, completed, failed
+  overallScore Int?   @map("overall_score") // 0-100
+  status       String @default("pending") // pending, running, completed, failed
 
   // Summary counts
-  criticalCount  Int      @default(0) @map("critical_count")
-  highCount      Int      @default(0) @map("high_count")
-  mediumCount    Int      @default(0) @map("medium_count")
-  lowCount       Int      @default(0) @map("low_count")
+  criticalCount Int @default(0) @map("critical_count")
+  highCount     Int @default(0) @map("high_count")
+  mediumCount   Int @default(0) @map("medium_count")
+  lowCount      Int @default(0) @map("low_count")
 
   // Detailed results as JSON
-  sslDetails     String?  @map("ssl_details") @db.Text
-  headerDetails  String?  @map("header_details") @db.Text
+  sslDetails    String? @map("ssl_details") @db.Text
+  headerDetails String? @map("header_details") @db.Text
 
-  startedAt      DateTime? @map("started_at")
-  completedAt    DateTime? @map("completed_at")
-  createdAt      DateTime @default(now()) @map("created_at")
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   // Relations
   vulnerabilities Vulnerability[]
@@ -1130,25 +1244,25 @@ model SecurityScan {
 }
 
 model Vulnerability {
-  id          String   @id @default(cuid())
-  scanId      String   @map("scan_id")
-  scan        SecurityScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  id     String       @id @default(cuid())
+  scanId String       @map("scan_id")
+  scan   SecurityScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
 
-  category    String   // ssl, headers, cookies, content, configuration
-  severity    String   // critical, high, medium, low, info
+  category    String // ssl, headers, cookies, content, configuration
+  severity    String // critical, high, medium, low, info
   title       String
-  description String   @db.Text
+  description String @db.Text
 
   // Remediation
-  remediation String?  @db.Text
-  references  String?  @db.Text // JSON array of reference URLs
+  remediation String? @db.Text
+  references  String? @db.Text // JSON array of reference URLs
 
   // Status
-  status      String   @default("open") // open, acknowledged, fixed, false_positive
-  fixedAt     DateTime? @map("fixed_at")
+  status  String    @default("open") // open, acknowledged, fixed, false_positive
+  fixedAt DateTime? @map("fixed_at")
 
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([scanId])
   @@index([severity])
@@ -1160,38 +1274,38 @@ model Vulnerability {
 // ==========================================
 
 model Employee {
-  id             String   @id @default(cuid())
-  organizationId String   @map("organization_id")
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   // Basic info
-  name           String
-  email          String?
-  phone          String?
-  role           String   // job title
-  department     String?
-  employeeType   String   @default("full_time") @map("employee_type") // full_time, part_time, contractor
+  name         String
+  email        String?
+  phone        String?
+  role         String // job title
+  department   String?
+  employeeType String  @default("full_time") @map("employee_type") // full_time, part_time, contractor
 
   // Employment details
-  hireDate       DateTime @map("hire_date") @db.Date
+  hireDate        DateTime  @map("hire_date") @db.Date
   terminationDate DateTime? @map("termination_date") @db.Date
-  status         String   @default("active") // active, on_leave, terminated
+  status          String    @default("active") // active, on_leave, terminated
 
   // Compensation (stored in cents for precision)
-  salary         Decimal? @db.Decimal(15, 2) // Annual salary in cents
-  hourlyRate     Decimal? @map("hourly_rate") @db.Decimal(10, 2) // Hourly rate in cents
-  payFrequency   String   @default("biweekly") @map("pay_frequency") // weekly, biweekly, semimonthly, monthly
+  salary       Decimal? @db.Decimal(15, 2) // Annual salary in cents
+  hourlyRate   Decimal? @map("hourly_rate") @db.Decimal(10, 2) // Hourly rate in cents
+  payFrequency String   @default("biweekly") @map("pay_frequency") // weekly, biweekly, semimonthly, monthly
 
   // Performance metrics
-  performanceScore Int?   @map("performance_score") // 0-100
+  performanceScore Int?      @map("performance_score") // 0-100
   lastReviewDate   DateTime? @map("last_review_date") @db.Date
 
   // External IDs for integrations
-  gustoId        String?  @map("gusto_id")
-  adpId          String?  @map("adp_id")
+  gustoId String? @map("gusto_id")
+  adpId   String? @map("adp_id")
 
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
   payrollEntries PayrollEntry[]
@@ -1203,40 +1317,40 @@ model Employee {
 }
 
 model PayrollSnapshot {
-  id             String   @id @default(cuid())
-  organizationId String   @map("organization_id")
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   // Period
-  periodStart    DateTime @map("period_start") @db.Date
-  periodEnd      DateTime @map("period_end") @db.Date
-  payDate        DateTime @map("pay_date") @db.Date
+  periodStart DateTime @map("period_start") @db.Date
+  periodEnd   DateTime @map("period_end") @db.Date
+  payDate     DateTime @map("pay_date") @db.Date
 
   // Totals (in cents)
-  totalGrossPay     Decimal @map("total_gross_pay") @db.Decimal(15, 2)
-  totalNetPay       Decimal @map("total_net_pay") @db.Decimal(15, 2)
+  totalGrossPay        Decimal @map("total_gross_pay") @db.Decimal(15, 2)
+  totalNetPay          Decimal @map("total_net_pay") @db.Decimal(15, 2)
   totalTaxWithholdings Decimal @map("total_tax_withholdings") @db.Decimal(15, 2)
-  totalBenefitsCost Decimal @default(0) @map("total_benefits_cost") @db.Decimal(15, 2)
-  totalOvertimeCost Decimal @default(0) @map("total_overtime_cost") @db.Decimal(15, 2)
-  employerTaxes     Decimal @default(0) @map("employer_taxes") @db.Decimal(15, 2)
+  totalBenefitsCost    Decimal @default(0) @map("total_benefits_cost") @db.Decimal(15, 2)
+  totalOvertimeCost    Decimal @default(0) @map("total_overtime_cost") @db.Decimal(15, 2)
+  employerTaxes        Decimal @default(0) @map("employer_taxes") @db.Decimal(15, 2)
 
   // Headcount
-  employeeCount     Int     @map("employee_count")
-  fullTimeCount     Int     @default(0) @map("full_time_count")
-  partTimeCount     Int     @default(0) @map("part_time_count")
-  contractorCount   Int     @default(0) @map("contractor_count")
+  employeeCount   Int @map("employee_count")
+  fullTimeCount   Int @default(0) @map("full_time_count")
+  partTimeCount   Int @default(0) @map("part_time_count")
+  contractorCount Int @default(0) @map("contractor_count")
 
   // Department breakdown (JSON)
   departmentBreakdown String? @map("department_breakdown") @db.Text
 
   // External IDs
-  gustoPayrollId    String? @map("gusto_payroll_id")
+  gustoPayrollId String? @map("gusto_payroll_id")
 
   // Source
-  source         String   @default("manual") // gusto, adp, manual, csv
+  source String @default("manual") // gusto, adp, manual, csv
 
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
   payrollEntries PayrollEntry[]
@@ -1247,28 +1361,28 @@ model PayrollSnapshot {
 }
 
 model PayrollEntry {
-  id             String   @id @default(cuid())
-  snapshotId     String   @map("snapshot_id")
-  snapshot       PayrollSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
-  employeeId     String?  @map("employee_id")
-  employee       Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  id         String          @id @default(cuid())
+  snapshotId String          @map("snapshot_id")
+  snapshot   PayrollSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  employeeId String?         @map("employee_id")
+  employee   Employee?       @relation(fields: [employeeId], references: [id], onDelete: SetNull)
 
   // Hours
-  regularHours   Decimal  @default(0) @map("regular_hours") @db.Decimal(6, 2)
-  overtimeHours  Decimal  @default(0) @map("overtime_hours") @db.Decimal(6, 2)
-  ptoHours       Decimal  @default(0) @map("pto_hours") @db.Decimal(6, 2)
+  regularHours  Decimal @default(0) @map("regular_hours") @db.Decimal(6, 2)
+  overtimeHours Decimal @default(0) @map("overtime_hours") @db.Decimal(6, 2)
+  ptoHours      Decimal @default(0) @map("pto_hours") @db.Decimal(6, 2)
 
   // Pay (in cents)
-  grossPay       Decimal  @map("gross_pay") @db.Decimal(15, 2)
-  netPay         Decimal  @map("net_pay") @db.Decimal(15, 2)
-  taxWithholdings Decimal @map("tax_withholdings") @db.Decimal(15, 2)
+  grossPay          Decimal @map("gross_pay") @db.Decimal(15, 2)
+  netPay            Decimal @map("net_pay") @db.Decimal(15, 2)
+  taxWithholdings   Decimal @map("tax_withholdings") @db.Decimal(15, 2)
   benefitsDeduction Decimal @default(0) @map("benefits_deduction") @db.Decimal(15, 2)
-  otherDeductions Decimal @default(0) @map("other_deductions") @db.Decimal(15, 2)
+  otherDeductions   Decimal @default(0) @map("other_deductions") @db.Decimal(15, 2)
 
   // Metadata
-  department     String?
+  department String?
 
-  createdAt      DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([snapshotId])
   @@index([employeeId])
@@ -1276,14 +1390,14 @@ model PayrollEntry {
 }
 
 model HiringRecommendation {
-  id             String   @id @default(cuid())
-  organizationId String   @map("organization_id")
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   // Recommendation details
-  role           String   // Suggested role to hire
-  department     String?
-  reasoning      String   @db.Text // AI explanation using "could" language
+  role       String // Suggested role to hire
+  department String?
+  reasoning  String  @db.Text // AI explanation using "could" language
 
   // Financial projections
   projectedROI       Decimal? @map("projected_roi") @db.Decimal(5, 2) // e.g., 1.5 = 150% ROI
@@ -1296,16 +1410,16 @@ model HiringRecommendation {
   urgency            String  @default("informational") // informational, consider, recommended
 
   // AI metadata
-  confidence     Decimal? @db.Decimal(5, 4) // 0.0000 - 1.0000
-  dataFactors    String?  @map("data_factors") @db.Text // JSON of factors considered
+  confidence  Decimal? @db.Decimal(5, 4) // 0.0000 - 1.0000
+  dataFactors String?  @map("data_factors") @db.Text // JSON of factors considered
 
   // Status
-  status         String   @default("active") // active, dismissed, actioned
-  actionedAt     DateTime? @map("actioned_at")
-  actionNotes    String?  @map("action_notes") @db.Text
+  status      String    @default("active") // active, dismissed, actioned
+  actionedAt  DateTime? @map("actioned_at")
+  actionNotes String?   @map("action_notes") @db.Text
 
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([organizationId])
   @@index([organizationId, status])
@@ -1317,21 +1431,21 @@ model HiringRecommendation {
 // ==========================================
 
 model AuditLog {
-  id             String  @id @default(cuid())
-  organizationId String? @map("organization_id")
+  id             String        @id @default(cuid())
+  organizationId String?       @map("organization_id")
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId         String? @map("user_id")
-  user           User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId         String?       @map("user_id")
+  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  action         String
-  entityType     String? @map("entity_type")
-  entityId       String? @map("entity_id")
-  oldValues      Json?   @map("old_values")
-  newValues      Json?   @map("new_values")
-  ipAddress      String? @map("ip_address")
-  userAgent      String? @map("user_agent") @db.Text
+  action     String
+  entityType String? @map("entity_type")
+  entityId   String? @map("entity_id")
+  oldValues  Json?   @map("old_values")
+  newValues  Json?   @map("new_values")
+  ipAddress  String? @map("ip_address")
+  userAgent  String? @map("user_agent") @db.Text
 
-  createdAt      DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([organizationId, createdAt])
   @@index([userId])
@@ -1343,27 +1457,27 @@ model AuditLog {
 // ==========================================
 
 model PlaidItem {
-  id             String   @id @default(cuid())
-  organizationId String   @map("organization_id")
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  accessToken    String   @map("access_token") @db.Text // Encrypted in production
-  itemId         String   @map("item_id")
-  institutionId  String?  @map("institution_id")
+  accessToken     String  @map("access_token") @db.Text // Encrypted in production
+  itemId          String  @map("item_id")
+  institutionId   String? @map("institution_id")
   institutionName String? @map("institution_name")
   institutionLogo String? @map("institution_logo") @db.Text
 
-  status         String   @default("active") // active, needs_update, error
-  errorCode      String?  @map("error_code")
-  errorMessage   String?  @map("error_message") @db.Text
+  status       String  @default("active") // active, needs_update, error
+  errorCode    String? @map("error_code")
+  errorMessage String? @map("error_message") @db.Text
 
   lastSynced     DateTime? @map("last_synced")
   consentExpires DateTime? @map("consent_expires")
 
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  bankAccounts   BankAccount[]
+  bankAccounts BankAccount[]
 
   @@unique([organizationId, itemId])
   @@index([organizationId])
@@ -1371,33 +1485,33 @@ model PlaidItem {
 }
 
 model BankAccount {
-  id               String   @id @default(cuid())
-  organizationId   String   @map("organization_id")
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  plaidItemId      String?  @map("plaid_item_id")
-  plaidItem        PlaidItem? @relation(fields: [plaidItemId], references: [id], onDelete: SetNull)
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plaidItemId    String?      @map("plaid_item_id")
+  plaidItem      PlaidItem?   @relation(fields: [plaidItemId], references: [id], onDelete: SetNull)
 
-  plaidAccountId   String   @map("plaid_account_id")
-  name             String
-  officialName     String?  @map("official_name")
-  type             String   // depository, credit, loan, investment, other
-  subtype          String?
-  mask             String?  // Last 4 digits
+  plaidAccountId String  @map("plaid_account_id")
+  name           String
+  officialName   String? @map("official_name")
+  type           String // depository, credit, loan, investment, other
+  subtype        String?
+  mask           String? // Last 4 digits
 
-  availableBalance Int?     @map("available_balance") // In cents
-  currentBalance   Int      @map("current_balance") // In cents
-  limitAmount      Int?     @map("limit_amount") // For credit accounts, in cents
-  currency         String   @default("USD")
+  availableBalance Int?   @map("available_balance") // In cents
+  currentBalance   Int    @map("current_balance") // In cents
+  limitAmount      Int?   @map("limit_amount") // For credit accounts, in cents
+  currency         String @default("USD")
 
-  isPrimary        Boolean  @default(false) @map("is_primary")
-  isHidden         Boolean  @default(false) @map("is_hidden")
+  isPrimary Boolean @default(false) @map("is_primary")
+  isHidden  Boolean @default(false) @map("is_hidden")
 
-  lastSynced       DateTime? @map("last_synced")
+  lastSynced DateTime? @map("last_synced")
 
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  transactions     BankTransaction[]
+  transactions BankTransaction[]
 
   @@unique([organizationId, plaidAccountId])
   @@index([organizationId])
@@ -1405,31 +1519,31 @@ model BankAccount {
 }
 
 model BankTransaction {
-  id                   String   @id @default(cuid())
-  organizationId       String   @map("organization_id")
-  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  bankAccountId        String?  @map("bank_account_id")
-  bankAccount          BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bankAccountId  String?      @map("bank_account_id")
+  bankAccount    BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
 
-  plaidTransactionId   String   @map("plaid_transaction_id")
-  plaidAccountId       String   @map("plaid_account_id")
+  plaidTransactionId String @map("plaid_transaction_id")
+  plaidAccountId     String @map("plaid_account_id")
 
-  amount               Int      // In cents. Positive = debit (out), Negative = credit (in)
-  date                 DateTime
-  name                 String
-  merchantName         String?  @map("merchant_name")
-  category             String[] // Plaid categories
-  pending              Boolean  @default(false)
-  paymentChannel       String?  @map("payment_channel") // online, in store, other
+  amount         Int // In cents. Positive = debit (out), Negative = credit (in)
+  date           DateTime
+  name           String
+  merchantName   String?  @map("merchant_name")
+  category       String[] // Plaid categories
+  pending        Boolean  @default(false)
+  paymentChannel String?  @map("payment_channel") // online, in store, other
 
   // User customization
-  customCategory       String?  @map("custom_category")
-  notes                String?  @db.Text
-  isRecurring          Boolean  @default(false) @map("is_recurring")
-  isExcluded           Boolean  @default(false) @map("is_excluded") // Exclude from analytics
+  customCategory String? @map("custom_category")
+  notes          String? @db.Text
+  isRecurring    Boolean @default(false) @map("is_recurring")
+  isExcluded     Boolean @default(false) @map("is_excluded") // Exclude from analytics
 
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([organizationId, plaidTransactionId])
   @@index([organizationId, date])
@@ -1442,19 +1556,19 @@ model BankTransaction {
 // ==========================================
 
 model ChatMessage {
-  id             String   @id @default(cuid())
-  organizationId String   @map("organization_id")
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId         String   @map("user_id")
+  userId         String       @map("user_id")
 
-  role           String   // "user" or "assistant"
-  content        String   @db.Text
+  role    String // "user" or "assistant"
+  content String @db.Text
 
   // Metadata
-  platform       String?  // "cashflow_ai", "business_chauffeur", "unified"
-  contextUsed    Json?    @map("context_used") // Summary of data context used
+  platform    String? // "cashflow_ai", "business_chauffeur", "unified"
+  contextUsed Json?   @map("context_used") // Summary of data context used
 
-  createdAt      DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([organizationId, createdAt])
   @@index([userId, createdAt])
