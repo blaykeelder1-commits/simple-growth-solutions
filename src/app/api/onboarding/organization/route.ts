@@ -36,7 +36,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = organizationSchema.parse(body);
 
-    // Create organization and update user in a transaction
+    // Create organization and update user in a transaction. Also: if there's
+    // an unconverted Lead matching this user's email, link it to the new org
+    // so the funnel correctly attributes "lead → customer" instead of leaving
+    // the Lead row stuck in `new` forever.
     const result = await prisma.$transaction(async (tx) => {
       // Create the organization
       const organization = await tx.organization.create({
@@ -49,13 +52,27 @@ export async function POST(request: NextRequest) {
       });
 
       // Update user with organization and make them owner
-      await tx.user.update({
+      const user = await tx.user.update({
         where: { id: session.user.id },
         data: {
           organizationId: organization.id,
           role: "owner",
         },
       });
+
+      // Auto-convert matching Lead row(s). Match by email; an org may have
+      // multiple leads if the same person filled out the questionnaire twice.
+      if (user.email) {
+        await tx.lead.updateMany({
+          where: { email: user.email, status: { not: "converted" } },
+          data: {
+            status: "converted",
+            convertedToOrgId: organization.id,
+            nurtureStatus: "completed",
+            nextNurtureAt: null,
+          },
+        });
+      }
 
       // Log the action
       await tx.auditLog.create({

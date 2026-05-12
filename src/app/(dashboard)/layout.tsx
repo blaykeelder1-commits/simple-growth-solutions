@@ -16,6 +16,7 @@ import { signOut } from "next-auth/react";
 import { useState } from "react";
 import { SubscriptionProvider } from "@/lib/subscription/context";
 import { UpgradeBanner } from "@/components/upgrade-banner";
+import { JourneyUpsell } from "@/components/dashboard/JourneyUpsell";
 import { dashboardNavigation as navigation } from "@/lib/config/navigation";
 
 export default function DashboardLayout({
@@ -181,6 +182,7 @@ export default function DashboardLayout({
         <main className="p-6 lg:p-8">
           <SubscriptionProvider>
             <UpgradeBanner />
+            <JourneyUpsell />
             {children}
           </SubscriptionProvider>
         </main>

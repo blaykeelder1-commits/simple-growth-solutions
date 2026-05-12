@@ -40,7 +40,7 @@ export function Hero() {
           <ScrollAnimation animation="fade-scale" delay={0}>
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-purple-200 bg-gradient-to-r from-purple-100 to-blue-100 px-4 py-1.5 text-sm font-medium text-purple-700 shadow-sm">
               <Sparkles className="h-4 w-4 text-purple-500" />
-              <span>Free Website + AI-Powered Business Tools</span>
+              <span>Free Website Build &middot; We Run It For You</span>
               <Star className="h-4 w-4 text-yellow-500 fill-yellow-400" />
             </div>
           </ScrollAnimation>
@@ -48,9 +48,9 @@ export function Hero() {
           {/* Headline */}
           <ScrollAnimation animation="fade-up" delay={100}>
             <h1 className="mb-6 text-4xl font-bold tracking-tight text-gray-900 md:text-5xl lg:text-6xl">
-              Your Website. Your Cash Flow.{" "}
+              A website that works for you{" "}
               <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-emerald-500 bg-clip-text text-transparent">
-                Your AI Business Mentor.
+                while you focus on your business.
               </span>
             </h1>
           </ScrollAnimation>
@@ -58,9 +58,8 @@ export function Hero() {
           {/* Subheadline */}
           <ScrollAnimation animation="fade-up" delay={200}>
             <p className="mx-auto mb-8 max-w-2xl text-lg text-gray-600 md:text-xl">
-              We build your website for free, collect your overdue invoices at
-              8% (agencies charge 25-40%), and give you a 24/7 AI mentor that
-              knows your business inside out.
+              We build your website for free, then host, secure, and update it
+              for a simple monthly fee. You send a request &mdash; we handle the rest.
             </p>
           </ScrollAnimation>
 
@@ -105,11 +104,11 @@ export function Hero() {
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-emerald-500" />
-                <span>8% AR — half the industry rate</span>
+                <span>Managed for $49/mo</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-emerald-500" />
-                <span>AI mentor from $79/mo</span>
+                <span>Same-day rush available</span>
               </div>
             </div>
           </ScrollAnimation>

@@ -31,7 +31,39 @@ export async function GET(
       return NextResponse.json({ error: "Lead not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, lead });
+    // If converted, fetch the org + its primary project for deep-linking
+    // back into the customer's workbench from the lead detail page.
+    let convertedOrg: {
+      id: string;
+      name: string;
+      customerStage: string | null;
+      primaryProjectId: string | null;
+    } | null = null;
+    if (lead.convertedToOrgId) {
+      const org = await prisma.organization.findUnique({
+        where: { id: lead.convertedToOrgId },
+        select: {
+          id: true,
+          name: true,
+          customerStage: true,
+          websiteProjects: {
+            select: { id: true },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
+        },
+      });
+      if (org) {
+        convertedOrg = {
+          id: org.id,
+          name: org.name,
+          customerStage: org.customerStage,
+          primaryProjectId: org.websiteProjects[0]?.id ?? null,
+        };
+      }
+    }
+
+    return NextResponse.json({ success: true, lead, convertedOrg });
   } catch {
     return NextResponse.json(
       { success: false, error: "Failed to fetch lead" },

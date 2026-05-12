@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, FileText, AlertCircle } from "lucide-react";
+import { Plus, FileText, AlertCircle, Zap, Clock, CreditCard } from "lucide-react";
 
 interface ChangeRequest {
   id: string;
@@ -22,18 +22,49 @@ interface ChangeRequest {
   status: string;
   resolution: string | null;
   createdAt: string;
+  isRush: boolean;
+  slaDueAt: string | null;
   project: {
     id: string;
     projectName: string;
   };
+  oneOffCharge: {
+    id: string;
+    status: string;
+    amountCents: number;
+    squarePaymentLinkUrl: string | null;
+  } | null;
+}
+
+function formatSla(slaDueAt: string | null, status: string): { text: string; tone: "default" | "warn" | "danger" } | null {
+  if (!slaDueAt) return null;
+  if (status === "completed" || status === "rejected") return null;
+  const due = new Date(slaDueAt).getTime();
+  const now = Date.now();
+  const diffMs = due - now;
+  const diffH = Math.round(diffMs / (60 * 60 * 1000));
+  if (diffMs < 0) {
+    const overdueH = Math.abs(diffH);
+    return { text: `Overdue by ${overdueH}h`, tone: "danger" };
+  }
+  if (diffH < 24) return { text: `Due in ${diffH}h`, tone: "warn" };
+  const diffD = Math.round(diffH / 24);
+  return { text: `Due in ${diffD}d`, tone: "default" };
 }
 
 const statusColors: Record<string, { color: string; bgColor: string }> = {
   pending: { color: "text-amber-700", bgColor: "bg-amber-100 border border-amber-200" },
+  awaiting_payment: { color: "text-orange-700", bgColor: "bg-orange-100 border border-orange-200" },
   approved: { color: "text-blue-700", bgColor: "bg-blue-100 border border-blue-200" },
   in_progress: { color: "text-purple-700", bgColor: "bg-purple-100 border border-purple-200" },
   completed: { color: "text-emerald-700", bgColor: "bg-emerald-100 border border-emerald-200" },
   rejected: { color: "text-red-700", bgColor: "bg-red-100 border border-red-200" },
+};
+
+const slaToneClasses: Record<"default" | "warn" | "danger", string> = {
+  default: "bg-gray-100 text-gray-700 border border-gray-200",
+  warn: "bg-amber-100 text-amber-800 border border-amber-200",
+  danger: "bg-red-100 text-red-800 border border-red-200",
 };
 
 const priorityConfig: Record<string, { color: string; bgColor: string; icon?: boolean }> = {
@@ -73,21 +104,51 @@ export default function ChangeRequestsPage() {
     );
   }
 
+  const pendingCount = requests.filter((r) => ["pending", "approved", "in_progress"].includes(r.status)).length;
+  const completedCount = requests.filter((r) => r.status === "completed").length;
+  const awaitingPaymentCount = requests.filter((r) => r.status === "awaiting_payment").length;
+
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Change Requests</h1>
-          <p className="text-gray-500 mt-1">
-            Request modifications to your website projects
-          </p>
+    <div className="space-y-6">
+      {/* Hero with embedded counts */}
+      <div className="rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 p-6 text-white shadow-xl relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.18),transparent_60%)]" />
+        <div className="relative">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center">
+                <FileText className="h-6 w-6" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold">Change Requests</h1>
+                <p className="text-white/80 text-sm mt-0.5">
+                  Anything you need updated on your site &mdash; we handle it.
+                </p>
+              </div>
+            </div>
+            <Link href="/portal/requests/new">
+              <Button className="bg-white text-fuchsia-700 hover:bg-white/90 shadow">
+                <Plus className="h-4 w-4 mr-2" />
+                New Request
+              </Button>
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white/10 backdrop-blur border border-white/20 rounded-lg px-3 py-2.5">
+              <div className="text-2xl font-bold">{pendingCount}</div>
+              <div className="text-[11px] uppercase tracking-wide text-white/70">In flight</div>
+            </div>
+            <div className="bg-white/10 backdrop-blur border border-white/20 rounded-lg px-3 py-2.5">
+              <div className="text-2xl font-bold">{awaitingPaymentCount}</div>
+              <div className="text-[11px] uppercase tracking-wide text-white/70">Awaiting Payment</div>
+            </div>
+            <div className="bg-white text-fuchsia-700 border border-white shadow rounded-lg px-3 py-2.5">
+              <div className="text-2xl font-bold">{completedCount}</div>
+              <div className="text-[11px] uppercase tracking-wide text-fuchsia-700/70">Completed</div>
+            </div>
+          </div>
         </div>
-        <Link href="/portal/requests/new">
-          <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25">
-            <Plus className="h-4 w-4 mr-2" />
-            New Request
-          </Button>
-        </Link>
       </div>
 
       {requests.length === 0 ? (
@@ -115,6 +176,7 @@ export default function ChangeRequestsPage() {
           {requests.map((request) => {
             const status = statusColors[request.status] || statusColors.pending;
             const priority = priorityConfig[request.priority] || priorityConfig.normal;
+            const sla = formatSla(request.slaDueAt, request.status);
 
             return (
               <Card key={request.id} variant="professional" hover="lift">
@@ -132,7 +194,19 @@ export default function ChangeRequestsPage() {
                         </CardDescription>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2 justify-end">
+                      {request.isRush && (
+                        <Badge className="bg-amber-100 text-amber-800 border border-amber-200">
+                          <Zap className="h-3 w-3 mr-1" />
+                          Rush
+                        </Badge>
+                      )}
+                      {sla && (
+                        <Badge className={slaToneClasses[sla.tone]}>
+                          <Clock className="h-3 w-3 mr-1" />
+                          {sla.text}
+                        </Badge>
+                      )}
                       <Badge className={`${priority.bgColor} ${priority.color} capitalize`}>
                         {priority.icon && <AlertCircle className="h-3 w-3 mr-1" />}
                         {request.priority}
@@ -145,6 +219,29 @@ export default function ChangeRequestsPage() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-gray-600 text-sm mb-4">{request.description}</p>
+
+                  {request.status === "awaiting_payment" && request.oneOffCharge?.squarePaymentLinkUrl && (
+                    <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mt-3 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-orange-900 mb-1">
+                          Rush fee due: ${(request.oneOffCharge.amountCents / 100).toFixed(2)}
+                        </p>
+                        <p className="text-xs text-orange-800">
+                          Pay now to release this ticket into the same-day queue.
+                        </p>
+                      </div>
+                      <a
+                        href={request.oneOffCharge.squarePaymentLinkUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Button size="sm" className="bg-orange-600 hover:bg-orange-700 text-white">
+                          <CreditCard className="h-4 w-4 mr-1.5" />
+                          Pay Rush Fee
+                        </Button>
+                      </a>
+                    </div>
+                  )}
 
                   {request.resolution && (
                     <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mt-3">

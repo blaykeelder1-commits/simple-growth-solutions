@@ -6,12 +6,14 @@ import { sendProjectStatusUpdateEmail } from "@/lib/email";
 import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
 
+// Frontend sends `null` to clear optional URL/platform fields; accept both
+// `null` and "" as "clear this field" sentinels alongside undefined.
 const updateProjectSchema = z.object({
   status: z.string().optional(),
   priority: z.number().optional(),
-  deployedUrl: z.string().url().optional().or(z.literal("")),
-  repositoryUrl: z.string().url().optional().or(z.literal("")),
-  deploymentPlatform: z.string().optional(),
+  deployedUrl: z.string().url().or(z.literal("")).nullable().optional(),
+  repositoryUrl: z.string().url().or(z.literal("")).nullable().optional(),
+  deploymentPlatform: z.string().nullable().optional(),
   estimatedCompletion: z.string().datetime().optional(),
 });
 
@@ -50,6 +52,22 @@ export const GET = withAuth(async (_req, ctx, session) => {
         { success: false, message: "Access denied" },
         { status: 403 }
       );
+    }
+
+    // Hosting lock: customers on trial don't see the live deployedUrl. They
+    // can preview the build inside the portal but the public URL only goes
+    // live once they convert to a paid subscription. Admins always see it.
+    if (user?.role !== "admin") {
+      const activeSub = await prisma.subscription.findFirst({
+        where: { organizationId: project.organizationId, status: "active" },
+      });
+      if (!activeSub) {
+        return NextResponse.json({
+          success: true,
+          project: { ...project, deployedUrl: null, repositoryUrl: null },
+          deployedUrlLocked: true,
+        });
+      }
     }
 
     return NextResponse.json({ success: true, project });

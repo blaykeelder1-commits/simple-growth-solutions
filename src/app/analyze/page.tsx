@@ -27,6 +27,45 @@ function AnalyzeContent() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<AnalysisData | null>(null);
 
+  // Lead capture state
+  const [leadName, setLeadName] = useState("");
+  const [leadEmail, setLeadEmail] = useState("");
+  const [leadBusiness, setLeadBusiness] = useState("");
+  const [leadCaptured, setLeadCaptured] = useState(false);
+  const [leadSubmitting, setLeadSubmitting] = useState(false);
+
+  const handleLeadCapture = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!leadEmail) return;
+
+    setLeadSubmitting(true);
+    try {
+      await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessName: leadBusiness || undefined,
+          contactName: leadName || undefined,
+          email: leadEmail,
+          source: "website-analysis",
+          websiteUrl: url,
+          analysisData: data
+            ? {
+                score: data.overallScore,
+                improvements: data.recommendations?.length || 0,
+              }
+            : undefined,
+        }),
+      });
+      setLeadCaptured(true);
+    } catch {
+      // Still show success to not block UX
+      setLeadCaptured(true);
+    } finally {
+      setLeadSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     async function fetchAnalysis() {
       if (!url) {
@@ -130,22 +169,74 @@ function AnalyzeContent() {
       {/* Report Card */}
       {data && <ReportCard url={url} data={data} />}
 
-      {/* CTA Section */}
-      <div className="mt-10 rounded-2xl border bg-gradient-to-br from-primary/5 to-secondary/5 p-6 text-center md:p-8">
-        <h2 className="mb-3 text-xl font-semibold">
-          Want to Improve These Scores?
-        </h2>
-        <p className="mb-6 text-muted-foreground">
-          Book a free consultation and we&apos;ll show you exactly how to fix
-          these issues and boost your online presence.
-        </p>
-        <Link href="/book">
-          <Button size="lg" className="group">
-            Book Your Free Consultation
-            <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
-          </Button>
-        </Link>
-      </div>
+      {/* Lead Capture + Free Website CTA */}
+      {!leadCaptured ? (
+        <div className="mt-10 rounded-2xl border bg-gradient-to-br from-primary/5 to-secondary/5 p-6 text-center md:p-8">
+          <h2 className="mb-3 text-2xl font-bold">
+            Let Us Build You a Better Website — Free
+          </h2>
+          <p className="mb-6 text-muted-foreground max-w-lg mx-auto">
+            We found {data?.recommendations?.length || 0} issues holding your site back.
+            Drop your info below and we&apos;ll build you a modern, optimized replacement at no cost.
+          </p>
+          <form
+            onSubmit={handleLeadCapture}
+            className="mx-auto max-w-md space-y-3"
+          >
+            <input
+              type="text"
+              placeholder="Your name"
+              value={leadName}
+              onChange={(e) => setLeadName(e.target.value)}
+              className="w-full rounded-lg border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <input
+              type="email"
+              placeholder="Your email"
+              value={leadEmail}
+              onChange={(e) => setLeadEmail(e.target.value)}
+              required
+              className="w-full rounded-lg border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <input
+              type="text"
+              placeholder="Business name"
+              value={leadBusiness}
+              onChange={(e) => setLeadBusiness(e.target.value)}
+              className="w-full rounded-lg border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full group"
+              disabled={leadSubmitting}
+            >
+              {leadSubmitting ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <>
+                  Yes, Build My Free Website
+                  <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+                </>
+              )}
+            </Button>
+          </form>
+          <p className="mt-3 text-xs text-muted-foreground">
+            No credit card required. We&apos;ll reach out within 24 hours.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-10 rounded-2xl border bg-gradient-to-br from-green-50 to-emerald-50 p-6 text-center md:p-8">
+          <div className="mb-3 text-4xl">🎉</div>
+          <h2 className="mb-3 text-2xl font-bold text-green-800">
+            You&apos;re In!
+          </h2>
+          <p className="text-green-700">
+            We&apos;ll start building your new website and reach out within 24 hours
+            to schedule a demo. Keep an eye on your inbox!
+          </p>
+        </div>
+      )}
     </div>
   );
 }

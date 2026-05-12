@@ -1,12 +1,27 @@
 "use client";
 
-import { useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { getSession, signIn } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-export default function LoginPage() {
+// Only allow same-origin paths; reject absolute URLs and protocol-relative URLs
+// to prevent open-redirect attacks (e.g. ?callbackUrl=https://evil.com).
+function safeCallback(raw: string | null): string | null {
+  if (!raw) return null;
+  try {
+    const url = new URL(raw, window.location.origin);
+    if (url.origin !== window.location.origin) return null;
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return null;
+  }
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = safeCallback(searchParams.get("callbackUrl"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -26,9 +41,17 @@ export default function LoginPage() {
     if (result?.error) {
       setError("Invalid email or password");
       setIsLoading(false);
-    } else {
-      router.push("/admin");
+      return;
     }
+
+    if (callbackUrl) {
+      router.push(callbackUrl);
+      return;
+    }
+
+    const session = await getSession();
+    const role = session?.user?.role;
+    router.push(role === "admin" || role === "owner" ? "/admin" : "/portal");
   };
 
   return (
@@ -36,7 +59,7 @@ export default function LoginPage() {
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
         <div>
           <h2 className="text-center text-3xl font-bold text-gray-900">
-            Admin Login
+            Sign in
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
             Simple Growth Solutions
@@ -62,7 +85,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="admin@simplegrowth.com"
+                placeholder="you@example.com"
               />
             </div>
 
@@ -112,5 +135,13 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

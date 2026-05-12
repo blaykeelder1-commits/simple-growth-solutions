@@ -229,11 +229,16 @@ export default function AdminProjectDetailPage() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between gap-4">
         <Link href="/admin/projects">
           <Button variant="ghost" size="sm">
             <ArrowLeft className="h-4 w-4 mr-1" />
             Back
+          </Button>
+        </Link>
+        <Link href={`/admin/projects/${project.id}/upcharges`}>
+          <Button variant="outline" size="sm">
+            Manage Upcharges
           </Button>
         </Link>
       </div>

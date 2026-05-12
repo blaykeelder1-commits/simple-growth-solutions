@@ -20,8 +20,16 @@ interface Lead {
   notes: string | null;
   analysisScore: number | null;
   analysisData: string | null;
+  convertedToOrgId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+interface ConvertedOrg {
+  id: string;
+  name: string;
+  customerStage: string | null;
+  primaryProjectId: string | null;
 }
 
 const statusOptions = [
@@ -35,6 +43,7 @@ export default function LeadDetailPage() {
   const params = useParams();
   const router = useRouter();
   const [lead, setLead] = useState<Lead | null>(null);
+  const [convertedOrg, setConvertedOrg] = useState<ConvertedOrg | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
@@ -53,6 +62,7 @@ export default function LeadDetailPage() {
           setLead(data.lead);
           setStatus(data.lead.status);
           setNotes(data.lead.notes || "");
+          setConvertedOrg(data.convertedOrg ?? null);
         } else {
           setError(data.error || "Failed to fetch lead");
         }
@@ -154,6 +164,34 @@ export default function LeadDetailPage() {
         </div>
         <StatusBadge status={lead.status} className="text-sm px-3 py-1" />
       </div>
+
+      {/* Converted-to-org banner — closes the loop on the funnel */}
+      {convertedOrg && (
+        <div className="rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-lg bg-emerald-500 text-white flex items-center justify-center flex-shrink-0">
+              ✓
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-emerald-900">
+                Converted to <span className="font-bold">{convertedOrg.name}</span>
+              </div>
+              <div className="text-xs text-emerald-700">
+                Stage: {convertedOrg.customerStage || "lead"}
+              </div>
+            </div>
+          </div>
+          {convertedOrg.primaryProjectId && (
+            <a
+              href={`/admin/projects/${convertedOrg.primaryProjectId}`}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700"
+            >
+              Open project workbench
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          )}
+        </div>
+      )}
 
       {/* Alerts */}
       {error && (

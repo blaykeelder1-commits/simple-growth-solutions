@@ -21,8 +21,10 @@ import {
   Plus,
   Sparkles,
   FileText,
-  TrendingUp,
+  Rocket,
 } from "lucide-react";
+import { CybersecurityUpsell } from "@/components/portal/UpsellBanner";
+import { UpgradesBanner } from "@/components/portal/UpgradesBanner";
 
 interface Project {
   id: string;
@@ -41,6 +43,17 @@ interface ChangeRequest {
   createdAt: string;
 }
 
+// 7-stage build progression — keep aligned with /portal/projects/[id] timeline
+const STATUS_ORDER = [
+  "submitted",
+  "reviewing",
+  "approved",
+  "in_progress",
+  "review_ready",
+  "deployed",
+  "completed",
+];
+
 const statusConfig: Record<string, { label: string; color: string; bgColor: string; icon: React.ElementType }> = {
   submitted: { label: "Submitted", color: "text-blue-700", bgColor: "bg-blue-100 border border-blue-200", icon: Clock },
   reviewing: { label: "Under Review", color: "text-amber-700", bgColor: "bg-amber-100 border border-amber-200", icon: Clock },
@@ -50,6 +63,17 @@ const statusConfig: Record<string, { label: string; color: string; bgColor: stri
   revision: { label: "Revisions Needed", color: "text-red-700", bgColor: "bg-red-100 border border-red-200", icon: AlertCircle },
   deployed: { label: "Deployed", color: "text-emerald-700", bgColor: "bg-emerald-100 border border-emerald-200", icon: CheckCircle2 },
   completed: { label: "Completed", color: "text-gray-700", bgColor: "bg-gray-100 border border-gray-200", icon: CheckCircle2 },
+};
+
+const NEXT_MILESTONE: Record<string, string> = {
+  submitted: "Our team will review your requirements within 24 hours.",
+  reviewing: "We're refining the spec — kickoff happens next.",
+  approved: "Build kicks off any moment — first draft in 2–3 days.",
+  in_progress: "Your designer is shaping the first draft right now.",
+  review_ready: "Your preview is ready — open the project to review and approve.",
+  revision: "We're applying your requested revisions.",
+  deployed: "Site is live! Submit change requests anytime.",
+  completed: "Project complete. Anything else? Submit a change request.",
 };
 
 export default function PortalDashboard() {
@@ -110,30 +134,93 @@ export default function PortalDashboard() {
   const activeProjects = projects.filter(
     (p) => !["completed", "deployed"].includes(p.status)
   );
+  // The featured project — most-recent active or most-recent overall.
+  const featured = activeProjects[0] || projects[0] || null;
+  const featuredStageIndex = featured
+    ? Math.max(0, STATUS_ORDER.indexOf(featured.status))
+    : -1;
+  const featuredProgress = featured
+    ? Math.round(((featuredStageIndex + 1) / STATUS_ORDER.length) * 100)
+    : 0;
+  const featuredStatus = featured ? statusConfig[featured.status] : null;
+  const featuredMilestone = featured ? NEXT_MILESTONE[featured.status] : null;
 
   return (
-    <div className="space-y-8">
-      {/* Welcome banner */}
-      <Card variant="gradient" className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 overflow-hidden relative">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cg fill=%22none%22 fill-rule=%22evenodd%22%3E%3Cg fill=%22%23ffffff%22 fill-opacity=%220.1%22%3E%3Cpath d=%22M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-30" />
-        <CardContent className="py-8 relative">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-6">
-              <div className="h-16 w-16 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                <Sparkles className="h-8 w-8 text-white" />
+    <div className="space-y-6">
+      {/* Hero — build progress for the featured project. Replaces the flat
+          welcome card with something that shows the customer where their
+          build actually is. */}
+      <div className="rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 p-6 lg:p-8 text-white shadow-xl relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(168,85,247,0.25),transparent_60%)]" />
+
+        <div className="relative">
+          <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+            <div className="flex items-center gap-4">
+              <div className="h-14 w-14 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center">
+                <Sparkles className="h-7 w-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white">
-                  Welcome back, {session?.user?.name || "there"}!
+                <h1 className="text-2xl font-bold">
+                  Welcome back, {session?.user?.name?.split(" ")[0] || "there"}.
                 </h1>
-                <p className="text-white/80 mt-1">
-                  Here&apos;s what&apos;s happening with your projects.
+                <p className="text-white/80 text-sm mt-0.5">
+                  {featured
+                    ? `Tracking your build of ${featured.projectName}.`
+                    : "Let's build your website. Start a free build to begin."}
                 </p>
               </div>
             </div>
+            <Link href={featured ? `/portal/projects/${featured.id}` : "/portal/projects/new"}>
+              <Button className="bg-white text-indigo-700 hover:bg-white/90 shadow-lg">
+                {featured ? (
+                  <>
+                    <ArrowRight className="h-4 w-4 mr-2" />
+                    Open Project
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Start Free Build
+                  </>
+                )}
+              </Button>
+            </Link>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Build-progress bar for the featured project */}
+          {featured && featuredStatus && (
+            <div className="bg-white/10 backdrop-blur rounded-xl p-4 border border-white/20">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Rocket className="h-4 w-4 text-white/80" />
+                  <span className="text-sm font-medium uppercase tracking-wide text-white/70">
+                    Build Progress
+                  </span>
+                </div>
+                <span className="text-sm font-bold">
+                  {featuredStatus.label} &middot; {featuredProgress}%
+                </span>
+              </div>
+              <div className="h-2 bg-white/15 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-400 to-cyan-300 rounded-full transition-all duration-500"
+                  style={{ width: `${featuredProgress}%` }}
+                />
+              </div>
+              <p className="text-xs text-white/80 mt-3 italic">
+                {featuredMilestone}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* In-portal upgrades banner — only renders for orgs ≥30 days into managed sub */}
+      <UpgradesBanner />
+
+      {/* Cybersecurity Upsell */}
+      <CybersecurityUpsell />
 
       {/* Quick stats */}
       <div className="grid gap-5 md:grid-cols-3">
@@ -155,24 +242,9 @@ export default function PortalDashboard() {
         <Card variant="professional" hover="lift" className="stat-card stat-card-green">
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-medium text-gray-500">
-              Total Projects
-            </CardTitle>
-            <div className="icon-container icon-container-green">
-              <TrendingUp className="h-5 w-5" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">{projects.length}</div>
-            <p className="text-sm text-gray-500 mt-1">All time</p>
-          </CardContent>
-        </Card>
-
-        <Card variant="professional" hover="lift" className="stat-card stat-card-purple">
-          <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-medium text-gray-500">
               Pending Requests
             </CardTitle>
-            <div className="icon-container icon-container-purple">
+            <div className="icon-container icon-container-green">
               <FileText className="h-5 w-5" />
             </div>
           </CardHeader>
@@ -180,7 +252,24 @@ export default function PortalDashboard() {
             <div className="text-3xl font-bold text-gray-900">
               {recentRequests.filter((r) => r.status === "pending").length}
             </div>
-            <p className="text-sm text-gray-500 mt-1">Awaiting response</p>
+            <p className="text-sm text-gray-500 mt-1">Awaiting our team</p>
+          </CardContent>
+        </Card>
+
+        <Card variant="professional" hover="lift" className="stat-card stat-card-purple">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium text-gray-500">
+              Completed Requests
+            </CardTitle>
+            <div className="icon-container icon-container-purple">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-gray-900">
+              {recentRequests.filter((r) => r.status === "completed").length}
+            </div>
+            <p className="text-sm text-gray-500 mt-1">All time</p>
           </CardContent>
         </Card>
       </div>

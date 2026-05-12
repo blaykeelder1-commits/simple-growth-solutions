@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Zap } from "lucide-react";
 import Link from "next/link";
 
 const requestSchema = z.object({
@@ -32,6 +32,7 @@ const requestSchema = z.object({
   description: z.string().min(20, "Please provide more details"),
   type: z.enum(["feature", "bug", "content", "design"]),
   priority: z.enum(["low", "normal", "high", "urgent"]),
+  rushDelivery: z.boolean(),
 });
 
 type RequestFormData = z.infer<typeof requestSchema>;
@@ -50,6 +51,16 @@ export default function NewChangeRequestPage() {
   const [error, setError] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
+  const [activePlan, setActivePlan] = useState<string | null>(null);
+  const [hasManagedSub, setHasManagedSub] = useState<boolean | null>(null);
+  const [quota, setQuota] = useState<{
+    used: number;
+    included: number;
+    remaining: number;
+    planLabel: string;
+    periodEndsAt: string | null;
+    overageFeeCents: number;
+  } | null>(null);
 
   const {
     register,
@@ -63,6 +74,7 @@ export default function NewChangeRequestPage() {
       projectId: preselectedProjectId || "",
       type: "feature",
       priority: "normal",
+      rushDelivery: false,
     },
   });
 
@@ -81,7 +93,52 @@ export default function NewChangeRequestPage() {
       }
     }
 
+    async function fetchSubscriptions() {
+      try {
+        const res = await fetch("/api/billing/subscriptions");
+        if (res.ok) {
+          const data = await res.json();
+          const managedKeys = new Set([
+            "website_managed",
+            "website_pro",
+            "website_premium",
+            "starter_bundle",
+            "growth_bundle",
+            "full_suite",
+            "enterprise_suite",
+          ]);
+          interface SubRow { plan: string; status: string }
+          const subs: SubRow[] = data.subscriptions || [];
+          const managed = subs.find(
+            (s) =>
+              managedKeys.has(s.plan) &&
+              (s.status === "active" || s.status === "trialing")
+          );
+          setHasManagedSub(!!managed);
+          setActivePlan(managed?.plan ?? null);
+        } else {
+          setHasManagedSub(false);
+        }
+      } catch {
+        setHasManagedSub(false);
+      }
+    }
+
+    async function fetchQuota() {
+      try {
+        const res = await fetch("/api/billing/cr-quota");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.quota) setQuota(data.quota);
+        }
+      } catch {
+        // Quota display is informational; ignore errors silently.
+      }
+    }
+
     fetchProjects();
+    fetchSubscriptions();
+    fetchQuota();
   }, []);
 
   useEffect(() => {
@@ -90,20 +147,59 @@ export default function NewChangeRequestPage() {
     }
   }, [preselectedProjectId, setValue]);
 
+  const submitRequest = async (data: RequestFormData, acceptOverageFee = false) => {
+    const response = await fetch(`/api/projects/${data.projectId}/change-requests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...data, acceptOverageFee }),
+    });
+    const responseData = await response.json().catch(() => ({}));
+    return { response, responseData };
+  };
+
   const onSubmit = async (data: RequestFormData) => {
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch(`/api/projects/${data.projectId}/change-requests`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
+      const { response, responseData } = await submitRequest(data);
+
+      if (response.status === 402 && responseData.code === "cr_cap_reached") {
+        const cap = responseData.capDetails;
+        const overageDollars = (cap?.overageFeeCents ?? 2500) / 100;
+        const confirmed = window.confirm(
+          `You've used your ${cap?.included ?? "included"} change request${cap?.included === 1 ? "" : "s"} for this period.\n\nPay $${overageDollars} for this extra request, or click Cancel to upgrade your plan instead.`
+        );
+        if (!confirmed) {
+          router.push("/portal/billing?reason=upgrade_for_more_requests");
+          return;
+        }
+        const retry = await submitRequest(data, true);
+        if (retry.responseData.paymentLinkUrl) {
+          window.location.href = retry.responseData.paymentLinkUrl;
+          return;
+        }
+        if (!retry.response.ok) {
+          throw new Error(retry.responseData.message || "Failed to create request");
+        }
+        router.push("/portal/requests");
+        return;
+      }
+
+      if (response.status === 402) {
+        // Other subscription gates (no plan, plan_excludes_change_requests).
+        router.push("/portal/billing?reason=upgrade_for_requests");
+        return;
+      }
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to create request");
+        throw new Error(responseData.message || "Failed to create request");
+      }
+
+      // If a rush or overage payment link was issued, send the customer to it.
+      if (responseData.paymentLinkUrl) {
+        window.location.href = responseData.paymentLinkUrl;
+        return;
       }
 
       router.push("/portal/requests");
@@ -135,6 +231,71 @@ export default function NewChangeRequestPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {hasManagedSub === false && (
+            <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4">
+              <p className="text-sm font-medium text-amber-900">
+                A management plan is required to submit change requests.
+              </p>
+              <p className="text-sm text-amber-800 mt-1">
+                Add a Managed plan ($49/mo) and we&apos;ll start handling your
+                site updates.
+              </p>
+              <Link href="/portal/billing">
+                <Button size="sm" className="mt-3 bg-amber-600 hover:bg-amber-700 text-white">
+                  Choose a Plan
+                </Button>
+              </Link>
+            </div>
+          )}
+
+          {/* Quota indicator — always visible when the customer has a sub. */}
+          {quota && quota.included > 0 && (
+            <div
+              className={`mb-6 rounded-xl border p-4 flex items-start gap-4 ${
+                quota.remaining === 0
+                  ? "border-amber-300 bg-amber-50"
+                  : quota.remaining <= 1
+                  ? "border-blue-200 bg-blue-50"
+                  : "border-emerald-200 bg-emerald-50"
+              }`}
+            >
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-900">
+                    {quota.planLabel} change requests this period
+                  </span>
+                  <span
+                    className={`text-sm font-bold ${
+                      quota.remaining === 0
+                        ? "text-amber-700"
+                        : "text-gray-900"
+                    }`}
+                  >
+                    {quota.used} of {quota.included} used
+                  </span>
+                </div>
+                <div className="mt-2 h-1.5 bg-white/70 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      quota.remaining === 0
+                        ? "bg-amber-500"
+                        : quota.remaining <= 1
+                        ? "bg-blue-500"
+                        : "bg-emerald-500"
+                    }`}
+                    style={{
+                      width: `${Math.min(100, (quota.used / quota.included) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <p className="text-xs text-gray-600 mt-2">
+                  {quota.remaining === 0
+                    ? `You're at your cap. Submitting another request costs $${(quota.overageFeeCents / 100).toFixed(0)} (or upgrade your plan).`
+                    : `${quota.remaining} included request${quota.remaining === 1 ? "" : "s"} left until ${quota.periodEndsAt ? new Date(quota.periodEndsAt).toLocaleDateString() : "end of period"}.`}
+                </p>
+              </div>
+            </div>
+          )}
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {/* Project selection */}
             <div>
@@ -250,6 +411,45 @@ export default function NewChangeRequestPage() {
               </p>
             </div>
 
+            {/* Rush Delivery Option — hidden for Pro (Pro gets same-day free) */}
+            {activePlan === "website_pro" ? (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-emerald-600" />
+                  <span className="font-medium text-emerald-900">
+                    Pro plan: 24-hour turnaround included
+                  </span>
+                </div>
+                <p className="text-sm text-emerald-800 mt-1">
+                  No rush fee needed — every ticket on Managed Pro is completed
+                  within one business day.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-lg border-2 border-dashed border-amber-200 bg-amber-50/50 p-4">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    {...register("rushDelivery")}
+                    className="mt-1 h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                  />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-amber-500" />
+                      <span className="font-medium text-gray-900">Same-Day Rush Delivery</span>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                        +$49
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Need it done today? You&apos;ll be redirected to Square to pay
+                      $49 for same-day turnaround instead of the standard 3&ndash;5 business days.
+                    </p>
+                  </div>
+                </label>
+              </div>
+            )}
+
             {/* Error message */}
             {error && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
@@ -264,7 +464,10 @@ export default function NewChangeRequestPage() {
                   Cancel
                 </Button>
               </Link>
-              <Button type="submit" disabled={loading || projects.length === 0}>
+              <Button
+                type="submit"
+                disabled={loading || projects.length === 0 || hasManagedSub === false}
+              >
                 {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Submit Request
               </Button>

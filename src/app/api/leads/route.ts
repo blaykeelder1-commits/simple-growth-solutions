@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
 
       const lead = await prisma.lead.create({
         data: {
-          businessName,
+          businessName: body.businessName || businessName,
           contactName: validated.name || "Website Visitor",
           email: validated.email,
           phone: null,
@@ -81,6 +81,10 @@ export async function POST(req: NextRequest) {
           websiteUrl: validated.websiteUrl || null,
           industry: null,
           challenges,
+          analysisScore: validated.analysisData?.score ?? null,
+          analysisData: validated.analysisData
+            ? JSON.stringify(validated.analysisData)
+            : null,
         },
       });
 

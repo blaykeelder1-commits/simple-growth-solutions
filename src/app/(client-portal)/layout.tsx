@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import Link from "next/link";
 import {
@@ -13,6 +13,7 @@ import {
   LogOut,
   Menu,
   X,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { signOut } from "next-auth/react";
@@ -22,6 +23,7 @@ const navigation = [
   { name: "Dashboard", href: "/portal", icon: LayoutDashboard },
   { name: "My Projects", href: "/portal/projects", icon: Globe },
   { name: "Change Requests", href: "/portal/requests", icon: FileText },
+  { name: "Upgrades", href: "/portal/upgrades", icon: Sparkles },
   { name: "Billing", href: "/portal/billing", icon: CreditCard },
   { name: "Settings", href: "/portal/settings", icon: Settings },
 ];
@@ -33,18 +35,30 @@ export default function ClientPortalLayout({
 }) {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.push("/login?callbackUrl=/portal");
+      const target = pathname && pathname !== "/login" ? pathname : "/portal";
+      router.replace(`/login?callbackUrl=${encodeURIComponent(target)}`);
     }
-  }, [status, router]);
+  }, [status, pathname, router]);
 
-  if (status === "loading") {
+  // Branded splash so the customer never sees a blank page while NextAuth
+  // resolves the session OR while we're redirecting to /login.
+  if (status !== "authenticated") {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-lg">
+            <Sparkles className="h-6 w-6 text-white" />
+          </div>
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600" />
+            {status === "loading" ? "Loading your portal..." : "Redirecting to sign in..."}
+          </div>
+        </div>
       </div>
     );
   }

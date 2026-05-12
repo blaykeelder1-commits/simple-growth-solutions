@@ -39,27 +39,45 @@ interface DashboardStats {
 export default function ChauffeurDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        setError(null);
-        const res = await fetch("/api/chauffeur/stats");
-        if (res.ok) {
-          const data = await res.json();
-          setStats(data.stats);
-        } else {
-          const errorData = await res.json().catch(() => ({}));
-          setError(errorData.message || "Failed to load dashboard data");
-        }
-      } catch {
-        setError("Unable to connect to server. Please try again later.");
-      } finally {
-        setLoading(false);
+  const fetchData = async () => {
+    try {
+      setError(null);
+      const res = await fetch("/api/chauffeur/stats");
+      if (res.ok) {
+        const data = await res.json();
+        setStats(data.stats);
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        setError(errorData.message || "Failed to load dashboard data");
       }
+    } catch {
+      setError("Unable to connect to server. Please try again later.");
+    } finally {
+      setLoading(false);
     }
+  };
 
+  const syncData = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/chauffeur/sync", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        await fetchData(); // Refresh stats after sync
+      } else {
+        setError(data.error || "Sync failed");
+      }
+    } catch {
+      setError("Failed to sync data");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -101,9 +119,14 @@ export default function ChauffeurDashboard() {
           <p className="text-gray-500 mt-1">AI-powered business insights and analytics</p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" className="bg-white/50 hover:bg-white">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Sync Data
+          <Button
+            variant="outline"
+            className="bg-white/50 hover:bg-white"
+            onClick={syncData}
+            disabled={syncing}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "Syncing..." : "Sync Data"}
           </Button>
           <Link href="/dashboard/chauffeur/integrations">
             <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg shadow-purple-500/25">

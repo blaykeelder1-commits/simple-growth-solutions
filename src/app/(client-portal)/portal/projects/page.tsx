@@ -72,19 +72,37 @@ export default function ProjectsPage() {
     );
   }
 
+  const activeCount = projects.filter(
+    (p) => !["completed", "deployed"].includes(p.status)
+  ).length;
+  const deployedCount = projects.filter(
+    (p) => p.status === "deployed" || p.status === "completed"
+  ).length;
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">My Projects</h1>
-          <p className="text-gray-600">Manage and track your website projects</p>
+      {/* Hero with embedded counts */}
+      <div className="rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-700 p-6 text-white shadow-xl relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_60%)]" />
+        <div className="relative flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center">
+              <Globe className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">My Projects</h1>
+              <p className="text-white/80 text-sm mt-0.5">
+                {activeCount} active &middot; {deployedCount} deployed &middot; {projects.length} total
+              </p>
+            </div>
+          </div>
+          <Link href="/portal/projects/new">
+            <Button className="bg-white text-indigo-700 hover:bg-white/90 shadow">
+              <Plus className="h-4 w-4 mr-2" />
+              New Project
+            </Button>
+          </Link>
         </div>
-        <Link href="/portal/projects/new">
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            New Project
-          </Button>
-        </Link>
       </div>
 
       {projects.length === 0 ? (

@@ -1,25 +1,27 @@
 import pino from 'pino';
+import pretty from 'pino-pretty';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
-const logger = pino({
-  level: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
-  formatters: {
-    level: (label) => ({ level: label }),
+// Avoid pino's worker-thread `transport` in Next.js: webpack can't bundle the
+// worker script and crashes with MODULE_NOT_FOUND. Use pino-pretty as a sync
+// destination stream in dev; ship JSON to stdout in prod.
+const logger = pino(
+  {
+    level: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
+    formatters: {
+      level: (label) => ({ level: label }),
+    },
+    timestamp: pino.stdTimeFunctions.isoTime,
   },
-  timestamp: pino.stdTimeFunctions.isoTime,
-  // In development, use pino-pretty if available
-  ...(isProduction ? {} : {
-    transport: {
-      target: 'pino-pretty',
-      options: {
+  isProduction
+    ? undefined
+    : pretty({
         colorize: true,
         ignore: 'pid,hostname',
         translateTime: 'SYS:standard',
-      },
-    },
-  }),
-});
+      })
+);
 
 // Create child loggers for different modules
 export const arEngineLogger = logger.child({ module: 'ar-engine' });

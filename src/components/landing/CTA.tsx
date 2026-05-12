@@ -42,20 +42,19 @@ export function CTA() {
           <ScrollAnimation animation="fade-scale">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-white/20 backdrop-blur-sm px-4 py-1.5 text-sm font-medium text-white">
               <Sparkles className="h-4 w-4" />
-              <span>Free Website + AI Business Suite</span>
+              <span>Free Website Build &middot; We Run It For You</span>
             </div>
           </ScrollAnimation>
 
           <ScrollAnimation animation="fade-up" delay={100}>
             <h2 className="mb-4 text-3xl font-bold tracking-tight text-white md:text-4xl lg:text-5xl">
-              Ready to Grow Smarter?
+              Ready for a website that just works?
             </h2>
           </ScrollAnimation>
           <ScrollAnimation animation="fade-up" delay={200}>
             <p className="mb-8 text-lg text-white/90 md:text-xl">
-              Get a free professional website, collect overdue invoices at a
-              fraction of the cost, and let your AI mentor handle the rest. Start
-              in minutes.
+              Free build today. Hand off the upkeep tomorrow.
+              You focus on the business &mdash; we keep the site working.
             </p>
           </ScrollAnimation>
           <ScrollAnimation animation="fade-up" delay={300}>

@@ -1,10 +1,10 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import Link from "next/link";
-import { LayoutDashboard, Users, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, Menu, X, GitBranch, Globe, Inbox, BarChart3 } from "lucide-react";
 import { useState } from "react";
 
 export default function AdminLayout({
@@ -14,18 +14,31 @@ export default function AdminLayout({
 }) {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.push("/login");
+      const callback = pathname && pathname !== "/login" ? `?callbackUrl=${encodeURIComponent(pathname)}` : "";
+      router.replace(`/login${callback}`);
     }
-  }, [status, router]);
+  }, [status, pathname, router]);
 
-  if (status === "loading") {
+  // Branded splash that covers (a) initial NextAuth loading and (b) the gap
+  // between unauthenticated detection and the actual /login redirect — the
+  // earlier "Loading..." gray text + blank-page handoff was the visual culprit.
+  if (status !== "authenticated") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-gray-500">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-lg">
+            <span className="text-white font-bold text-lg">SGS</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600" />
+            {status === "loading" ? "Loading admin..." : "Redirecting to sign in..."}
+          </div>
+        </div>
       </div>
     );
   }
@@ -71,11 +84,39 @@ export default function AdminLayout({
             Dashboard
           </Link>
           <Link
+            href="/admin/dispatch"
+            className="flex items-center gap-3 px-3 py-2 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <Inbox className="w-5 h-5" />
+            Dispatch Board
+          </Link>
+          <Link
+            href="/admin/reports"
+            className="flex items-center gap-3 px-3 py-2 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <BarChart3 className="w-5 h-5" />
+            Revenue & Reports
+          </Link>
+          <Link
             href="/admin"
             className="flex items-center gap-3 px-3 py-2 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
           >
             <Users className="w-5 h-5" />
             Leads
+          </Link>
+          <Link
+            href="/admin/builds"
+            className="flex items-center gap-3 px-3 py-2 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <Globe className="w-5 h-5" />
+            Website Builds
+          </Link>
+          <Link
+            href="/admin/funnel"
+            className="flex items-center gap-3 px-3 py-2 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <GitBranch className="w-5 h-5" />
+            Customer Funnel
           </Link>
         </nav>
 

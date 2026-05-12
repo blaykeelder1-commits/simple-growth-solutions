@@ -126,6 +126,14 @@ async function main() {
     { name: "DIRECT_URL", required: true },
     { name: "NEXTAUTH_SECRET", required: true },
     { name: "NEXTAUTH_URL", required: true },
+    // Square — primary customer-facing payment processor (front-half of SGS)
+    { name: "SQUARE_ACCESS_TOKEN", required: false },
+    { name: "SQUARE_LOCATION_ID", required: false },
+    { name: "SQUARE_ENVIRONMENT", required: false },
+    { name: "SQUARE_WEBHOOK_SIGNATURE_KEY", required: false },
+    { name: "SQUARE_PLAN_WEBSITE_MANAGED_ID", required: false },
+    { name: "SQUARE_PLAN_WEBSITE_PRO_ID", required: false },
+    // Stripe — legacy / back-half subscriptions only
     { name: "STRIPE_SECRET_KEY", required: false },
     { name: "STRIPE_WEBHOOK_SECRET", required: false },
     { name: "RESEND_API_KEY", required: false },

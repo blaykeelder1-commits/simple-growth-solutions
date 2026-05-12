@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardList, Globe, Brain, ArrowDown } from "lucide-react";
+import { ClipboardList, Globe, Headset, ArrowDown } from "lucide-react";
 import { ScrollAnimation } from "@/components/ui/scroll-animation";
 
 const steps = [
@@ -9,7 +9,7 @@ const steps = [
     icon: ClipboardList,
     title: "Tell Us About Your Business",
     description:
-      "Fill out a quick questionnaire about your goals, industry, and challenges. We'll analyze your current web presence for free.",
+      "Fill out a quick questionnaire (or paste your current site for a free audit). We learn what you do, who you serve, and what your site needs to accomplish.",
     color: "from-blue-500 to-cyan-500",
     bgColor: "bg-blue-100",
     textColor: "text-blue-600",
@@ -17,19 +17,19 @@ const steps = [
   {
     number: "02",
     icon: Globe,
-    title: "We Build Your Website — Free",
+    title: "We Build It — Free",
     description:
-      "Our team designs and builds a professional website for your business at no cost. Add managed services starting at $49/mo when you're ready.",
+      "Our team designs and launches a professional website for your business at no cost. Approve the design, we deploy it, you go live.",
     color: "from-purple-500 to-pink-500",
     bgColor: "bg-purple-100",
     textColor: "text-purple-600",
   },
   {
     number: "03",
-    icon: Brain,
-    title: "Grow with AI-Powered Tools",
+    icon: Headset,
+    title: "We Run It For $49/mo",
     description:
-      "Collect past-due invoices at 8%, get cash flow predictions, and let Geoffrey — your AI business mentor — guide smarter decisions with your real data.",
+      "Hosting, security, edits, and updates handled. Send a request anytime — standard turnaround is 3–5 business days, or pay $49 for same-day rush.",
     color: "from-emerald-500 to-teal-500",
     bgColor: "bg-emerald-100",
     textColor: "text-emerald-600",
@@ -65,8 +65,7 @@ export function HowItWorks() {
           </ScrollAnimation>
           <ScrollAnimation animation="fade-up" delay={200}>
             <p className="text-lg text-gray-600">
-              Start with a free website, then layer on cash flow recovery and AI
-              mentoring as your business grows.
+              Free website, simple monthly fee. We handle the work so you don&apos;t have to.
             </p>
           </ScrollAnimation>
         </div>

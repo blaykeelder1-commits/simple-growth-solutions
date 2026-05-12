@@ -21,6 +21,7 @@ import {
   ExternalLink,
   Plus,
 } from "lucide-react";
+import { ProjectUpcharges } from "@/components/portal/ProjectUpcharges";
 
 interface Project {
   id: string;
@@ -38,6 +39,14 @@ interface Project {
   updatedAt: string;
   changeRequests: ChangeRequest[];
   projectNotes: ProjectNote[];
+}
+
+interface ProjectResponse {
+  success: boolean;
+  project: Project;
+  // True when the customer's sub isn't active yet — they see a preview card
+  // instead of the live deployedUrl.
+  deployedUrlLocked?: boolean;
 }
 
 interface ChangeRequest {
@@ -82,6 +91,7 @@ export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
   const [project, setProject] = useState<Project | null>(null);
+  const [deployedUrlLocked, setDeployedUrlLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -91,8 +101,9 @@ export default function ProjectDetailPage() {
     try {
       const res = await fetch(`/api/projects/${params.id}`);
       if (res.ok) {
-        const data = await res.json();
+        const data: ProjectResponse = await res.json();
         setProject(data.project);
+        setDeployedUrlLocked(!!data.deployedUrlLocked);
       } else if (res.status === 404) {
         router.push("/portal/projects");
       } else {
@@ -212,6 +223,56 @@ export default function ProjectDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Custom upcharges (only renders if any exist) */}
+      <ProjectUpcharges projectId={project.id} />
+
+      {/* Trial preview card — shown when the customer's site isn't yet on
+          our paid hosting (deployedUrl is masked by the API). Communicates
+          that they can preview the build but the live URL activates on
+          subscription. Anti-loophole: they don't get the keys until they pay. */}
+      {deployedUrlLocked && (
+        <Card variant="professional" className="border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50">
+          <CardHeader>
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Your build preview</CardTitle>
+                <CardDescription>
+                  Your site is being built on our staging infrastructure. The
+                  live public URL goes live the moment your subscription activates.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-xl bg-white border border-amber-200 p-4">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-gray-500 font-medium mb-1">
+                    Staging Preview
+                  </div>
+                  <code className="text-sm bg-gray-50 px-2 py-1 rounded text-gray-700 break-all">
+                    preview.simplegrowth.app/{project.id.slice(0, 8)}
+                  </code>
+                </div>
+                <Link href="/portal/billing">
+                  <Button className="bg-amber-600 hover:bg-amber-700 text-white shadow-md">
+                    Activate subscription
+                    <ArrowLeft className="h-4 w-4 ml-2 rotate-180" />
+                  </Button>
+                </Link>
+              </div>
+              <p className="text-xs text-gray-500 mt-3">
+                During your trial we host the preview privately so you can review
+                + request edits. Activate any plan to publish to your real domain.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Status timeline */}
       <Card variant="professional">

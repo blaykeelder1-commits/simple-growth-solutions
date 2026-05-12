@@ -1,6 +1,7 @@
 import { Header, Footer } from "@/components/landing";
 import { ArrowLeft, Calendar, Clock, Video } from "lucide-react";
 import Link from "next/link";
+import { CalEmbed } from "@/components/booking/CalEmbed";
 
 export const metadata = {
   title: "Book a Call | Simple Growth Solutions",
@@ -9,6 +10,7 @@ export const metadata = {
 };
 
 export default function BookPage() {
+  const calLink = process.env.NEXT_PUBLIC_CAL_LINK || null;
   return (
     <>
       <Header />
@@ -66,32 +68,31 @@ export default function BookPage() {
               </div>
             </div>
 
-            {/* Cal.com Embed Placeholder */}
+            {/* Cal.com Embed */}
             <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-              {/* Cal.com embed: install @calcom/embed-react, then use <Cal calLink="your-username/30min" /> */}
-              <div className="flex min-h-[500px] flex-col items-center justify-center p-8 text-center">
-                <div className="mb-4 rounded-full bg-primary/10 p-4">
-                  <Calendar className="h-10 w-10 text-primary" />
-                </div>
-                <h3 className="mb-2 text-xl font-semibold">
-                  Calendar Coming Soon
-                </h3>
-                <p className="mb-6 max-w-md text-muted-foreground">
-                  We&apos;re setting up our scheduling system. In the meantime,
-                  you can reach us directly.
-                </p>
-                <div className="space-y-3">
+              {calLink ? (
+                <CalEmbed calLink={calLink} />
+              ) : (
+                <div className="flex min-h-[500px] flex-col items-center justify-center p-8 text-center">
+                  <div className="mb-4 rounded-full bg-primary/10 p-4">
+                    <Calendar className="h-10 w-10 text-primary" />
+                  </div>
+                  <h3 className="mb-2 text-xl font-semibold">
+                    Calendar setup pending
+                  </h3>
+                  <p className="mb-6 max-w-md text-muted-foreground">
+                    Set <code>NEXT_PUBLIC_CAL_LINK</code> (e.g.
+                    <code> simplegrowth/30min</code>) to enable booking. In the
+                    meantime, email us:
+                  </p>
                   <a
                     href="mailto:hello@simplegrowthsolutions.com"
-                    className="block text-primary hover:underline"
+                    className="text-primary hover:underline"
                   >
                     hello@simplegrowthsolutions.com
                   </a>
-                  <p className="text-sm text-muted-foreground">
-                    We typically respond within 24 hours
-                  </p>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* What to expect */}

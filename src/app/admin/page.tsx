@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { LeadTable } from "@/components/admin/LeadTable";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Users, UserCheck, Calendar, TrendingUp, Sparkles } from "lucide-react";
 
 interface Lead {
   id: string;
@@ -65,42 +65,48 @@ export default function AdminDashboard() {
     scheduled: leads.filter((l) => l.status === "scheduled").length,
     converted: leads.filter((l) => l.status === "converted").length,
   };
+  const conversionRate =
+    stats.total > 0 ? Math.round((stats.converted / stats.total) * 100) : 0;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Lead Dashboard</h1>
-        <button
-          onClick={fetchLeads}
-          disabled={isLoading}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
-          Refresh
-        </button>
-      </div>
+      {/* Hero */}
+      <div className="rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 p-6 text-white shadow-xl relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
+        <div className="relative flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="h-14 w-14 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center">
+              <Sparkles className="h-7 w-7 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Lead Dashboard</h1>
+              <p className="text-white/80 text-sm mt-0.5">
+                Top-of-funnel pipeline. New leads route here from the analyzer + questionnaire.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={fetchLeads}
+            disabled={isLoading}
+            className="text-sm bg-white/15 hover:bg-white/25 backdrop-blur px-3 py-2 rounded-lg flex items-center gap-2 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+        </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <p className="text-sm text-gray-500">Total</p>
-          <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <p className="text-sm text-gray-500">New</p>
-          <p className="text-2xl font-bold text-blue-600">{stats.new}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <p className="text-sm text-gray-500">Contacted</p>
-          <p className="text-2xl font-bold text-yellow-600">{stats.contacted}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <p className="text-sm text-gray-500">Scheduled</p>
-          <p className="text-2xl font-bold text-purple-600">{stats.scheduled}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <p className="text-sm text-gray-500">Converted</p>
-          <p className="text-2xl font-bold text-green-600">{stats.converted}</p>
+        {/* Stat strip inside hero */}
+        <div className="relative grid grid-cols-2 md:grid-cols-5 gap-3 mt-6">
+          <StatTile icon={Users} label="Total" value={stats.total} accent="text-white" />
+          <StatTile icon={Sparkles} label="New" value={stats.new} accent="text-blue-100" />
+          <StatTile icon={UserCheck} label="Contacted" value={stats.contacted} accent="text-amber-100" />
+          <StatTile icon={Calendar} label="Scheduled" value={stats.scheduled} accent="text-purple-100" />
+          <StatTile
+            icon={TrendingUp}
+            label="Converted"
+            value={`${stats.converted} (${conversionRate}%)`}
+            accent="text-emerald-200"
+          />
         </div>
       </div>
 
@@ -137,6 +143,28 @@ export default function AdminDashboard() {
       ) : (
         <LeadTable leads={filteredLeads} />
       )}
+    </div>
+  );
+}
+
+function StatTile({
+  icon: Icon,
+  label,
+  value,
+  accent,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: number | string;
+  accent: string;
+}) {
+  return (
+    <div className="bg-white/10 backdrop-blur border border-white/20 rounded-xl p-3">
+      <div className="flex items-center gap-2 text-white/70 text-xs uppercase tracking-wide font-medium">
+        <Icon className="w-3.5 h-3.5" />
+        {label}
+      </div>
+      <div className={`text-2xl font-bold mt-1 ${accent}`}>{value}</div>
     </div>
   );
 }

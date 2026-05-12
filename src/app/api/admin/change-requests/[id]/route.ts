@@ -7,8 +7,13 @@ import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
 
 const updateSchema = z.object({
-  status: z.enum(["pending", "approved", "in_progress", "completed", "rejected"]),
+  status: z
+    .enum(["pending", "approved", "in_progress", "completed", "rejected"])
+    .optional(),
   resolution: z.string().optional(),
+  // Operator assignment — null clears, string sets. Used by the kanban
+  // dispatch board so multiple admins can claim/hand off tickets.
+  assigneeId: z.string().nullable().optional(),
 });
 
 // PATCH /api/admin/change-requests/[id] - Update change request status
@@ -33,8 +38,9 @@ export const PATCH = withAdmin(async (req, ctx) => {
     const changeRequest = await prisma.changeRequest.update({
       where: { id },
       data: {
-        status: validatedData.status,
+        ...(validatedData.status && { status: validatedData.status }),
         ...(validatedData.resolution && { resolution: validatedData.resolution }),
+        ...(validatedData.assigneeId !== undefined && { assigneeId: validatedData.assigneeId }),
       },
       include: {
         project: { select: { id: true, projectName: true, organizationId: true } },
@@ -42,7 +48,11 @@ export const PATCH = withAdmin(async (req, ctx) => {
     });
 
     // Notify the customer only if status actually changed
-    if (changeRequest.project && oldChangeRequest.status !== validatedData.status) {
+    if (
+      validatedData.status &&
+      changeRequest.project &&
+      oldChangeRequest.status !== validatedData.status
+    ) {
       prisma.user.findUnique({
         where: { id: changeRequest.requesterId },
         select: { email: true, name: true },

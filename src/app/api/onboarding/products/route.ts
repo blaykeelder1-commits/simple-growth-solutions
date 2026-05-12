@@ -74,9 +74,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, subscriptions: [] });
     }
 
-    // Create subscriptions for selected products
+    // Create subscriptions for selected products. Also fire a JourneyEvent
+    // so the admin funnel chart reflects the stage transition (lead →
+    // website_build) and update Organization.customerStage in lockstep.
     const result = await prisma.$transaction(async (tx) => {
       const subscriptions = [];
+      let didProvisionWebsiteSub = false;
 
       for (const productId of validatedData.products) {
         const config = productConfig[productId];
@@ -108,6 +111,14 @@ export async function POST(request: NextRequest) {
 
         subscriptions.push(subscription);
 
+        if (
+          productId === "website_managed" ||
+          productId === "website_pro" ||
+          productId === "website_premium"
+        ) {
+          didProvisionWebsiteSub = true;
+        }
+
         // Log the action
         await tx.auditLog.create({
           data: {
@@ -122,6 +133,30 @@ export async function POST(request: NextRequest) {
             },
           },
         });
+      }
+
+      // Stage transition into the build phase. Don't create duplicates if
+      // the org is already past the lead stage (e.g., re-running onboarding).
+      if (didProvisionWebsiteSub) {
+        const org = await tx.organization.findUnique({
+          where: { id: user.organizationId! },
+          select: { customerStage: true, name: true },
+        });
+        const fromStage = org?.customerStage ?? "lead";
+        if (fromStage !== "website_build" && fromStage !== "website_managed") {
+          await tx.journeyEvent.create({
+            data: {
+              organizationId: user.organizationId!,
+              fromStage,
+              toStage: "website_build",
+              triggeredBy: "trial_subscription",
+            },
+          });
+          await tx.organization.update({
+            where: { id: user.organizationId! },
+            data: { customerStage: "website_build" },
+          });
+        }
       }
 
       return subscriptions;

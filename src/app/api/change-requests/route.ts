@@ -40,8 +40,17 @@ export const GET = withAuth(async (req, _ctx, session) => {
         project: {
           select: { id: true, projectName: true },
         },
+        oneOffCharge: {
+          select: {
+            id: true,
+            status: true,
+            amountCents: true,
+            squarePaymentLinkUrl: true,
+          },
+        },
       },
-      orderBy: { createdAt: "desc" },
+      // Open tickets first, then by SLA deadline.
+      orderBy: [{ slaDueAt: "asc" }, { createdAt: "desc" }],
       take: limit,
     });
 

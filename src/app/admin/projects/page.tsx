@@ -23,6 +23,7 @@ import {
 import {
   Globe,
   Search,
+  Briefcase,
 } from "lucide-react";
 
 interface Project {
@@ -123,24 +124,52 @@ export default function AdminProjectsPage() {
   }, {} as Record<string, number>);
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Project Queue</h1>
-          <p className="text-gray-600">Manage website build projects</p>
-        </div>
-      </div>
+    <div className="space-y-6">
+      {/* Hero strip with embedded stage counters */}
+      <div className="rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-600 p-6 text-white shadow-xl relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_60%)]" />
+        <div className="relative">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center">
+                <Briefcase className="h-6 w-6" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold">Project Queue</h1>
+                <p className="text-white/80 text-sm">Active website builds across the customer base.</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-3xl font-bold">{projects.length}</div>
+              <div className="text-xs text-white/70 uppercase tracking-wide">Total projects</div>
+            </div>
+          </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-        {Object.entries(statusConfig).map(([key, config]) => (
-          <Card key={key} className="cursor-pointer" onClick={() => setStatusFilter(key)}>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold">{statusCounts[key] || 0}</div>
-              <div className="text-xs text-gray-500">{config.label}</div>
-            </CardContent>
-          </Card>
-        ))}
+          {/* 8-status stat tiles, embedded inside the gradient hero */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
+            {Object.entries(statusConfig).map(([key, config]) => {
+              const isActive = statusFilter === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setStatusFilter(key)}
+                  className={`text-left rounded-lg px-3 py-2 backdrop-blur transition border ${
+                    isActive
+                      ? "bg-white text-indigo-700 border-white shadow-md"
+                      : "bg-white/10 hover:bg-white/20 border-white/20"
+                  }`}
+                >
+                  <div className={`text-xl font-bold ${isActive ? "text-indigo-700" : "text-white"}`}>
+                    {statusCounts[key] || 0}
+                  </div>
+                  <div className={`text-[11px] uppercase tracking-wide ${isActive ? "text-indigo-700/70" : "text-white/70"}`}>
+                    {config.label}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Filters */}
