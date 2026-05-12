@@ -54,32 +54,57 @@ export const PLANS = {
     ],
   },
 
-  // ── Accounts Receivable ───────────────────────────────────────────────
-  cashflow_ai: {
-    name: "AR Collection",
+  // ── Cash Flow AI — Hybrid Pricing ───────────────────────────────────
+  // Free tier: basic dashboard, invoice tracking, health score (no Stripe plan)
+  cashflow_free: {
+    name: "Cash Flow AI — Free",
+    priceId: null, // No charge
+    amount: 0,
+    interval: null,
+    features: [
+      "Basic cash flow dashboard",
+      "Invoice tracking & management",
+      "Business health score",
+      "Simple payment alerts",
+      "Up to 50 invoices/month",
+    ],
+  },
+  // 8% tier: AR agent with automated follow-ups, 8% on collections past 14 days
+  cashflow_ar: {
+    name: "Cash Flow AI — AR Agent",
     priceId: null, // Success fee only - 8%
     amount: 0,
     interval: null,
     successFeePercentage: 0.08,
+    successFeeThresholdDays: 14, // Only applies to invoices past 14 days
     features: [
-      "Invoice recovery automation",
-      "Cash flow dashboard & prediction",
-      "QuickBooks/Xero sync",
-      "AI-powered recovery strategies",
-      "Client payment scoring",
+      "Everything in Free",
+      "Automated AR follow-ups (email/SMS)",
+      "Payment reminder sequences",
+      "Client payment scoring (A-D tiers)",
+      "Recovery likelihood scoring",
+      "Escalation workflows",
+      "We only get paid when you get paid — 8% on collections past 14 days",
     ],
   },
-  ar_proactive: {
-    name: "Proactive AR Management",
-    priceId: process.env.STRIPE_PRICE_AR_PROACTIVE || "price_ar_proactive",
-    amount: 4900, // $49.00
+  // Pro tier: full analytics, forecasting, benchmarks
+  cashflow_pro: {
+    name: "Cash Flow AI — Pro",
+    priceId: process.env.STRIPE_PRICE_CASHFLOW_PRO || "price_cashflow_pro",
+    amount: 7900, // $79.00
     interval: "month" as const,
+    successFeePercentage: 0.08, // Also includes AR agent
+    successFeeThresholdDays: 14,
     features: [
-      "Automated payment reminders",
-      "Aging reports & tracking",
-      "Payment tracking before overdue",
-      "Custom reminder sequences",
-      "Proactive risk alerts",
+      "Everything in AR Agent",
+      "30/60/90-day cash flow forecasting",
+      "Cash gap detection & alerts",
+      "Seasonal pattern analysis",
+      "Industry benchmarking",
+      "AI recommendations engine",
+      "Economic indicator impact analysis",
+      "Communication effectiveness tracking",
+      "Unlimited invoices",
     ],
   },
 

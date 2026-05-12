@@ -35,6 +35,7 @@ export async function GET() {
         priceMonthly: true,
         currentPeriodEnd: true,
         trialEndDate: true,
+        createdAt: true,
       },
       orderBy: { createdAt: "desc" },
     });
