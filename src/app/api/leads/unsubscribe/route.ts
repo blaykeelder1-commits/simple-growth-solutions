@@ -92,7 +92,7 @@ function unsubscribePage(message: string, success: boolean): string {
       <p style="font-size: 18px; color: #1f2937; margin: 0;">${message}</p>
     </div>
     <p style="color: #9ca3af; font-size: 13px; margin-top: 30px;">
-      If you unsubscribed by mistake, contact us at support@simplegrowthsolutions.com
+      If you unsubscribed by mistake, contact us at support@simple-growth-solution.com
     </p>
   </body>
 </html>`;

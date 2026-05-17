@@ -5,7 +5,7 @@ import { apiLogger } from '@/lib/logger';
 // Initialize Resend client only if API key is present
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
-const FROM_EMAIL = process.env.EMAIL_FROM || 'Simple Growth Solutions <noreply@simplegrowthsolutions.com>';
+const FROM_EMAIL = process.env.EMAIL_FROM || 'Simple Growth Solutions <noreply@simple-growth-solution.com>';
 
 /** Escape HTML special characters to prevent XSS in email templates */
 export function escapeHtml(str: string): string {

@@ -14,16 +14,16 @@ for everyone but Blayke.
 
 ### Steps
 
-1. Pick the sending domain. Recommended: `mail.simplegrowthsolutions.com`
+1. Pick the sending domain. Recommended: `mail.simple-growth-solution.com`
    (subdomain so it doesn't conflict with marketing email).
 2. Resend dashboard → Domains → Add domain → enter the subdomain.
 3. Resend will display 4 DNS records: 1 MX, 1 SPF (TXT), 2 DKIM (CNAME).
-4. Add all 4 to GoDaddy DNS for `simplegrowthsolutions.com`. TTL = 1 hour.
+4. Add all 4 to GoDaddy DNS for `simple-growth-solution.com`. TTL = 1 hour.
 5. Click **Verify** in Resend. Propagation is usually 5–30 minutes.
 6. Once verified, update `.env`:
 
    ```env
-   EMAIL_FROM="Simple Growth Solutions <hello@mail.simplegrowthsolutions.com>"
+   EMAIL_FROM="Simple Growth Solutions <hello@mail.simple-growth-solution.com>"
    ```
 
 7. Restart the dev server (or redeploy). Test by signing up a new user — they
