@@ -33,7 +33,11 @@ const checkoutSchema = z.object({
 
 // Plans that route through Square (the customer-facing front-half of SGS).
 // All other plans still go through the legacy Stripe path.
-const SQUARE_PLAN_KEYS = new Set<string>(["website_managed", "website_pro"]);
+const SQUARE_PLAN_KEYS = new Set<string>([
+  "website_managed",
+  "website_pro",
+  "website_premium",
+]);
 
 // POST /api/billing/checkout - Create a hosted checkout session.
 // Routes to Square for front-half website plans, Stripe for everything else.

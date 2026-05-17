@@ -26,6 +26,7 @@ async function main() {
   const plans = [
     { key: "WEBSITE_MANAGED", name: "Managed Website", amountCents: 4900 },
     { key: "WEBSITE_PRO", name: "Managed Website Pro", amountCents: 7900 },
+    { key: "WEBSITE_PREMIUM", name: "Managed Website Premium", amountCents: 12900 },
   ] as const;
 
   for (const plan of plans) {

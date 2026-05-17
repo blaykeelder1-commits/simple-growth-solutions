@@ -255,6 +255,7 @@ function pickPlanVariationId(plan: string): string | null {
   if (!cfg) return null;
   if (plan === "website_managed") return cfg.planIds.website_managed;
   if (plan === "website_pro") return cfg.planIds.website_pro;
+  if (plan === "website_premium") return cfg.planIds.website_premium;
   return null;
 }
 

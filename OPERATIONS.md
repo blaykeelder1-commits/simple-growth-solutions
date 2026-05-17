@@ -132,6 +132,7 @@ are complete; only env vars and Square Catalog plans are pending.
    ```env
    SQUARE_PLAN_WEBSITE_MANAGED_ID="..."
    SQUARE_PLAN_WEBSITE_PRO_ID="..."
+   SQUARE_PLAN_WEBSITE_PREMIUM_ID="..."
    ```
 
 7. Redeploy.

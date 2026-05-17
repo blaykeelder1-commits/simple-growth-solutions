@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/billing/trial-check",
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/nurture/process",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/security/scheduled-scan",
+      "schedule": "0 6 * * 1"
+    },
+    {
+      "path": "/api/ar-engine/execute",
+      "schedule": "0 13 * * *"
+    }
+  ]
+}

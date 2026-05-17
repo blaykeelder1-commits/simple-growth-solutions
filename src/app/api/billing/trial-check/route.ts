@@ -129,3 +129,6 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+// Vercel Cron only sends GET requests, so alias GET to POST.
+export const GET = POST;
