@@ -5,6 +5,7 @@ import { apiError } from "@/lib/api/errors";
 import {
   getAdminEmails,
   sendNewChangeRequestNotification,
+  sendChangeRequestReceivedEmail,
 } from "@/lib/email";
 import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
@@ -12,6 +13,7 @@ import { computeSlaDueAt, RUSH_FEE_CENTS } from "@/lib/billing/sla";
 import {
   resolvePlanCaps,
   getPeriodWindow,
+  rollManualPeriodIfExpired,
   OVERAGE_CR_FEE_CENTS,
 } from "@/lib/billing/plan-caps";
 import {
@@ -73,7 +75,7 @@ export const POST = withAuth(async (req, ctx, session) => {
 
     // Always look up the org's active managed plan so SLA + rush billing logic
     // apply consistently (even when an admin submits on behalf of a customer).
-    const activeSub = await prisma.subscription.findFirst({
+    let activeSub = await prisma.subscription.findFirst({
       where: {
         organizationId: project.organizationId,
         plan: { in: Array.from(MANAGED_PLAN_KEYS) },
@@ -81,6 +83,7 @@ export const POST = withAuth(async (req, ctx, session) => {
       },
       orderBy: { createdAt: "desc" },
     });
+    if (activeSub) activeSub = await rollManualPeriodIfExpired(prisma, activeSub);
     const activePlan: string | null = activeSub?.plan ?? null;
 
     // Subscription gate — customers (not admins) must have an active managed plan.
@@ -260,6 +263,32 @@ export const POST = withAuth(async (req, ctx, session) => {
         .catch((e) =>
           apiLogger.warn({ err: e }, "Failed to send change request notification")
         );
+
+      // Customer-facing acknowledgment — closes the "did it go through?" loop
+      // before they have to refresh the portal.
+      if (session.user.email) {
+        const slaText =
+          activePlan === "website_pro"
+            ? "Within 24 hours (Pro plan)"
+            : activePlan === "website_premium"
+              ? "Same business day (Premium plan)"
+              : validatedData.rushDelivery
+                ? "Same day (rush)"
+                : "3–5 business days";
+        sendChangeRequestReceivedEmail(
+          session.user.email,
+          session.user.name || session.user.email,
+          {
+            title: validatedData.title,
+            type: validatedData.type,
+            priority: validatedData.priority,
+          },
+          { id: project.id, projectName: project.projectName },
+          slaText
+        ).catch((e) =>
+          apiLogger.warn({ err: e }, "Failed to send CR receipt to customer")
+        );
+      }
     }
 
     return NextResponse.json(

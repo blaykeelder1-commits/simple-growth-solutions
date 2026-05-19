@@ -8,6 +8,11 @@ const protectedPrefixes = ["/dashboard", "/portal", "/admin", "/onboarding"];
 const adminPrefixes = ["/admin"];
 
 function isProtectedRoute(pathname: string): boolean {
+  // /admin/login is a public staff-sign-in surface even though it lives
+  // under the otherwise-protected /admin tree.
+  if (pathname === "/admin/login" || pathname.startsWith("/admin/login/")) {
+    return false;
+  }
   return protectedPrefixes.some(
     (prefix) => pathname === prefix || pathname.startsWith(prefix + "/")
   );
@@ -27,15 +32,19 @@ export async function middleware(request: NextRequest) {
     const token = await getToken({ req: request });
 
     if (!token) {
-      const loginUrl = new URL("/login", request.url);
+      // Unauthenticated visitors to /admin/* land on the staff sign-in;
+      // everyone else goes to the customer-branded sign-in.
+      const loginPath = isAdminRoute(pathname) ? "/admin/login" : "/login";
+      const loginUrl = new URL(loginPath, request.url);
       loginUrl.searchParams.set("callbackUrl", request.url);
       return NextResponse.redirect(loginUrl);
     }
 
-    // Admin routes require admin or owner role
+    // Admin routes require SGS staff role (admin). Customers own their
+    // organization with role=owner — they don't belong on the admin board.
     if (isAdminRoute(pathname)) {
       const role = token.role as string | undefined;
-      if (role !== "admin" && role !== "owner") {
+      if (role !== "admin") {
         return NextResponse.redirect(new URL("/portal", request.url));
       }
     }

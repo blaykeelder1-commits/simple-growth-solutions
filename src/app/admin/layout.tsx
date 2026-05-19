@@ -17,12 +17,24 @@ export default function AdminLayout({
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // The staff sign-in page lives under /admin but is the ONE public route in
+  // this tree — we detect it and bypass the auth wall + sidebar. Computed up
+  // front so all hooks below run unconditionally (rules of hooks).
+  const isLoginRoute = pathname === "/admin/login";
+
   useEffect(() => {
-    if (status === "unauthenticated") {
-      const callback = pathname && pathname !== "/login" ? `?callbackUrl=${encodeURIComponent(pathname)}` : "";
-      router.replace(`/login${callback}`);
+    if (!isLoginRoute && status === "unauthenticated") {
+      const callback = pathname
+        ? `?callbackUrl=${encodeURIComponent(pathname)}`
+        : "";
+      router.replace(`/admin/login${callback}`);
     }
-  }, [status, pathname, router]);
+  }, [status, pathname, router, isLoginRoute]);
+
+  // Render the login page bare — no sidebar, no splash, no auth wall.
+  if (isLoginRoute) {
+    return <>{children}</>;
+  }
 
   // Branded splash that covers (a) initial NextAuth loading and (b) the gap
   // between unauthenticated detection and the actual /login redirect — the

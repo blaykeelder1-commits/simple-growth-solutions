@@ -388,13 +388,51 @@ export async function sendNewChangeRequestNotification(
     </div>
     <p style="background: #f9fafb; padding: 15px; border-radius: 6px; border-left: 4px solid #e5e7eb; color: #374151;">${escapeHtml(changeRequest.description)}</p>
     <div style="text-align: center; margin: 30px 0;">
-      <a href="${APP_URL}/admin/projects/${project.id}" style="display: inline-block; background: linear-gradient(to right, #2563eb, #4f46e5); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);">View Request</a>
+      <a href="${APP_URL}/admin/dispatch" style="display: inline-block; background: linear-gradient(to right, #2563eb, #4f46e5); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);">Open Dispatch Board</a>
     </div>
   `, 'Website Management');
 
   return sendEmail({
     to: adminEmails,
     subject: `Change Request [${changeRequest.priority.toUpperCase()}]: ${changeRequest.title}`,
+    html,
+  });
+}
+
+/** Acknowledge a freshly-submitted change request back to the customer — so they
+ *  see the ticket land in their inbox alongside the on-screen confirmation. */
+export async function sendChangeRequestReceivedEmail(
+  email: string,
+  customerName: string,
+  changeRequest: { title: string; type: string; priority: string },
+  project: { id: string; projectName: string },
+  slaText: string
+) {
+  const html = emailLayout(`
+    <h2 style="color: #1f2937;">We got your request.</h2>
+    <p>Hi ${escapeHtml(customerName.split(' ')[0])},</p>
+    <p>Thanks for sending this in — your request for <strong>${escapeHtml(project.projectName)}</strong> is in our queue.</p>
+    <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+      <table style="width: 100%; border-collapse: collapse;">
+        <tr>
+          <td style="padding: 8px 0;"><strong>Request:</strong></td>
+          <td style="padding: 8px 0; text-align: right;">${escapeHtml(changeRequest.title)}</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0;"><strong>Turnaround:</strong></td>
+          <td style="padding: 8px 0; text-align: right; color: #10b981; font-weight: 600;">${escapeHtml(slaText)}</td>
+        </tr>
+      </table>
+    </div>
+    <p>You'll get another email the moment we start working on it, and again when it's live. Track progress any time in your portal.</p>
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${APP_URL}/portal/requests" style="display: inline-block; background: linear-gradient(to right, #2563eb, #4f46e5); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);">Open Portal</a>
+    </div>
+  `, 'Website Management');
+
+  return sendEmail({
+    to: email,
+    subject: `Received: ${changeRequest.title}`,
     html,
   });
 }

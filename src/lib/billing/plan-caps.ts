@@ -90,6 +90,44 @@ export function resolvePlanCaps(
 }
 
 /**
+ * Auto-roll an active "manual" (comped) subscription whose period has expired.
+ * Square/Stripe webhooks roll their own subs forward when a payment lands;
+ * manual subs have no payment event, so without this they'd hard-cap at
+ * `cap reached` forever after the first 30 days. Pass the prisma client so
+ * the caller controls transactions; returns the (possibly rolled) sub.
+ */
+export async function rollManualPeriodIfExpired<
+  T extends {
+    id: string;
+    status: string;
+    processor: string;
+    currentPeriodStart: Date | null;
+    currentPeriodEnd: Date | null;
+  }
+>(
+  prisma: {
+    subscription: { update: (args: { where: { id: string }; data: Record<string, unknown> }) => Promise<unknown> };
+  },
+  sub: T
+): Promise<T> {
+  const expired =
+    sub.status === "active" &&
+    sub.processor === "manual" &&
+    sub.currentPeriodEnd !== null &&
+    sub.currentPeriodEnd.getTime() < Date.now();
+  if (!expired) return sub;
+  const start = new Date();
+  const end = new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000);
+  await prisma.subscription.update({
+    where: { id: sub.id },
+    data: { currentPeriodStart: start, currentPeriodEnd: end },
+  });
+  sub.currentPeriodStart = start;
+  sub.currentPeriodEnd = end;
+  return sub;
+}
+
+/**
  * Determine the current "billing period" window so we can count CRs against
  * the per-period cap.
  *

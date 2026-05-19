@@ -5,6 +5,7 @@ import { apiError } from "@/lib/api/errors";
 import {
   resolvePlanCaps,
   getPeriodWindow,
+  rollManualPeriodIfExpired,
   OVERAGE_CR_FEE_CENTS,
 } from "@/lib/billing/plan-caps";
 
@@ -24,13 +25,15 @@ export const GET = withAuth(async (_req, _ctx, session) => {
       });
     }
 
-    const sub = await prisma.subscription.findFirst({
+    let sub = await prisma.subscription.findFirst({
       where: {
         organizationId: user.organizationId,
         status: { in: ["active", "trialing"] },
       },
       orderBy: { createdAt: "desc" },
     });
+
+    if (sub) sub = await rollManualPeriodIfExpired(prisma, sub);
 
     if (!sub) {
       return NextResponse.json({

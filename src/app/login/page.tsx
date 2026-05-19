@@ -1,12 +1,37 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { getSession, signIn } from "next-auth/react";
+import { Suspense, useEffect, useState } from "react";
+import { getProviders, signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import {
+  Sparkles,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  CheckCircle2,
+  Loader2,
+  ShieldCheck,
+  Star,
+} from "lucide-react";
 
-// Only allow same-origin paths; reject absolute URLs and protocol-relative URLs
-// to prevent open-redirect attacks (e.g. ?callbackUrl=https://evil.com).
+// Reads /api/auth/session up to ~3s waiting for role to populate. After
+// signIn(redirect:false), the cookie is set but the JWT-encoded role isn't
+// always visible to the next request immediately — retry with backoff.
+async function pollForRole(maxMs = 3000): Promise<string | undefined> {
+  const start = Date.now();
+  while (Date.now() - start < maxMs) {
+    const session = await fetch("/api/auth/session", { cache: "no-store" }).then(
+      (r) => r.json()
+    );
+    if (session?.user?.role) return session.user.role;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return undefined;
+}
+
 function safeCallback(raw: string | null): string | null {
   if (!raw) return null;
   try {
@@ -24,8 +49,16 @@ function LoginForm() {
   const callbackUrl = safeCallback(searchParams.get("callbackUrl"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [hasGoogle, setHasGoogle] = useState(false);
+
+  useEffect(() => {
+    getProviders().then((providers) => {
+      setHasGoogle(!!providers?.google);
+    });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,91 +82,274 @@ function LoginForm() {
       return;
     }
 
-    const session = await getSession();
-    const role = session?.user?.role;
-    router.push(role === "admin" || role === "owner" ? "/admin" : "/portal");
+    // Poll until role is populated — see pollForRole comment for the race.
+    const role = await pollForRole();
+    // Only SGS staff (role=admin) land on the admin dashboard.
+    // Customers (role=owner — they own their organization) and any other
+    // authenticated users go to the customer portal.
+    router.push(role === "admin" ? "/admin" : "/portal");
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
-        <div>
-          <h2 className="text-center text-3xl font-bold text-gray-900">
-            Sign in
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100">
+      {/* Layered radial wash — same language as landing Hero */}
+      <div className="absolute inset-0">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(59,130,246,0.30),transparent_55%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(16,185,129,0.22),transparent_55%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(139,92,246,0.20),transparent_60%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(236,72,153,0.20),transparent_45%)]" />
+      </div>
+
+      {/* Floating ambient orbs */}
+      <div className="absolute top-16 left-10 float opacity-50 pointer-events-none">
+        <div className="h-40 w-40 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 blur-3xl" />
+      </div>
+      <div className="absolute top-24 right-12 float opacity-45 pointer-events-none" style={{ animationDelay: "2s" }}>
+        <div className="h-48 w-48 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-500 blur-3xl" />
+      </div>
+      <div className="absolute bottom-16 left-1/4 float opacity-40 pointer-events-none" style={{ animationDelay: "4s" }}>
+        <div className="h-44 w-44 rounded-full bg-gradient-to-br from-pink-400 to-orange-400 blur-3xl" />
+      </div>
+      <div className="absolute bottom-24 right-1/4 float opacity-40 pointer-events-none" style={{ animationDelay: "3s" }}>
+        <div className="h-36 w-36 rounded-full bg-gradient-to-br from-yellow-400 to-amber-500 blur-3xl" />
+      </div>
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 float opacity-25 pointer-events-none" style={{ animationDelay: "1s" }}>
+        <div className="h-80 w-80 rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 blur-3xl" />
+      </div>
+
+      {/* Subtle grid texture for depth */}
+      <div
+        className="absolute inset-0 opacity-[0.04] pointer-events-none"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(0,0,0,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.5) 1px, transparent 1px)",
+          backgroundSize: "40px 40px",
+        }}
+      />
+
+      {/* Top nav — small wordmark, top-left */}
+      <header className="relative z-10 px-6 sm:px-10 pt-6">
+        <Link href="/" className="inline-flex items-center gap-2.5 group w-fit">
+          <div className="h-9 w-9 rounded-xl bg-white/70 backdrop-blur ring-1 ring-white/60 shadow-sm flex items-center justify-center group-hover:bg-white transition">
+            <Sparkles className="h-4 w-4 text-purple-600" />
+          </div>
+          <span className="text-sm font-semibold tracking-tight text-gray-900">
             Simple Growth Solutions
-          </p>
+          </span>
+        </Link>
+      </header>
+
+      {/* Two-column body — both halves share the immersive backdrop */}
+      <main className="relative z-10 mx-auto max-w-7xl px-6 sm:px-10 py-8 lg:py-12">
+        <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center min-h-[calc(100vh-180px)]">
+          {/* LEFT — Brand pitch, transparent over backdrop */}
+          <div className="text-center lg:text-left">
+            {/* Tagline pill */}
+            <div className="fade-in-up inline-flex items-center gap-2 rounded-full border border-purple-200/70 bg-white/70 backdrop-blur px-4 py-1.5 text-xs font-medium text-purple-700 shadow-sm">
+              <Sparkles className="h-3.5 w-3.5 text-purple-500" />
+              <span className="tracking-wide uppercase">Customer Portal</span>
+              <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-400" />
+            </div>
+
+            {/* Headline */}
+            <h1 className="fade-in-up delay-100 mt-6 text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-gray-900 leading-[1.05]">
+              Welcome back.{" "}
+              <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-emerald-500 bg-clip-text text-transparent">
+                Your site, in your pocket.
+              </span>
+            </h1>
+
+            {/* Lede */}
+            <p className="fade-in-up delay-200 mt-5 text-base sm:text-lg text-gray-600 max-w-lg mx-auto lg:mx-0">
+              Track requests, review changes, and message your team. Built. Hosted. Maintained &mdash; all in one place.
+            </p>
+
+            {/* Value bullets */}
+            <ul className="fade-in-up delay-300 mt-7 space-y-3 max-w-md mx-auto lg:mx-0 text-left">
+              {[
+                "Real humans handle every edit — never a bot",
+                "One portal for everything live on your site",
+                "Same-day rush available on every plan",
+              ].map((feature) => (
+                <li key={feature} className="flex items-start gap-3">
+                  <div className="mt-0.5 h-6 w-6 rounded-full bg-white/70 backdrop-blur ring-1 ring-white/60 shadow-sm flex items-center justify-center flex-shrink-0">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  </div>
+                  <span className="text-gray-700">{feature}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* RIGHT — Glass card form */}
+          <div className="fade-in-up delay-200 w-full max-w-md mx-auto lg:ml-auto lg:mr-0">
+            <div className="relative rounded-2xl bg-white/70 backdrop-blur-xl ring-1 ring-white/60 shadow-2xl shadow-purple-500/10 p-7 sm:p-8">
+              {/* Soft inner glow */}
+              <div className="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-br from-white/40 via-white/0 to-white/0" />
+
+              <div className="relative">
+                {/* Form heading */}
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold tracking-tight text-gray-900">
+                    Sign in to your portal
+                  </h2>
+                  <p className="mt-1.5 text-sm text-gray-500">
+                    New here?{" "}
+                    <Link
+                      href="/signup"
+                      className="font-semibold text-blue-700 hover:text-blue-800"
+                    >
+                      Get your free build &rarr;
+                    </Link>
+                  </p>
+                </div>
+
+                {/* Google OAuth — only renders when provider is configured */}
+                {hasGoogle && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        signIn("google", { callbackUrl: callbackUrl || "/portal" })
+                      }
+                      className="w-full inline-flex items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white/80 backdrop-blur px-4 py-3 text-sm font-medium text-gray-700 shadow-sm hover:bg-white hover:border-gray-300 hover:shadow transition"
+                    >
+                      <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.61z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/>
+                      </svg>
+                      Continue with Google
+                    </button>
+
+                    <div className="relative my-5">
+                      <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                        <div className="w-full border-t border-gray-200/80" />
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase tracking-wide">
+                        <span className="bg-white/70 backdrop-blur px-3 text-gray-500">
+                          or with email
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                <form className="space-y-4" onSubmit={handleSubmit}>
+                  {error && (
+                    <div className="rounded-xl bg-red-50/90 border border-red-200 text-red-700 px-4 py-3 text-sm">
+                      {error}
+                    </div>
+                  )}
+
+                  <div>
+                    <label
+                      htmlFor="email"
+                      className="block text-sm font-medium text-gray-700 mb-1.5"
+                    >
+                      Email
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        id="email"
+                        type="email"
+                        required
+                        autoComplete="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl bg-white/90 backdrop-blur shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition"
+                        placeholder="you@example.com"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label
+                        htmlFor="password"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Password
+                      </label>
+                      <Link
+                        href="/forgot-password"
+                        className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        Forgot?
+                      </Link>
+                    </div>
+                    <div className="relative">
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        required
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="block w-full pl-10 pr-11 py-3 border border-gray-200 rounded-xl bg-white/90 backdrop-blur shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition"
+                        placeholder="Enter your password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="group relative w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:via-indigo-700 hover:to-purple-700 px-4 py-3.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40 transition-all disabled:opacity-60 disabled:cursor-not-allowed overflow-hidden"
+                  >
+                    {/* Shimmer sweep on hover */}
+                    <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 ease-out pointer-events-none" />
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin relative" />
+                        <span className="relative">Signing in...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="relative">Sign in</span>
+                        <ArrowRight className="h-4 w-4 relative group-hover:translate-x-0.5 transition-transform" />
+                      </>
+                    )}
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded">
-              {error}
-            </div>
-          )}
-
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="you@example.com"
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between">
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                  Password
-                </label>
-                <Link
-                  href="/forgot-password"
-                  className="text-sm text-blue-600 hover:text-blue-500"
-                >
-                  Forgot password?
-                </Link>
-              </div>
-              <input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter your password"
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? "Signing in..." : "Sign in"}
-          </button>
-
-          <div className="text-center">
-            <p className="text-sm text-gray-600">
-              Don&apos;t have an account?{" "}
-              <Link
-                href="/signup"
-                className="font-medium text-blue-600 hover:text-blue-500"
-              >
-                Sign up
-              </Link>
-            </p>
-          </div>
-        </form>
-      </div>
+        {/* Trust strip — bottom of the page */}
+        <div className="fade-in-up delay-400 mt-10 lg:mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-xs text-gray-600">
+          <span className="inline-flex items-center gap-1.5">
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+            256-bit encryption
+          </span>
+          <span className="hidden sm:inline text-gray-300">&middot;</span>
+          <span className="inline-flex items-center gap-1.5">
+            <CheckCircle2 className="h-3.5 w-3.5 text-blue-600" />
+            Real humans on every ticket
+          </span>
+          <span className="hidden sm:inline text-gray-300">&middot;</span>
+          <span className="inline-flex items-center gap-1.5">
+            <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-400" />
+            Trusted by growing businesses
+          </span>
+        </div>
+      </main>
     </div>
   );
 }

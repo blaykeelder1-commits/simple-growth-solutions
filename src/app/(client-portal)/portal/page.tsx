@@ -166,7 +166,9 @@ export default function PortalDashboard() {
                 </h1>
                 <p className="text-white/80 text-sm mt-0.5">
                   {featured
-                    ? `Tracking your build of ${featured.projectName}.`
+                    ? featured.status === "deployed" || featured.status === "completed"
+                      ? `Managing your live site — ${featured.projectName}.`
+                      : `Tracking your build of ${featured.projectName}.`
                     : "Let's build your website. Start a free build to begin."}
                 </p>
               </div>

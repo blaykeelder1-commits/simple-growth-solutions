@@ -14,16 +14,15 @@ for everyone but Blayke.
 
 ### Steps
 
-1. Pick the sending domain. Recommended: `mail.simple-growth-solution.com`
-   (subdomain so it doesn't conflict with marketing email).
-2. Resend dashboard → Domains → Add domain → enter the subdomain.
-3. Resend will display 4 DNS records: 1 MX, 1 SPF (TXT), 2 DKIM (CNAME).
-4. Add all 4 to GoDaddy DNS for `simple-growth-solution.com`. TTL = 1 hour.
+1. Sending domain: `simple-growth-solution.com` (apex, verified in Resend 2026-05-19).
+2. Resend dashboard → Domains → Add domain → enter the domain (already done).
+3. Resend will display 3 DNS records: 1 MX, 1 SPF (TXT), 1 DKIM (TXT).
+4. DNS records are managed in Cloudflare (zone `simple-growth-solution.com`, already added 2026-05-19).
 5. Click **Verify** in Resend. Propagation is usually 5–30 minutes.
-6. Once verified, update `.env`:
+6. Production `EMAIL_FROM` lives in Render env (do NOT put production sender in laptop .env):
 
    ```env
-   EMAIL_FROM="Simple Growth Solutions <hello@mail.simple-growth-solution.com>"
+   EMAIL_FROM="Simple Growth Solutions <hello@simple-growth-solution.com>"
    ```
 
 7. Restart the dev server (or redeploy). Test by signing up a new user — they
