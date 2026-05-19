@@ -8,6 +8,7 @@ import {
   Filter,
   RefreshCw,
   User as UserIcon,
+  X,
   Zap,
 } from "lucide-react";
 
@@ -68,6 +69,12 @@ export default function DispatchPage() {
   const [operators, setOperators] = useState<Operator[]>([]);
   const [filter, setFilter] = useState<"all" | "mine" | "unassigned">("all");
   const [loading, setLoading] = useState(true);
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  const openRequest = useMemo(
+    () => requests.find((r) => r.id === openId) ?? null,
+    [requests, openId]
+  );
 
   const fetchAll = async () => {
     setLoading(true);
@@ -92,6 +99,15 @@ export default function DispatchPage() {
     fetchAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
+
+  useEffect(() => {
+    if (!openId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenId(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [openId]);
 
   const updateRequest = async (id: string, patch: Record<string, string | null>) => {
     await fetch(`/api/admin/change-requests/${id}`, {
@@ -229,7 +245,7 @@ export default function DispatchPage() {
                 return (
                   <div
                     key={r.id}
-                    className={`bg-white rounded-lg border p-3 shadow-sm hover:shadow-md transition ${
+                    className={`bg-white rounded-lg border shadow-sm hover:shadow-md transition ${
                       sla.tone === "red"
                         ? "border-red-300 ring-2 ring-red-100"
                         : sla.tone === "amber"
@@ -237,50 +253,61 @@ export default function DispatchPage() {
                         : "border-gray-200"
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="font-medium text-gray-900 text-sm leading-snug flex-1">
-                        {r.title}
+                    <button
+                      type="button"
+                      onClick={() => setOpenId(r.id)}
+                      className="w-full text-left p-3 pb-2 cursor-pointer hover:bg-gray-50 rounded-t-lg transition"
+                      title="Click to see full request"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="font-medium text-gray-900 text-sm leading-snug flex-1">
+                          {r.title}
+                        </div>
+                        {r.isRush && <Zap className="w-4 h-4 text-amber-500 flex-shrink-0" />}
                       </div>
-                      {r.isRush && <Zap className="w-4 h-4 text-amber-500 flex-shrink-0" />}
-                    </div>
-                    <div className="text-xs text-gray-500 mb-2">
-                      {r.project.organizationName} &mdash; {r.project.name}
-                    </div>
-                    <p className="text-xs text-gray-600 line-clamp-2 mb-3">
-                      {r.description}
-                    </p>
-                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium border ${PRIORITY_COLORS[r.priority] || PRIORITY_COLORS.normal}`}>
-                        {r.priority}
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700 border border-blue-200">
-                        {r.type}
-                      </span>
-                      <span
-                        className={`px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1 ${
-                          sla.tone === "red"
-                            ? "bg-red-100 text-red-700"
-                            : sla.tone === "amber"
-                            ? "bg-amber-100 text-amber-700"
-                            : sla.tone === "green"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-gray-50 text-gray-500"
-                        }`}
-                      >
-                        {sla.tone === "red" ? (
-                          <AlertCircle className="w-3 h-3" />
-                        ) : (
-                          <Clock className="w-3 h-3" />
-                        )}
-                        {sla.label}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
+                      <div className="text-xs text-gray-500 mb-2">
+                        {r.project.organizationName} &mdash; {r.project.name}
+                      </div>
+                      <p className="text-xs text-gray-600 line-clamp-2 mb-2 whitespace-pre-wrap">
+                        {r.description}
+                      </p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium border ${PRIORITY_COLORS[r.priority] || PRIORITY_COLORS.normal}`}>
+                          {r.priority}
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700 border border-blue-200">
+                          {r.type}
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1 ${
+                            sla.tone === "red"
+                              ? "bg-red-100 text-red-700"
+                              : sla.tone === "amber"
+                              ? "bg-amber-100 text-amber-700"
+                              : sla.tone === "green"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-gray-50 text-gray-500"
+                          }`}
+                        >
+                          {sla.tone === "red" ? (
+                            <AlertCircle className="w-3 h-3" />
+                          ) : (
+                            <Clock className="w-3 h-3" />
+                          )}
+                          {sla.label}
+                        </span>
+                      </div>
+                    </button>
+                    <div
+                      className="flex items-center justify-between gap-2 px-3 py-2 border-t border-gray-100"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <select
                         value={r.assignee?.id ?? ""}
                         onChange={(e) =>
                           updateRequest(r.id, { assigneeId: e.target.value || null })
                         }
+                        onClick={(e) => e.stopPropagation()}
                         className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white flex-1 max-w-[110px]"
                       >
                         <option value="">Unassigned</option>
@@ -296,6 +323,7 @@ export default function DispatchPage() {
                       <select
                         value={r.status}
                         onChange={(e) => updateRequest(r.id, { status: e.target.value })}
+                        onClick={(e) => e.stopPropagation()}
                         className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white"
                       >
                         <option value="pending">Pending</option>
@@ -312,6 +340,161 @@ export default function DispatchPage() {
           </div>
         ))}
       </div>
+
+      {openRequest && (
+        <RequestDetailModal
+          request={openRequest}
+          operators={operators}
+          onClose={() => setOpenId(null)}
+          onChange={(patch) => updateRequest(openRequest.id, patch)}
+        />
+      )}
+    </div>
+  );
+}
+
+function RequestDetailModal({
+  request,
+  operators,
+  onClose,
+  onChange,
+}: {
+  request: ChangeRequest;
+  operators: Operator[];
+  onClose: () => void;
+  onChange: (patch: Record<string, string | null>) => void;
+}) {
+  const sla = slaInfo(request.slaDueAt);
+  const created = new Date(request.createdAt).toLocaleString();
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl max-w-3xl w-full max-h-[85vh] overflow-y-auto shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 p-6 border-b border-gray-100">
+          <div className="min-w-0 flex-1">
+            <div className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">
+              {request.project.organizationName} &mdash; {request.project.name}
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 leading-snug">
+              {request.title}
+              {request.isRush && (
+                <Zap className="inline-block w-5 h-5 text-amber-500 ml-2 align-middle" />
+              )}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6 grid grid-cols-1 md:grid-cols-[1fr_220px] gap-6">
+          <div>
+            <div className="text-xs uppercase tracking-wide font-semibold text-gray-500 mb-2">
+              Request
+            </div>
+            <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+              {request.description || <span className="text-gray-400 italic">No description provided.</span>}
+            </p>
+          </div>
+
+          <aside className="space-y-3 text-xs">
+            <Meta label="Status">
+              <select
+                value={request.status}
+                onChange={(e) => onChange({ status: e.target.value })}
+                className="w-full border border-gray-200 rounded px-2 py-1 bg-white text-xs"
+              >
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </Meta>
+            <Meta label="Assignee">
+              <select
+                value={request.assignee?.id ?? ""}
+                onChange={(e) => onChange({ assigneeId: e.target.value || null })}
+                className="w-full border border-gray-200 rounded px-2 py-1 bg-white text-xs"
+              >
+                <option value="">Unassigned</option>
+                {operators.map((op) => (
+                  <option key={op.id} value={op.id}>
+                    {op.name || op.email}
+                  </option>
+                ))}
+              </select>
+            </Meta>
+            <Meta label="Priority">
+              <span className={`inline-block px-2 py-0.5 rounded font-medium border ${PRIORITY_COLORS[request.priority] || PRIORITY_COLORS.normal}`}>
+                {request.priority}
+              </span>
+            </Meta>
+            <Meta label="Type">
+              <span className="inline-block px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                {request.type}
+              </span>
+            </Meta>
+            <Meta label="SLA">
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-medium ${
+                  sla.tone === "red"
+                    ? "bg-red-100 text-red-700"
+                    : sla.tone === "amber"
+                    ? "bg-amber-100 text-amber-700"
+                    : sla.tone === "green"
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-gray-50 text-gray-500"
+                }`}
+              >
+                {sla.tone === "red" ? (
+                  <AlertCircle className="w-3 h-3" />
+                ) : (
+                  <Clock className="w-3 h-3" />
+                )}
+                {sla.label}
+              </span>
+            </Meta>
+            {request.requester && (
+              <Meta label="Requested by">
+                <div className="text-gray-900 font-medium">
+                  {request.requester.name || request.requester.email.split("@")[0]}
+                </div>
+                <a
+                  href={`mailto:${request.requester.email}`}
+                  className="text-blue-600 hover:underline break-all"
+                >
+                  {request.requester.email}
+                </a>
+              </Meta>
+            )}
+            <Meta label="Created">
+              <div className="text-gray-700">{created}</div>
+            </Meta>
+          </aside>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Meta({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wide font-semibold text-gray-500 mb-1">
+        {label}
+      </div>
+      <div className="text-xs text-gray-800">{children}</div>
     </div>
   );
 }
