@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { withAuth } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
+import { z } from "zod";
 
 // GET /api/cashflow/clients - List clients with cursor-based pagination
 export const GET = withAuth(async (request: NextRequest, _ctx, session) => {
@@ -48,5 +49,48 @@ export const GET = withAuth(async (request: NextRequest, _ctx, session) => {
     });
   } catch (error) {
     return apiError(error, "Failed to fetch clients");
+  }
+});
+
+const createClientSchema = z.object({
+  name: z.string().min(1, "Client name is required"),
+  email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().optional().or(z.literal("")),
+  industry: z.string().optional().or(z.literal("")),
+});
+
+// POST /api/cashflow/clients - Create a new client
+export const POST = withAuth(async (request: NextRequest, _ctx, session) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+    });
+
+    if (!user?.organizationId) {
+      return NextResponse.json(
+        { success: false, message: "No organization found" },
+        { status: 400 }
+      );
+    }
+
+    const body = await request.json();
+    const data = createClientSchema.parse(body);
+
+    const client = await prisma.client.create({
+      data: {
+        organizationId: user.organizationId,
+        name: data.name,
+        email: data.email || null,
+        phone: data.phone || null,
+        industry: data.industry || null,
+      },
+    });
+
+    return NextResponse.json(
+      { success: true, client },
+      { status: 201 }
+    );
+  } catch (error) {
+    return apiError(error, "Failed to create client");
   }
 });

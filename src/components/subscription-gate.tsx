@@ -74,19 +74,35 @@ function UpgradePrompt({ requiredPlan }: { requiredPlan: string }) {
   const handleStartTrial = async () => {
     setStartingTrial(true);
     try {
-      const res = await fetch('/api/billing/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier: requiredPlan, trial: true }),
-      });
-      if (res.ok) {
-        const { url } = await res.json();
-        if (url) {
-          window.location.href = url;
+      // Free-tier products (cashflow_ai, cybersecurity) are activated via the
+      // onboarding/products endpoint which creates a trial subscription directly.
+      // Paid plans go through the billing checkout for payment capture.
+      const FREE_ACTIVATE_PLANS = ['cashflow_ai', 'cybersecurity'];
+
+      if (FREE_ACTIVATE_PLANS.includes(requiredPlan)) {
+        const res = await fetch('/api/onboarding/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ products: [requiredPlan] }),
+        });
+        if (res.ok) {
+          window.location.reload();
           return;
         }
       }
-      // Fallback to pricing page
+
+      const res = await fetch('/api/billing/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: requiredPlan }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.url) {
+          window.location.href = data.url;
+          return;
+        }
+      }
       window.location.href = `/pricing?plan=${encodeURIComponent(requiredPlan)}`;
     } catch {
       window.location.href = `/pricing?plan=${encodeURIComponent(requiredPlan)}`;

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -19,6 +20,7 @@ import {
   BarChart3,
   Loader2,
   Sparkles,
+  AlertCircle,
 } from "lucide-react";
 
 interface Subscription {
@@ -53,29 +55,53 @@ const planInfo: Record<string, { name: string; icon: React.ElementType; color: s
   chauffeur: { name: "Business Chauffeur", icon: BarChart3, color: "from-purple-500 to-pink-600" },
 };
 
-const statusColors: Record<string, { color: string; bgColor: string }> = {
+const statusColors: Record<string, { color: string; bgColor: string; label?: string }> = {
   active: { color: "text-emerald-700", bgColor: "bg-emerald-100 border border-emerald-200" },
   trialing: { color: "text-blue-700", bgColor: "bg-blue-100 border border-blue-200" },
   past_due: { color: "text-red-700", bgColor: "bg-red-100 border border-red-200" },
   canceled: { color: "text-gray-700", bgColor: "bg-gray-100 border border-gray-200" },
   pending: { color: "text-amber-700", bgColor: "bg-amber-100 border border-amber-200" },
+  awaiting_payment: { color: "text-amber-700", bgColor: "bg-amber-100 border border-amber-200", label: "Awaiting Payment" },
+  expired: { color: "text-red-700", bgColor: "bg-red-100 border border-red-200", label: "Trial Expired" },
 };
 
 export default function BillingPage() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [portalMessage, setPortalMessage] = useState<string | null>(null);
+  const [activatingCfa, setActivatingCfa] = useState(false);
+
+  const activateCfa = useCallback(async () => {
+    setActivatingCfa(true);
+    try {
+      const res = await fetch("/api/onboarding/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ products: ["cashflow_ai"] }),
+      });
+      if (res.ok) {
+        window.location.reload();
+      } else {
+        setPortalMessage("Failed to activate Cash Flow AI. Please try again.");
+      }
+    } catch {
+      setPortalMessage("Something went wrong. Please try again.");
+    } finally {
+      setActivatingCfa(false);
+    }
+  }, []);
 
   useEffect(() => {
     async function fetchSubscriptions() {
       try {
         const res = await fetch("/api/billing/subscriptions");
-        if (res.ok) {
-          const data = await res.json();
-          setSubscriptions(data.subscriptions || []);
-        }
+        if (!res.ok) throw new Error("Failed to load subscriptions");
+        const data = await res.json();
+        setSubscriptions(data.subscriptions || []);
       } catch {
-        // Error handled silently - UI shows empty state
+        setError("Unable to load your billing information. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -86,14 +112,23 @@ export default function BillingPage() {
 
   const handleManageBilling = async () => {
     setPortalLoading(true);
+    setPortalMessage(null);
     try {
       const res = await fetch("/api/billing/portal", { method: "POST" });
-      if (res.ok) {
-        const data = await res.json();
+      const data = await res.json();
+
+      if (data.url) {
         window.location.href = data.url;
+        return;
+      }
+
+      if (data.processor === "square") {
+        setPortalMessage(data.message);
+      } else if (!data.success) {
+        setPortalMessage(data.message || "Unable to open billing portal.");
       }
     } catch {
-      // Error handled silently - no redirect occurs
+      setPortalMessage("Something went wrong. Please try again or contact support.");
     } finally {
       setPortalLoading(false);
     }
@@ -107,8 +142,23 @@ export default function BillingPage() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
+        <AlertCircle className="h-12 w-12 text-amber-500 mb-4" />
+        <h2 className="text-lg font-semibold text-gray-900 mb-2">Something went wrong</h2>
+        <p className="text-gray-500 mb-4">{error}</p>
+        <Button onClick={() => window.location.reload()}>Try Again</Button>
+      </div>
+    );
+  }
+
   const activeSubscriptions = subscriptions.filter(
     (s) => s.status === "active" || s.status === "trialing"
+  );
+
+  const expiredSubscriptions = subscriptions.filter(
+    (s) => s.status === "expired"
   );
 
   return (
@@ -133,6 +183,33 @@ export default function BillingPage() {
           </Button>
         )}
       </div>
+
+      {/* Square portal message */}
+      {portalMessage && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+          {portalMessage}
+        </div>
+      )}
+
+      {/* Expired trial banner */}
+      {expiredSubscriptions.length > 0 && activeSubscriptions.length === 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-5">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <h3 className="font-semibold text-amber-900">Your trial has ended</h3>
+              <p className="text-sm text-amber-800 mt-1">
+                Pick a plan to keep your site live and managed. Your project and data are safe.
+              </p>
+              <Link href="/pricing">
+                <Button size="sm" className="mt-3 bg-amber-600 hover:bg-amber-700 text-white">
+                  Choose a Plan
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Active subscriptions */}
       {activeSubscriptions.length > 0 ? (
@@ -162,9 +239,9 @@ export default function BillingPage() {
                       </div>
                     </div>
                     <Badge className={`${status.bgColor} ${status.color}`}>
-                      {subscription.status === "trialing"
+                      {status.label || (subscription.status === "trialing"
                         ? "Trial"
-                        : subscription.status}
+                        : subscription.status)}
                     </Badge>
                   </div>
                 </CardHeader>
@@ -192,7 +269,7 @@ export default function BillingPage() {
             );
           })}
         </div>
-      ) : (
+      ) : expiredSubscriptions.length === 0 ? (
         <Card variant="professional">
           <CardContent className="flex flex-col items-center justify-center py-16">
             <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center mb-5">
@@ -205,14 +282,14 @@ export default function BillingPage() {
               Upgrade your services with our premium plans to unlock automation,
               security monitoring, and business insights.
             </p>
-            <a href="/pricing">
+            <Link href="/pricing">
               <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25">
                 View Plans
               </Button>
-            </a>
+            </Link>
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
       {/* Available plans */}
       <Card variant="professional">
@@ -234,7 +311,7 @@ export default function BillingPage() {
               </div>
               <h4 className="font-semibold text-gray-900 mb-1">Website Management</h4>
               <p className="text-2xl font-bold text-gray-900 mb-3">
-                $79<span className="text-sm font-normal text-gray-500">/mo</span>
+                $49<span className="text-sm font-normal text-gray-500">/mo</span>
               </p>
               <ul className="space-y-2 text-sm text-gray-600 mb-5">
                 <li className="flex items-center gap-2">
@@ -250,9 +327,11 @@ export default function BillingPage() {
                   Priority support
                 </li>
               </ul>
-              <Button variant="outline" className="w-full bg-white/50 hover:bg-white">
-                Subscribe
-              </Button>
+              <Link href="/pricing">
+                <Button variant="outline" className="w-full bg-white/50 hover:bg-white">
+                  View Plans
+                </Button>
+              </Link>
             </div>
 
             {/* Cybersecurity */}
@@ -278,9 +357,11 @@ export default function BillingPage() {
                   SSL monitoring
                 </li>
               </ul>
-              <Button variant="outline" className="w-full bg-white/50 hover:bg-white">
-                Subscribe
-              </Button>
+              <Link href="/pricing">
+                <Button variant="outline" className="w-full bg-white/50 hover:bg-white">
+                  View Plans
+                </Button>
+              </Link>
             </div>
 
             {/* Cash Flow AI */}
@@ -309,8 +390,15 @@ export default function BillingPage() {
                   QuickBooks/Xero sync
                 </li>
               </ul>
-              <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25">
-                Get Started
+              <Button
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25"
+                onClick={activateCfa}
+                disabled={activatingCfa}
+              >
+                {activatingCfa ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : null}
+                {activatingCfa ? "Activating..." : "Activate Free Trial"}
               </Button>
             </div>
           </div>

@@ -16,6 +16,10 @@
     {
       "path": "/api/ar-engine/execute",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/ar-engine/sync-payments",
+      "schedule": "0 14 * * *"
     }
   ]
 }

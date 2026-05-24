@@ -261,7 +261,7 @@ export default function PortalDashboard() {
         <Card variant="professional" hover="lift" className="stat-card stat-card-purple">
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-medium text-gray-500">
-              Completed Requests
+              Recently Completed
             </CardTitle>
             <div className="icon-container icon-container-purple">
               <CheckCircle2 className="h-5 w-5" />
@@ -271,7 +271,7 @@ export default function PortalDashboard() {
             <div className="text-3xl font-bold text-gray-900">
               {recentRequests.filter((r) => r.status === "completed").length}
             </div>
-            <p className="text-sm text-gray-500 mt-1">All time</p>
+            <p className="text-sm text-gray-500 mt-1">Latest requests</p>
           </CardContent>
         </Card>
       </div>

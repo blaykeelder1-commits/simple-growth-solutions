@@ -96,18 +96,32 @@ export default function ClientPortalLayout({
         </div>
 
         <nav className="p-4 space-y-1">
-          {navigation.map((item) => (
-            <Link
-              key={item.name}
-              href={item.href}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-700 hover:bg-white/60 transition-all"
-            >
-              <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50">
-                <item.icon className="h-4 w-4 text-blue-600" />
-              </div>
-              <span className="font-medium">{item.name}</span>
-            </Link>
-          ))}
+          {navigation.map((item) => {
+            const isActive =
+              item.href === "/portal"
+                ? pathname === "/portal"
+                : pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
+                  isActive
+                    ? "bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-md shadow-blue-500/25"
+                    : "text-gray-700 hover:bg-white/60"
+                }`}
+              >
+                <div className={`p-1.5 rounded-lg ${
+                  isActive
+                    ? "bg-white/20"
+                    : "bg-gradient-to-br from-blue-50 to-indigo-50"
+                }`}>
+                  <item.icon className={`h-4 w-4 ${isActive ? "text-white" : "text-blue-600"}`} />
+                </div>
+                <span className="font-medium">{item.name}</span>
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100/50 bg-white/30">

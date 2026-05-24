@@ -78,12 +78,12 @@ export async function middleware(request: NextRequest) {
       "Content-Security-Policy",
       [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' https://js.stripe.com", // unsafe-inline required for Next.js App Router inline scripts
+        "script-src 'self' 'unsafe-inline'", // unsafe-inline required for Next.js App Router inline scripts
         "style-src 'self' 'unsafe-inline'", // unsafe-inline needed for Tailwind/inline styles
         "img-src 'self' data: https: blob:",
         "font-src 'self' data:",
-        "connect-src 'self' https://api.stripe.com https://api.resend.com https://*.supabase.co wss://*.supabase.co",
-        "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
+        "connect-src 'self' https://api.resend.com https://*.supabase.co wss://*.supabase.co",
+        "frame-src 'self'",
         "object-src 'none'",
         "base-uri 'self'",
         "form-action 'self'",

@@ -26,7 +26,7 @@ export async function GET() {
     const subscriptions = await prisma.subscription.findMany({
       where: {
         organizationId: user.organizationId,
-        status: { in: ["active", "trialing", "past_due"] },
+        status: { in: ["active", "trialing", "past_due", "expired", "awaiting_payment"] },
       },
       select: {
         id: true,

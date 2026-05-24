@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -9,6 +9,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -25,6 +26,8 @@ import {
   CheckCircle2,
   Clock,
   Calendar,
+  X,
+  Loader2,
 } from "lucide-react";
 
 interface Invoice {
@@ -64,30 +67,76 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    clientName: "",
+    clientEmail: "",
+    invoiceNumber: "",
+    amount: "",
+    dueDate: "",
+    notes: "",
+  });
 
-  useEffect(() => {
-    async function fetchInvoices() {
-      try {
-        const res = await fetch("/api/cashflow/invoices");
-        if (res.ok) {
-          const data = await res.json();
-          setInvoices(data.invoices || []);
-        }
-      } catch {
-        // Error handled silently - UI shows empty state
-      } finally {
-        setLoading(false);
+  const fetchInvoices = useCallback(async () => {
+    try {
+      const res = await fetch("/api/cashflow/invoices");
+      if (res.ok) {
+        const data = await res.json();
+        setInvoices(data.data || data.invoices || []);
       }
+    } catch {
+      // UI shows empty state
+    } finally {
+      setLoading(false);
     }
-
-    fetchInvoices();
   }, []);
 
-  const formatCurrency = (cents: number) => {
+  useEffect(() => {
+    fetchInvoices();
+  }, [fetchInvoices]);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreating(true);
+    setCreateError(null);
+
+    try {
+      const res = await fetch("/api/cashflow/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientName: form.clientName,
+          clientEmail: form.clientEmail || undefined,
+          invoiceNumber: form.invoiceNumber,
+          amount: parseFloat(form.amount),
+          dueDate: form.dueDate,
+          notes: form.notes || undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Failed to create invoice");
+      }
+
+      setShowCreateForm(false);
+      setForm({ clientName: "", clientEmail: "", invoiceNumber: "", amount: "", dueDate: "", notes: "" });
+      setLoading(true);
+      fetchInvoices();
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
-    }).format(cents / 100);
+    }).format(value);
   };
 
   const filteredInvoices = invoices.filter((invoice) => {
@@ -121,11 +170,112 @@ export default function InvoicesPage() {
           <h1 className="text-3xl font-bold text-gray-900">Invoices</h1>
           <p className="text-gray-500 mt-1">Manage and track your invoices</p>
         </div>
-        <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25">
+        <Button
+          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25"
+          onClick={() => setShowCreateForm(true)}
+        >
           <Plus className="h-4 w-4 mr-2" />
           Create Invoice
         </Button>
       </div>
+
+      {/* Create Invoice Form */}
+      {showCreateForm && (
+        <Card variant="professional" className="border-2 border-blue-200">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">New Invoice</h3>
+              <button onClick={() => setShowCreateForm(false)} className="p-1 hover:bg-gray-100 rounded">
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleCreate} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="clientName">Client Name *</Label>
+                  <Input
+                    id="clientName"
+                    required
+                    value={form.clientName}
+                    onChange={(e) => setForm(f => ({ ...f, clientName: e.target.value }))}
+                    placeholder="Acme Corp"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="clientEmail">Client Email</Label>
+                  <Input
+                    id="clientEmail"
+                    type="email"
+                    value={form.clientEmail}
+                    onChange={(e) => setForm(f => ({ ...f, clientEmail: e.target.value }))}
+                    placeholder="billing@acme.com"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="invoiceNumber">Invoice Number *</Label>
+                  <Input
+                    id="invoiceNumber"
+                    required
+                    value={form.invoiceNumber}
+                    onChange={(e) => setForm(f => ({ ...f, invoiceNumber: e.target.value }))}
+                    placeholder="INV-001"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="amount">Amount (USD) *</Label>
+                  <Input
+                    id="amount"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    required
+                    value={form.amount}
+                    onChange={(e) => setForm(f => ({ ...f, amount: e.target.value }))}
+                    placeholder="1500.00"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="dueDate">Due Date *</Label>
+                  <Input
+                    id="dueDate"
+                    type="date"
+                    required
+                    value={form.dueDate}
+                    onChange={(e) => setForm(f => ({ ...f, dueDate: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="notes">Notes</Label>
+                  <Input
+                    id="notes"
+                    value={form.notes}
+                    onChange={(e) => setForm(f => ({ ...f, notes: e.target.value }))}
+                    placeholder="Optional notes"
+                  />
+                </div>
+              </div>
+
+              {createError && (
+                <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm">
+                  {createError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3">
+                <Button type="button" variant="outline" onClick={() => setShowCreateForm(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={creating}>
+                  {creating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  {creating ? "Creating..." : "Create Invoice"}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       <Card variant="professional">
         <CardHeader className="pb-4">
@@ -170,7 +320,10 @@ export default function InvoicesPage() {
                 Create your first invoice or sync from QuickBooks/Xero to start tracking
               </p>
               <div className="flex justify-center gap-3">
-                <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25">
+                <Button
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25"
+                  onClick={() => setShowCreateForm(true)}
+                >
                   <Plus className="h-4 w-4 mr-2" />
                   Create Invoice
                 </Button>
@@ -195,7 +348,7 @@ export default function InvoicesPage() {
                   {filteredInvoices.map((invoice) => {
                     const status = statusConfig[invoice.status] || statusConfig.sent;
                     const StatusIcon = status.icon;
-                    const outstanding = invoice.amount - invoice.amountPaid;
+                    const outstanding = Number(invoice.amount) - Number(invoice.amountPaid);
                     const isOverdue = new Date(invoice.dueDate) < new Date() && invoice.status !== "paid";
                     const risk = invoice.riskLevel ? riskConfig[invoice.riskLevel] : null;
 
@@ -219,9 +372,9 @@ export default function InvoicesPage() {
                         <TableCell>
                           <div>
                             <span className="font-semibold text-gray-900">
-                              {formatCurrency(invoice.amount)}
+                              {formatCurrency(Number(invoice.amount))}
                             </span>
-                            {invoice.amountPaid > 0 && outstanding > 0 && (
+                            {Number(invoice.amountPaid) > 0 && outstanding > 0 && (
                               <span className="text-sm text-orange-600 block">
                                 ({formatCurrency(outstanding)} due)
                               </span>

@@ -5,10 +5,8 @@ import { prisma } from '@/lib/db/prisma';
 import { sendEmail } from '@/lib/email';
 import { sendSMS } from '@/lib/integrations/twilio';
 import { arEngineLogger as logger } from '@/lib/logger';
+import { getSgsSquareConfig, createPaymentLink as createSquarePaymentLink } from '@/lib/billing/square';
 import { ScheduledAction, OutreachContent, IncentiveOffer } from './types';
-
-// Stripe integration for payment links
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 
 interface PaymentLinkResult {
   url: string;
@@ -16,7 +14,7 @@ interface PaymentLinkResult {
   expiresAt?: Date;
 }
 
-// Generate a Stripe payment link for an invoice
+// Generate a Square payment link for an invoice collection
 export async function generatePaymentLink(
   invoiceId: string,
   amount: number, // in cents
@@ -24,20 +22,17 @@ export async function generatePaymentLink(
   description: string,
   discount?: { percent?: number; amount?: number }
 ): Promise<PaymentLinkResult> {
-  if (!STRIPE_SECRET_KEY) {
-    // Return mock link for development
+  const cfg = getSgsSquareConfig();
+
+  if (!cfg) {
+    logger.warn('[AR Engine] Square not configured — cannot generate payment link');
     return {
-      url: `https://pay.stripe.com/mock/${invoiceId}`,
-      id: `mock_${invoiceId}`,
+      url: '',
+      id: `unconfigured_${invoiceId}`,
     };
   }
 
   try {
-    // Dynamic import to avoid issues if stripe not installed
-    const Stripe = (await import('stripe')).default;
-    const stripe = new Stripe(STRIPE_SECRET_KEY);
-
-    // Calculate final amount after discount
     let finalAmount = amount;
     if (discount?.percent) {
       finalAmount = Math.round(amount * (1 - discount.percent / 100));
@@ -45,41 +40,26 @@ export async function generatePaymentLink(
       finalAmount = amount - discount.amount;
     }
 
-    // Create a payment link
-    const paymentLink = await stripe.paymentLinks.create({
-      line_items: [
-        {
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: description,
-              metadata: { invoiceId },
-            },
-            unit_amount: finalAmount,
-          },
-          quantity: 1,
-        },
-      ],
+    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+
+    const link = await createSquarePaymentLink(cfg, {
+      amountCents: finalAmount,
+      description,
+      redirectUrl: `${baseUrl}/dashboard/cashflow?paid=${invoiceId}`,
+      buyerEmail: clientEmail || undefined,
       metadata: {
         invoiceId,
+        purpose: 'ar_collection',
         originalAmount: amount.toString(),
-        discountPercent: discount?.percent?.toString() || '',
-        discountAmount: discount?.amount?.toString() || '',
-      },
-      after_completion: {
-        type: 'redirect',
-        redirect: {
-          url: `${process.env.NEXT_PUBLIC_APP_URL}/payment/success?invoice=${invoiceId}`,
-        },
       },
     });
 
     return {
-      url: paymentLink.url,
-      id: paymentLink.id,
+      url: link.url,
+      id: link.id,
     };
   } catch (error) {
-    logger.error({ err: error }, '[AR Engine] Failed to create payment link');
+    logger.error({ err: error }, '[AR Engine] Failed to create Square payment link');
     throw error;
   }
 }

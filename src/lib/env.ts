@@ -45,9 +45,21 @@ const envSchema = z.object({
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
 
+  // Square (optional — primary billing processor)
+  SQUARE_ACCESS_TOKEN: z.string().optional(),
+  SQUARE_LOCATION_ID: z.string().optional(),
+  SQUARE_ENVIRONMENT: z.enum(["sandbox", "production"]).optional(),
+  SQUARE_WEBHOOK_SIGNATURE_KEY: z.string().optional(),
+  SQUARE_PLAN_WEBSITE_MANAGED_ID: z.string().optional(),
+  SQUARE_PLAN_WEBSITE_PRO_ID: z.string().optional(),
+  SQUARE_PLAN_WEBSITE_PREMIUM_ID: z.string().optional(),
+
   // QuickBooks (optional)
   QUICKBOOKS_CLIENT_ID: z.string().optional(),
   QUICKBOOKS_CLIENT_SECRET: z.string().optional(),
+
+  // Cron
+  CRON_SECRET: z.string().optional(),
 
   // App
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),

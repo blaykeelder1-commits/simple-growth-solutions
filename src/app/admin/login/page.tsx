@@ -152,17 +152,14 @@ function StaffLoginForm() {
             <ul className="mt-7 space-y-3 max-w-md mx-auto lg:mx-0 text-left">
               {[
                 { icon: Inbox, label: "Dispatch board with live SLA countdowns" },
-                { icon: Activity, label: "Throughput &amp; reliability metrics at a glance" },
-                { icon: Users, label: "Customer funnel &mdash; from lead to managed" },
+                { icon: Activity, label: "Throughput & reliability metrics at a glance" },
+                { icon: Users, label: "Customer funnel — from lead to managed" },
               ].map(({ icon: I, label }) => (
                 <li key={label} className="flex items-start gap-3">
                   <div className="mt-0.5 h-6 w-6 rounded-full bg-white/5 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
                     <I className="h-3.5 w-3.5 text-cyan-300" />
                   </div>
-                  <span
-                    className="text-gray-300"
-                    dangerouslySetInnerHTML={{ __html: label }}
-                  />
+                  <span className="text-gray-300">{label}</span>
                 </li>
               ))}
             </ul>

@@ -164,7 +164,7 @@ export default function AdminCommandCenter() {
               label="SLA At Risk"
               value={stats?.atRiskTickets ?? "—"}
               href="/admin/dispatch"
-              subtle="Due in &lt; 12h"
+              subtle="Due in < 12h"
             />
             <KpiCard
               tone={(stats?.stuckPayment ?? 0) > 0 ? "amber" : "gray"}
@@ -355,10 +355,7 @@ function KpiCard({
       <div className={`mt-2 text-3xl font-bold tabular-nums ${toneColor[tone]}`}>
         {value}
       </div>
-      <div
-        className="mt-1 text-[11px] text-gray-500"
-        dangerouslySetInnerHTML={{ __html: subtle }}
-      />
+      <div className="mt-1 text-[11px] text-gray-500">{subtle}</div>
       <ArrowUpRight className="absolute top-3 right-3 h-4 w-4 text-gray-600 group-hover:text-white transition" />
     </Link>
   );

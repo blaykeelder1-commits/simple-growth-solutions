@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -42,7 +42,7 @@ interface Project {
   projectName: string;
 }
 
-export default function NewChangeRequestPage() {
+function NewChangeRequestContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedProjectId = searchParams.get("projectId");
@@ -476,5 +476,19 @@ export default function NewChangeRequestPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function NewChangeRequestPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        </div>
+      }
+    >
+      <NewChangeRequestContent />
+    </Suspense>
   );
 }
