@@ -1,3 +1,5 @@
+import { withSentryConfig } from "@sentry/nextjs";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
@@ -5,6 +7,8 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: "2mb",
     },
+    // Required on Next 14 so src/instrumentation.ts (Sentry init) runs.
+    instrumentationHook: true,
   },
 
   // Environment variables that should be available on the client
@@ -41,4 +45,11 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+// Wrap with Sentry. With no auth token at build time we skip source-map upload
+// entirely, so the build never fails for lack of Sentry credentials — error
+// monitoring still works once SENTRY_DSN / NEXT_PUBLIC_SENTRY_DSN are set.
+export default withSentryConfig(nextConfig, {
+  silent: true,
+  disableLogger: true,
+  sourcemaps: { disable: true },
+});
