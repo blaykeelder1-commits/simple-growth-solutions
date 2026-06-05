@@ -285,6 +285,9 @@ model Subscription {
   // recurring sub is provisioned against the founding Square plan variation.
   promoCodeId String?    @map("promo_code_id")
   promoCode   PromoCode? @relation(fields: [promoCodeId], references: [id])
+  // Set once we've emailed the customer that their founding rate is about to
+  // revert to standard pricing — guards the daily reminder cron from resending.
+  foundingReminderSentAt DateTime? @map("founding_reminder_sent_at")
 
   trialStartDate     DateTime? @map("trial_start_date")
   trialEndDate       DateTime? @map("trial_end_date")

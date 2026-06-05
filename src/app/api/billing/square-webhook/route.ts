@@ -7,7 +7,16 @@ import {
   getPayment,
   createSubscription,
 } from "@/lib/billing/square";
-import { foundingPlanVariationId, isWebsitePlan } from "@/lib/billing/founding";
+import {
+  foundingPlanVariationId,
+  isWebsitePlan,
+  STANDARD_PRICE_CENTS,
+  FOUNDING_INTRO_MONTHS,
+} from "@/lib/billing/founding";
+import {
+  sendSubscriptionActivatedEmail,
+  sendPaymentFailedEmail,
+} from "@/lib/email/lifecycle-emails";
 import { apiLogger } from "@/lib/logger";
 
 // Square webhook handler.
@@ -206,6 +215,43 @@ async function handlePaymentEvent(event: SquareEvent) {
           where: { id: subscription.organizationId },
           data: { customerStage: "website_managed" },
         }).catch(() => {});
+
+        // Payment confirmation + welcome (+ site-live if already deployed).
+        // Non-blocking: a mail hiccup must never fail the webhook.
+        try {
+          const owner =
+            (await prisma.user.findFirst({
+              where: { organizationId: subscription.organizationId, role: "owner" },
+              select: { email: true, name: true },
+            })) ||
+            (await prisma.user.findFirst({
+              where: { organizationId: subscription.organizationId },
+              select: { email: true, name: true },
+            }));
+          if (owner?.email) {
+            const liveProject = await prisma.websiteProject.findFirst({
+              where: { organizationId: subscription.organizationId, deployedUrl: { not: null } },
+              select: { deployedUrl: true },
+              orderBy: { createdAt: "desc" },
+            });
+            const founding = subscription.promoCodeId && isWebsitePlan(subscription.plan)
+              ? {
+                  introCents: subscription.priceMonthly,
+                  introMonths: FOUNDING_INTRO_MONTHS,
+                  standardCents: STANDARD_PRICE_CENTS[subscription.plan],
+                }
+              : null;
+            await sendSubscriptionActivatedEmail({
+              email: owner.email,
+              name: owner.name || "there",
+              plan: subscription.plan,
+              founding,
+              liveUrl: liveProject?.deployedUrl ?? null,
+            });
+          }
+        } catch (mailErr) {
+          apiLogger.warn({ err: mailErr }, "Subscription activated but confirmation email failed");
+        }
       } catch (err) {
         apiLogger.error({ err }, "Failed to provision Square subscription after first payment");
       }
@@ -263,6 +309,32 @@ async function handleSubscriptionEvent(event: SquareEvent) {
         : {}),
     },
   });
+
+  // Dunning: a recurring charge failed (Square PAUSED → past_due). Email the
+  // owner to update their card — only on the transition in, so repeated
+  // past_due events don't spam them. Non-blocking.
+  if (status === "past_due" && local.status !== "past_due") {
+    try {
+      const owner =
+        (await prisma.user.findFirst({
+          where: { organizationId: local.organizationId, role: "owner" },
+          select: { email: true, name: true },
+        })) ||
+        (await prisma.user.findFirst({
+          where: { organizationId: local.organizationId },
+          select: { email: true, name: true },
+        }));
+      if (owner?.email) {
+        await sendPaymentFailedEmail({
+          email: owner.email,
+          name: owner.name || "there",
+          plan: local.plan,
+        });
+      }
+    } catch (mailErr) {
+      apiLogger.warn({ err: mailErr }, "Failed to send payment-failed email");
+    }
+  }
 }
 
 async function handleInvoicePaid(_event: SquareEvent) {

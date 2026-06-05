@@ -145,6 +145,12 @@ export default function PortalDashboard() {
   const featuredStatus = featured ? statusConfig[featured.status] : null;
   const featuredMilestone = featured ? NEXT_MILESTONE[featured.status] : null;
 
+  // First-run guidance: the customer is live (has a deployed site) but hasn't
+  // done anything yet. Show a short "what now" so a paying customer is never
+  // left wondering — without creating any support work on our end.
+  const liveProject = projects.find((p) => p.deployedUrl) || null;
+  const showGettingStarted = !!liveProject && recentRequests.length === 0;
+
   return (
     <div className="space-y-6">
       {/* Hero — build progress for the featured project. Replaces the flat
@@ -217,6 +223,56 @@ export default function PortalDashboard() {
           )}
         </div>
       </div>
+
+      {/* First-run getting-started — only for a freshly-live customer */}
+      {showGettingStarted && liveProject && (
+        <Card variant="professional">
+          <CardHeader>
+            <CardTitle className="text-lg">Getting started</CardTitle>
+            <CardDescription>
+              You&apos;re all set. Here&apos;s how to get the most out of your plan.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <a
+                href={liveProject.deployedUrl as string}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group rounded-xl border border-gray-100 bg-white p-4 hover:border-blue-200 hover:bg-blue-50/40 transition-all"
+              >
+                <div className="h-10 w-10 rounded-lg bg-emerald-100 flex items-center justify-center mb-3">
+                  <Globe className="h-5 w-5 text-emerald-600" />
+                </div>
+                <p className="font-medium text-gray-900">Visit your live site</p>
+                <p className="text-sm text-gray-500 mt-0.5">See it live and share the link.</p>
+              </a>
+
+              <Link
+                href="/portal/requests/new"
+                className="group rounded-xl border border-gray-100 bg-white p-4 hover:border-blue-200 hover:bg-blue-50/40 transition-all"
+              >
+                <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center mb-3">
+                  <FileText className="h-5 w-5 text-blue-600" />
+                </div>
+                <p className="font-medium text-gray-900">Request your first edit</p>
+                <p className="text-sm text-gray-500 mt-0.5">Need a change? We handle it for you.</p>
+              </Link>
+
+              <Link
+                href="/portal/upgrades"
+                className="group rounded-xl border border-gray-100 bg-white p-4 hover:border-blue-200 hover:bg-blue-50/40 transition-all"
+              >
+                <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center mb-3">
+                  <Sparkles className="h-5 w-5 text-purple-600" />
+                </div>
+                <p className="font-medium text-gray-900">Explore add-ons</p>
+                <p className="text-sm text-gray-500 mt-0.5">SEO, marketing, and more when you&apos;re ready.</p>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* In-portal upgrades banner — only renders for orgs ≥30 days into managed sub */}
       <UpgradesBanner />
