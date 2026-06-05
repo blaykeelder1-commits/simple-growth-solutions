@@ -4,7 +4,7 @@ import { useSession, signOut } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import Link from "next/link";
-import { LayoutDashboard, Users, LogOut, Menu, X, GitBranch, Globe, Inbox, BarChart3 } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, Menu, X, GitBranch, Globe, Inbox, BarChart3, Ticket } from "lucide-react";
 import { useState } from "react";
 
 export default function AdminLayout({
@@ -129,6 +129,13 @@ export default function AdminLayout({
           >
             <GitBranch className="w-5 h-5" />
             Customer Funnel
+          </Link>
+          <Link
+            href="/admin/promo-codes"
+            className="flex items-center gap-3 px-3 py-2 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <Ticket className="w-5 h-5" />
+            Founding Codes
           </Link>
         </nav>
 

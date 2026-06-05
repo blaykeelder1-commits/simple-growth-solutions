@@ -7,6 +7,7 @@ import {
   getPayment,
   createSubscription,
 } from "@/lib/billing/square";
+import { foundingPlanVariationId, isWebsitePlan } from "@/lib/billing/founding";
 import { apiLogger } from "@/lib/logger";
 
 // Square webhook handler.
@@ -138,20 +139,33 @@ async function handlePaymentEvent(event: SquareEvent) {
 
     if (subscription && payment.cardId) {
       // Provision the recurring Square Subscription against the saved card.
-      const planVariationId = pickPlanVariationId(subscription.plan);
+      // Founding subs (created with a promo code) bill against the founding
+      // plan variation so the discounted price persists every month.
+      const isFounding = !!subscription.promoCodeId;
+      const planVariationId =
+        isFounding && isWebsitePlan(subscription.plan)
+          ? foundingPlanVariationId(subscription.plan)
+          : pickPlanVariationId(subscription.plan);
       if (!planVariationId) {
         apiLogger.error(
-          { plan: subscription.plan },
+          { plan: subscription.plan, founding: isFounding },
           "No Square plan variation ID configured for plan"
         );
         return;
       }
 
       try {
+        // The checkout payment link already collected month 1 and saved the
+        // card, so the recurring subscription must start one month out —
+        // otherwise Square would bill the first cycle again immediately
+        // (double-charge). For founding subs this also means the subscription's
+        // founding phase covers the remaining intro months; month 1 (the link)
+        // is the first founding month.
         const sub = await createSubscription(cfg, {
           customerId: payment.customerId!,
           cardId: payment.cardId,
           planVariationId,
+          startDate: monthFromNow().toISOString().slice(0, 10),
         });
 
         await prisma.subscription.update({
@@ -165,6 +179,17 @@ async function handlePaymentEvent(event: SquareEvent) {
             currentPeriodEnd: monthFromNow(),
           },
         });
+
+        // Count the founding-code redemption now that the sub is live. Bounded
+        // by maxRedemptions at validation time; this is the authoritative tally.
+        if (subscription.promoCodeId) {
+          await prisma.promoCode
+            .update({
+              where: { id: subscription.promoCodeId },
+              data: { redeemedCount: { increment: 1 } },
+            })
+            .catch(() => {});
+        }
 
         // Advance journey to managed.
         await prisma.journeyEvent.create({

@@ -281,17 +281,27 @@ export interface SquarePlanVariation {
   planVariationId: string;
 }
 
+// A single monthly billing phase. `periods` bounds the phase to that many
+// monthly cycles before advancing to the next phase; omit it on the final
+// phase so it runs indefinitely. Multiple phases model introductory pricing
+// (e.g., founding rate for N months, then standard forever).
+export interface PlanPhase {
+  amountCents: number;
+  periods?: number;
+}
+
 /**
- * Creates a Subscription Plan + a single monthly Variation in the Square catalog.
+ * Creates a Subscription Plan + a monthly Variation in the Square catalog.
  * The plan_variation_id returned is what you reference when starting subscriptions.
  *
- * Run once per plan (e.g., website_managed, website_pro) via setup-square-plans.ts
- * and store the IDs in env vars.
+ * Pass a single phase for a flat plan, or multiple phases for introductory
+ * pricing. Run once per plan via setup-square-plans.ts and store the IDs in env.
  */
 export async function createSubscriptionPlanVariation(
   cfg: SgsSquareConfig,
-  args: { name: string; amountCents: number }
+  args: { name: string; phases: PlanPhase[] }
 ): Promise<SquarePlanVariation> {
+  if (!args.phases.length) throw new Error("At least one phase is required");
   const planObjectId = `#plan-${args.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
   const variationObjectId = `${planObjectId}-monthly`;
   const res = await request<{
@@ -316,15 +326,15 @@ export async function createSubscriptionPlanVariation(
               id: variationObjectId,
               subscription_plan_variation_data: {
                 name: `${args.name} — Monthly`,
-                phases: [
-                  {
-                    cadence: "MONTHLY",
-                    pricing: {
-                      type: "STATIC",
-                      price: { amount: args.amountCents, currency: "USD" },
-                    },
+                phases: args.phases.map((phase, i) => ({
+                  ordinal: i,
+                  cadence: "MONTHLY",
+                  ...(phase.periods ? { periods: phase.periods } : {}),
+                  pricing: {
+                    type: "STATIC",
+                    price: { amount: phase.amountCents, currency: "USD" },
                   },
-                ],
+                })),
               },
             },
           ],
