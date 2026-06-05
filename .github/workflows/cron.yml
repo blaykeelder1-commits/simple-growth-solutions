@@ -17,6 +17,7 @@ on:
     - cron: "0 14 * * *"   # Trial reminders + AR payment sync
     - cron: "0 15 * * *"   # Nurture sequence
     - cron: "0 6 * * 1"    # Weekly security scan (Mondays)
+    - cron: "0 */6 * * *"  # Health backstop: every 6h, alarm if DB is down
   workflow_dispatch:
     inputs:
       target:
@@ -36,7 +37,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Daily/weekly business jobs (skips the 6-hourly health schedule).
   run:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule != '0 */6 * * *' }}
     runs-on: ubuntu-latest
     env:
       APP_URL: ${{ vars.APP_URL || 'https://simple-growth-solution.com' }}
@@ -81,3 +84,25 @@ jobs:
             fi
           done
           exit $fail
+
+  # Backstop uptime+DB alarm. Runs every 6h and on demand. A failed job emails
+  # the repo owner — the alert that was missing when the database paused.
+  # (For sub-minute detection, also point a free UptimeRobot monitor at
+  # /api/health; this job is the zero-extra-account safety net.)
+  health:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '0 */6 * * *' }}
+    runs-on: ubuntu-latest
+    env:
+      APP_URL: ${{ vars.APP_URL || 'https://simple-growth-solution.com' }}
+    steps:
+      - name: Check /api/health
+        run: |
+          set -euo pipefail
+          echo "→ GET $APP_URL/api/health"
+          code=$(curl -sS -o /tmp/h.txt -w "%{http_code}" --max-time 30 "$APP_URL/api/health") \
+            || { echo "::error::health check could not reach $APP_URL"; exit 1; }
+          echo "  HTTP $code"; cat /tmp/h.txt; echo
+          if [ "$code" != "200" ]; then
+            echo "::error::Production health check failed ($code) — app or database is down"; exit 1
+          fi
+          echo "Healthy."
