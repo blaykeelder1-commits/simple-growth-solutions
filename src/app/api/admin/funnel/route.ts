@@ -3,14 +3,16 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/options";
 import { prisma } from "@/lib/prisma";
 import { CUSTOMER_STAGES, STAGE_LABELS } from "@/lib/journey";
+import { apiError } from "@/lib/api/errors";
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user || (session.user as { role?: string }).role !== "admin") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user || (session.user as { role?: string }).role !== "admin") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  // Stage counts
+    // Stage counts
   const stageCounts = await prisma.organization.groupBy({
     by: ["customerStage"],
     _count: { id: true },
@@ -59,5 +61,8 @@ export async function GET() {
       createdAt: e.createdAt,
     })),
     totalOrganizations: totalOrgs,
-  });
+    });
+  } catch (error) {
+    return apiError(error, "Failed to load funnel");
+  }
 }

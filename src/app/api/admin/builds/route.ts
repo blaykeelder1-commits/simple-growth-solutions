@@ -2,7 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/options";
 import { prisma } from "@/lib/prisma";
+import { apiError } from "@/lib/api/errors";
 import { z } from "zod";
+
+function requireAdmin(session: unknown): boolean {
+  const role = (session as { user?: { role?: string } } | null)?.user?.role;
+  return role === "admin";
+}
+
+function badRequest(error: unknown) {
+  if (error instanceof z.ZodError) {
+    return NextResponse.json(
+      { error: error.issues[0]?.message ?? "Invalid input" },
+      { status: 400 }
+    );
+  }
+  return null;
+}
 
 const createBuildSchema = z.object({
   leadId: z.string(),
@@ -21,35 +37,40 @@ const updateBuildSchema = z.object({
 });
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user || (session.user as { role?: string }).role !== "admin") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const session = await getServerSession(authOptions);
+    if (!requireAdmin(session)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const builds = await prisma.websiteProject.findMany({
+      where: { isFreeuild: true },
+      orderBy: { createdAt: "desc" },
+      include: {
+        organization: { select: { name: true, customerStage: true } },
+      },
+    });
+
+    return NextResponse.json({ success: true, builds });
+  } catch (error) {
+    return apiError(error, "Failed to load builds");
   }
-
-  const builds = await prisma.websiteProject.findMany({
-    where: { isFreeuild: true },
-    orderBy: { createdAt: "desc" },
-    include: {
-      organization: { select: { name: true, customerStage: true } },
-    },
-  });
-
-  return NextResponse.json({ success: true, builds });
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user || (session.user as { role?: string }).role !== "admin") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const session = await getServerSession(authOptions);
+    if (!requireAdmin(session)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const body = await req.json();
-  const validated = createBuildSchema.parse(body);
+    const body = await req.json();
+    const validated = createBuildSchema.parse(body);
 
-  // Find the lead
-  const lead = await prisma.lead.findUnique({
-    where: { id: validated.leadId },
-  });
+    // Find the lead
+    const lead = await prisma.lead.findUnique({
+      where: { id: validated.leadId },
+    });
 
   if (!lead) {
     return NextResponse.json({ error: "Lead not found" }, { status: 404 });
@@ -103,17 +124,21 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return NextResponse.json({ success: true, project }, { status: 201 });
+    return NextResponse.json({ success: true, project }, { status: 201 });
+  } catch (error) {
+    return badRequest(error) ?? apiError(error, "Failed to create build");
+  }
 }
 
 export async function PATCH(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user || (session.user as { role?: string }).role !== "admin") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const session = await getServerSession(authOptions);
+    if (!requireAdmin(session)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const body = await req.json();
-  const validated = updateBuildSchema.parse(body);
+    const body = await req.json();
+    const validated = updateBuildSchema.parse(body);
 
   const updateData: Record<string, unknown> = {};
   if (validated.status) updateData.status = validated.status;
@@ -161,5 +186,8 @@ export async function PATCH(req: NextRequest) {
     });
   }
 
-  return NextResponse.json({ success: true, project });
+    return NextResponse.json({ success: true, project });
+  } catch (error) {
+    return badRequest(error) ?? apiError(error, "Failed to update build");
+  }
 }
