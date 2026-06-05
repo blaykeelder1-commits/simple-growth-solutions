@@ -266,8 +266,9 @@ export default function ProjectDetailPage() {
                 </Link>
               </div>
               <p className="text-xs text-gray-500 mt-3">
-                During your trial we host the preview privately so you can review
-                + request edits. Activate any plan to publish to your real domain.
+                While your build is in progress we host the preview privately so
+                you can review + request edits. Start your plan to publish to your
+                real domain.
               </p>
             </div>
           </CardContent>

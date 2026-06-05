@@ -72,10 +72,10 @@ export default function OnboardingPage() {
     }
   };
 
-  // The "free build" path: provision a trial Managed Website subscription so the
-  // customer can submit change requests during the build phase, then drop them
-  // straight into the project intake form. This matches the documented funnel
-  // (free analyzer → free build → managed plan).
+  // The "free build" path: mark the org as entering the website-build stage
+  // (no trial subscription — the build is free and billing starts at go-live),
+  // then drop them straight into the project intake form. This matches the
+  // funnel: free analyzer → free build → founding/managed plan at go-live.
   const handleStartFreeBuild = async () => {
     setIsLoading(true);
     setError(null);
@@ -195,11 +195,11 @@ export default function OnboardingPage() {
               </li>
               <li className="flex items-start gap-3">
                 <Check />
-                <span>14-day trial of Managed Website ($49/mo) — change requests, hosting, updates</span>
+                <span>Go live whenever you&apos;re ready — hosting, updates &amp; change requests from $29/mo founding rate</span>
               </li>
               <li className="flex items-start gap-3">
                 <Check />
-                <span>No card required to start. Cancel anytime in your portal.</span>
+                <span>No card required to start your build. You only pay once your site goes live.</span>
               </li>
             </ul>
 

@@ -34,12 +34,13 @@ const websitePlans = [
     name: "Managed",
     description: "We host, secure, and ship 2 edits a month. The simple plan for most small businesses.",
     price: "$49",
+    priceCents: 4900,
     period: "/month",
     icon: Headset,
     color: "text-blue-600",
     bgColor: "bg-blue-50",
     features: [
-      "Free custom website build (14-day trial included)",
+      "Free custom website build — no card to start",
       "Managed hosting, SSL, and security monitoring",
       "2 change requests per month included",
       "5-business-day turnaround",
@@ -55,6 +56,7 @@ const websitePlans = [
     name: "Managed Pro",
     description: "24-hour turnaround on every ticket plus AI-powered features. The plan if you update often.",
     price: "$79",
+    priceCents: 7900,
     period: "/month",
     icon: Zap,
     color: "text-purple-600",
@@ -77,6 +79,7 @@ const websitePlans = [
     name: "Managed Premium",
     description: "Same-day edits, dedicated account manager, and quarterly custom features. For high-touch businesses.",
     price: "$129",
+    priceCents: 12900,
     period: "/month",
     icon: Sparkles,
     color: "text-amber-600",
@@ -101,11 +104,21 @@ function PlanCard({
   plan,
   onCheckout,
   loadingPlan,
+  foundingCents,
+  introMonths,
 }: {
   plan: (typeof websitePlans)[number];
   onCheckout: (planKey: string) => void;
   loadingPlan: string | null;
+  foundingCents?: number;
+  introMonths?: number;
 }) {
+  const hasFounding =
+    typeof foundingCents === "number" && foundingCents < plan.priceCents;
+  const foundingPrice = hasFounding
+    ? `$${(foundingCents! / 100).toFixed(foundingCents! % 100 === 0 ? 0 : 2)}`
+    : null;
+  const months = introMonths ?? 3;
   return (
     <Card
       className={`relative flex flex-col ${
@@ -130,8 +143,27 @@ function PlanCard({
 
       <CardContent className="flex-1">
         <div className="mb-6">
-          <span className="text-4xl font-bold">{plan.price}</span>
-          <span className="text-gray-500">{plan.period}</span>
+          {hasFounding ? (
+            <>
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span className="text-4xl font-bold text-purple-600">{foundingPrice}</span>
+                <span className="text-gray-500">{plan.period}</span>
+                <span className="text-lg text-gray-400 line-through">{plan.price}</span>
+                <Badge className="bg-purple-100 text-purple-700 border-purple-200">
+                  Founding rate
+                </Badge>
+              </div>
+              <p className="mt-2 text-sm text-purple-700">
+                {foundingPrice}/mo for your first {months} month{months === 1 ? "" : "s"}, then{" "}
+                {plan.price}/mo. Lock it in before founding spots close.
+              </p>
+            </>
+          ) : (
+            <>
+              <span className="text-4xl font-bold">{plan.price}</span>
+              <span className="text-gray-500">{plan.period}</span>
+            </>
+          )}
         </div>
 
         <ul className="space-y-3">
@@ -194,10 +226,72 @@ function PricingContent() {
   const { status } = useSession();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
+  // Founding-rate promo code.
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedCode, setAppliedCode] = useState<string | null>(null);
+  const [foundingByPlan, setFoundingByPlan] = useState<Record<string, number>>({});
+  const [introMonths, setIntroMonths] = useState<number>(3);
+  const [promoStatus, setPromoStatus] = useState<
+    { ok: boolean; message: string } | null
+  >(null);
+  const [applyingPromo, setApplyingPromo] = useState(false);
+
+  // Validate a code against every website plan and capture the founding price
+  // for each plan it applies to. Returns the normalized code if at least one
+  // plan accepted it, else null.
+  const applyPromo = useCallback(async (rawCode: string): Promise<string | null> => {
+    const code = rawCode.trim();
+    if (!code) return null;
+    setApplyingPromo(true);
+    try {
+      const results = await Promise.all(
+        websitePlans.map(async (p) => {
+          try {
+            const res = await fetch("/api/billing/promo/validate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ code, plan: p.planKey }),
+            });
+            const data = await res.json();
+            return { planKey: p.planKey, data };
+          } catch {
+            return { planKey: p.planKey, data: { valid: false } };
+          }
+        })
+      );
+      const map: Record<string, number> = {};
+      let months = 3;
+      let lastMessage = "That code isn't valid.";
+      for (const r of results) {
+        if (r.data?.valid && typeof r.data.foundingCents === "number") {
+          map[r.planKey] = r.data.foundingCents;
+          if (typeof r.data.introMonths === "number") months = r.data.introMonths;
+        } else if (r.data?.message) {
+          lastMessage = r.data.message;
+        }
+      }
+      setIntroMonths(months);
+      if (Object.keys(map).length > 0) {
+        setFoundingByPlan(map);
+        setAppliedCode(code.toUpperCase());
+        setPromoStatus({ ok: true, message: "Founding rate applied." });
+        return code.toUpperCase();
+      }
+      setFoundingByPlan({});
+      setAppliedCode(null);
+      setPromoStatus({ ok: false, message: lastMessage });
+      return null;
+    } finally {
+      setApplyingPromo(false);
+    }
+  }, []);
+
   const handleCheckout = useCallback(
-    async (planKey: string) => {
+    async (planKey: string, code?: string | null) => {
+      const promo = code ?? appliedCode;
       if (status !== "authenticated") {
-        router.push(`/login?callbackUrl=/pricing?plan=${planKey}`);
+        const cb = `/pricing?plan=${planKey}${promo ? `&promo=${encodeURIComponent(promo)}` : ""}`;
+        router.push(`/login?callbackUrl=${encodeURIComponent(cb)}`);
         return;
       }
 
@@ -207,7 +301,7 @@ function PricingContent() {
         const response = await fetch("/api/billing/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ plan: planKey }),
+          body: JSON.stringify(promo ? { plan: planKey, promoCode: promo } : { plan: planKey }),
         });
 
         const data = await response.json();
@@ -224,15 +318,21 @@ function PricingContent() {
         setLoadingPlan(null);
       }
     },
-    [status, router]
+    [status, router, appliedCode]
   );
 
   useEffect(() => {
     const planFromUrl = searchParams.get("plan");
+    const promoFromUrl = searchParams.get("promo");
+    if (promoFromUrl && !appliedCode) {
+      setPromoInput(promoFromUrl);
+      void applyPromo(promoFromUrl);
+    }
     if (planFromUrl && status === "authenticated") {
       router.replace("/pricing");
-      handleCheckout(planFromUrl);
+      handleCheckout(planFromUrl, promoFromUrl);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, searchParams, router, handleCheckout]);
 
   return (
@@ -256,6 +356,40 @@ function PricingContent() {
         {/* Plans */}
         <section className="py-16 -mt-8">
           <div className="container mx-auto px-4">
+            {/* Founding-rate promo code */}
+            <div className="max-w-md mx-auto mb-10">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void applyPromo(promoInput);
+                }}
+                className="flex gap-2"
+              >
+                <input
+                  type="text"
+                  value={promoInput}
+                  onChange={(e) => setPromoInput(e.target.value)}
+                  placeholder="Founding / promo code"
+                  className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm uppercase placeholder:normal-case focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  aria-label="Promo code"
+                />
+                <Button type="submit" variant="outline" disabled={applyingPromo || !promoInput.trim()}>
+                  {applyingPromo ? <Loader2 className="w-4 h-4 animate-spin" /> : "Apply"}
+                </Button>
+              </form>
+              {promoStatus && (
+                <p
+                  className={`mt-2 text-sm ${
+                    promoStatus.ok ? "text-purple-600" : "text-red-600"
+                  }`}
+                >
+                  {promoStatus.ok && appliedCode
+                    ? `Founding rate “${appliedCode}” applied — discounted pricing shown below.`
+                    : promoStatus.message}
+                </p>
+              )}
+            </div>
+
             <div className="grid gap-8 md:grid-cols-3 max-w-5xl mx-auto">
               {websitePlans.map((plan) => (
                 <PlanCard
@@ -263,6 +397,8 @@ function PricingContent() {
                   plan={plan}
                   onCheckout={handleCheckout}
                   loadingPlan={loadingPlan}
+                  foundingCents={foundingByPlan[plan.planKey]}
+                  introMonths={introMonths}
                 />
               ))}
             </div>
@@ -286,10 +422,10 @@ function PricingContent() {
               <div className="bg-white rounded-lg p-6 shadow-sm">
                 <h3 className="font-semibold mb-2">Is the website really free?</h3>
                 <p className="text-gray-600">
-                  Yes — we design and build your first version at no cost during
-                  a 14-day trial of the Managed plan. After the trial, you pick
-                  the plan that fits and we keep running the site. Cancel during
-                  the trial and you&apos;re not charged.
+                  Yes — we design and build your first version at no cost, with
+                  no card required. You only start a plan once you&apos;re happy
+                  with it and ready to take the site live. From there we host,
+                  secure, and keep it updated for a simple monthly fee.
                 </p>
               </div>
 

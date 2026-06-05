@@ -1,0 +1,83 @@
+name: Scheduled jobs
+
+# Production runs on Render, where vercel.json crons do NOT execute. This
+# workflow is the real scheduler: it POSTs the cron endpoints with the shared
+# Bearer secret on the same schedules previously declared in vercel.json.
+#
+# Required repo secret (Settings → Secrets and variables → Actions):
+#   CRON_SECRET  — must equal the CRON_SECRET env var on the Render service.
+# Optional repo variable:
+#   APP_URL      — defaults to https://simple-growth-solution.com if unset.
+#
+# All times are UTC (GitHub Actions, like Vercel crons, schedules in UTC).
+
+on:
+  schedule:
+    - cron: "0 13 * * *"   # AR engine: execute outreach
+    - cron: "0 14 * * *"   # Trial reminders + AR payment sync
+    - cron: "0 15 * * *"   # Nurture sequence
+    - cron: "0 6 * * 1"    # Weekly security scan (Mondays)
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Endpoint to run manually (smoke test)"
+        required: true
+        default: "/api/billing/trial-check"
+        type: choice
+        options:
+          - /api/billing/trial-check
+          - /api/nurture/process
+          - /api/ar-engine/execute
+          - /api/ar-engine/sync-payments
+          - /api/security/scheduled-scan
+
+concurrency:
+  group: sgs-cron
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      APP_URL: ${{ vars.APP_URL || 'https://simple-growth-solution.com' }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      SCHEDULE: ${{ github.event.schedule }}
+      MANUAL_TARGET: ${{ inputs.target }}
+    steps:
+      - name: POST cron endpoints
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET repo secret is not set"; exit 1
+          fi
+
+          # Map the firing trigger to the endpoint(s) to POST.
+          endpoints=()
+          if [ -n "${MANUAL_TARGET:-}" ]; then
+            endpoints+=("$MANUAL_TARGET")
+          else
+            case "$SCHEDULE" in
+              "0 13 * * *") endpoints+=("/api/ar-engine/execute") ;;
+              "0 14 * * *") endpoints+=("/api/billing/trial-check" "/api/ar-engine/sync-payments") ;;
+              "0 15 * * *") endpoints+=("/api/nurture/process") ;;
+              "0 6 * * 1")  endpoints+=("/api/security/scheduled-scan") ;;
+              *) echo "::error::Unmapped schedule '$SCHEDULE'"; exit 1 ;;
+            esac
+          fi
+
+          fail=0
+          for path in "${endpoints[@]}"; do
+            echo "→ POST $APP_URL$path"
+            code=$(curl -sS -o /tmp/body.txt -w "%{http_code}" \
+              --max-time 120 \
+              -X POST "$APP_URL$path" \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              -H "Content-Type: application/json" \
+              -d '{}') || { echo "::error::curl failed for $path"; fail=1; continue; }
+            echo "  HTTP $code"
+            head -c 500 /tmp/body.txt || true; echo
+            if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+              echo "::error::$path returned $code"; fail=1
+            fi
+          done
+          exit $fail

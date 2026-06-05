@@ -8,10 +8,12 @@ import {
   findOrCreateCustomer,
   createPaymentLink,
 } from "@/lib/billing/square";
+import { validatePromoCode } from "@/lib/billing/founding";
 import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
 
 const checkoutSchema = z.object({
+  promoCode: z.string().trim().min(1).max(40).optional(),
   plan: z.enum([
     // Website tiers
     "website_managed",
@@ -53,7 +55,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { plan } = checkoutSchema.parse(body);
+    const { plan, promoCode } = checkoutSchema.parse(body);
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
@@ -100,6 +102,25 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // Optional founding-rate promo code. When valid, the customer pays the
+      // founding price now and the webhook provisions the recurring sub against
+      // the founding Square plan variation so the discount persists.
+      let amountCents: number = planConfig.amount;
+      let promoCodeId: string | null = null;
+      let descriptionSuffix = "first month";
+      if (promoCode) {
+        const result = await validatePromoCode(prisma, promoCode, plan);
+        if (!result.ok) {
+          return NextResponse.json(
+            { success: false, message: result.error },
+            { status: 400 }
+          );
+        }
+        amountCents = result.foundingCents;
+        promoCodeId = result.promo.id;
+        descriptionSuffix = "first month (founding rate)";
+      }
+
       const customer = await findOrCreateCustomer(
         cfg,
         user.email,
@@ -110,8 +131,8 @@ export async function POST(request: NextRequest) {
       // The webhook will then provision a recurring Square Subscription
       // against the saved card.
       const link = await createPaymentLink(cfg, {
-        amountCents: planConfig.amount,
-        description: `${planConfig.name} — first month`,
+        amountCents,
+        description: `${planConfig.name} — ${descriptionSuffix}`,
         redirectUrl: `${baseUrl}/portal/billing?success=true&plan=${plan}`,
         buyerEmail: user.email,
         customerId: customer.id,
@@ -129,7 +150,8 @@ export async function POST(request: NextRequest) {
           processor: "square",
           plan,
           status: "awaiting_payment",
-          priceMonthly: planConfig.amount,
+          priceMonthly: amountCents,
+          promoCodeId,
           squareCustomerId: customer.id,
           squarePaymentLinkId: link.id,
           squarePaymentLinkUrl: link.url,
@@ -140,6 +162,15 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Legacy Stripe path (back-half products) ─────────────────────────
+    // We're Square-only right now; Stripe isn't configured in production. Fail
+    // with a clear message instead of a 500 if a Stripe-routed plan is hit.
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return NextResponse.json(
+        { success: false, message: "This add-on isn't available yet — check back soon." },
+        { status: 400 }
+      );
+    }
+
     const stripeCustomerId = user.organization.subscriptions.find(
       (s) => s.stripeCustomerId
     )?.stripeCustomerId;

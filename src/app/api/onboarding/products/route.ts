@@ -82,6 +82,21 @@ export async function POST(request: NextRequest) {
       let didProvisionWebsiteSub = false;
 
       for (const productId of validatedData.products) {
+        const isWebsite =
+          productId === "website_managed" ||
+          productId === "website_pro" ||
+          productId === "website_premium";
+
+        // Website plans no longer get a 14-day trial subscription. The website
+        // build itself is the free offer; the customer starts billing (founding
+        // or standard rate) through the Square checkout when the site goes live
+        // — the hosting lock keeps the live URL gated until a paid sub is
+        // active. We still advance the funnel stage so the build is tracked.
+        if (isWebsite) {
+          didProvisionWebsiteSub = true;
+          continue;
+        }
+
         const config = productConfig[productId];
 
         // Check if subscription already exists
@@ -97,7 +112,7 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Create subscription (starts as trial)
+        // Non-website products still start as a trial.
         const subscription = await tx.subscription.create({
           data: {
             organizationId: user.organizationId!,
@@ -110,14 +125,6 @@ export async function POST(request: NextRequest) {
         });
 
         subscriptions.push(subscription);
-
-        if (
-          productId === "website_managed" ||
-          productId === "website_pro" ||
-          productId === "website_premium"
-        ) {
-          didProvisionWebsiteSub = true;
-        }
 
         // Log the action
         await tx.auditLog.create({

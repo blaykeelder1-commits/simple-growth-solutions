@@ -280,6 +280,12 @@ model Subscription {
   status       String @default("pending") // pending, awaiting_payment, trialing, active, past_due, canceled
   priceMonthly Int    @default(0) @map("price_monthly") // in cents
 
+  // Founding-rate discount. When set, this subscription was created with a
+  // promo code: priceMonthly already reflects the founding price and the
+  // recurring sub is provisioned against the founding Square plan variation.
+  promoCodeId String?    @map("promo_code_id")
+  promoCode   PromoCode? @relation(fields: [promoCodeId], references: [id])
+
   trialStartDate     DateTime? @map("trial_start_date")
   trialEndDate       DateTime? @map("trial_end_date")
   currentPeriodStart DateTime? @map("current_period_start")
@@ -296,7 +302,38 @@ model Subscription {
   @@index([stripeCustomerId])
   @@index([squareCustomerId])
   @@index([squareSubscriptionId])
+  @@index([promoCodeId])
   @@map("subscriptions")
+}
+
+// Founding-rate / promo codes. A code grants founding pricing on the website
+// management plans: the customer pays the published founding rate (per tier,
+// defined in src/lib/billing/founding.ts) instead of the standard price, and
+// the recurring Square subscription is provisioned against the founding plan
+// variation so the discount persists every month.
+model PromoCode {
+  id          String  @id @default(cuid())
+  code        String  @unique // case-insensitive match enforced in app layer (stored uppercase)
+  description String?
+
+  // Optional restriction to a single website plan. null = valid on any of
+  // website_managed / website_pro / website_premium.
+  restrictToPlan String? @map("restrict_to_plan")
+
+  // Redemption limits. maxRedemptions null = unlimited.
+  maxRedemptions Int? @map("max_redemptions")
+  redeemedCount  Int  @default(0) @map("redeemed_count")
+
+  active    Boolean   @default(true)
+  expiresAt DateTime? @map("expires_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subscriptions Subscription[]
+
+  @@index([active])
+  @@map("promo_codes")
 }
 
 // One-off charges (rush ticket fees, custom upcharges, setup fees).
