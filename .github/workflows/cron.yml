@@ -16,6 +16,7 @@ on:
     - cron: "0 13 * * *"   # AR engine: execute outreach
     - cron: "0 14 * * *"   # Trial reminders + AR payment sync
     - cron: "0 15 * * *"   # Nurture sequence
+    - cron: "0 16 * * *"   # Founding-rate step-up reminders
     - cron: "0 6 * * 1"    # Weekly security scan (Mondays)
     - cron: "0 */6 * * *"  # Health backstop: every 6h, alarm if DB is down
   workflow_dispatch:
@@ -27,6 +28,7 @@ on:
         type: choice
         options:
           - /api/billing/trial-check
+          - /api/billing/founding-reminders
           - /api/nurture/process
           - /api/ar-engine/execute
           - /api/ar-engine/sync-payments
@@ -63,6 +65,7 @@ jobs:
               "0 13 * * *") endpoints+=("/api/ar-engine/execute") ;;
               "0 14 * * *") endpoints+=("/api/billing/trial-check" "/api/ar-engine/sync-payments") ;;
               "0 15 * * *") endpoints+=("/api/nurture/process") ;;
+              "0 16 * * *") endpoints+=("/api/billing/founding-reminders") ;;
               "0 6 * * 1")  endpoints+=("/api/security/scheduled-scan") ;;
               *) echo "::error::Unmapped schedule '$SCHEDULE'"; exit 1 ;;
             esac
