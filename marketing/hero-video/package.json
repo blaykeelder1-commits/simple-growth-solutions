@@ -1,0 +1,26 @@
+{
+  "name": "sgs-hero-video",
+  "version": "1.0.0",
+  "description": "Simple Growth Solutions hero video — Remotion, cinematic-premium, 75s + 30s, 16:9 and 9:16 masters. All rendered in code.",
+  "private": true,
+  "scripts": {
+    "dev": "remotion studio",
+    "render": "remotion render HeroLandscape out/sgs-hero-landscape.mp4",
+    "render:portrait": "remotion render HeroPortrait out/sgs-hero-portrait.mp4",
+    "render:short": "remotion render HeroShortPortrait out/sgs-hero-short.mp4",
+    "render:all": "remotion render HeroLandscape out/sgs-hero-landscape.mp4 && remotion render HeroPortrait out/sgs-hero-portrait.mp4 && remotion render HeroShortPortrait out/sgs-hero-short.mp4"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.448",
+    "@remotion/cli": "4.0.448",
+    "@remotion/google-fonts": "4.0.448",
+    "@remotion/renderer": "4.0.448",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "remotion": "4.0.448"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.3",
+    "typescript": "^5.6.0"
+  }
+}
