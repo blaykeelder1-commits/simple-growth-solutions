@@ -1,6 +1,7 @@
 export { Hero } from "./Hero";
 export { Services } from "./Services";
 export { HowItWorks } from "./HowItWorks";
+export { Portfolio } from "./Portfolio";
 export { Testimonials } from "./Testimonials";
 export { CTA } from "./CTA";
 export { Header } from "./Header";

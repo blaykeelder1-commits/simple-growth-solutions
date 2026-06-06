@@ -1,6 +1,7 @@
 import {
   Hero,
   HowItWorks,
+  Portfolio,
   Testimonials,
   CTA,
   Header,
@@ -14,6 +15,7 @@ export default function Home() {
       <main>
         <Hero />
         <HowItWorks />
+        <Portfolio />
         <Testimonials />
         <CTA />
       </main>
