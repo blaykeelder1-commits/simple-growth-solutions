@@ -29,6 +29,7 @@ const works: Work[] = [
       "Dumpster rental serving the Kansas City metro. Bold, high-contrast design with 2-minute online booking.",
     headline: "Rent it. Fill it. We haul it.",
     gradient: "from-orange-500 via-orange-600 to-stone-800",
+    image: "wasterescuekc.jpg",
   },
   {
     name: "RG 158 Venue",
@@ -39,6 +40,7 @@ const works: Work[] = [
       "Live-music and event venue with online event listings and a built-in booking request flow.",
     headline: "Live music. Good times.",
     gradient: "from-violet-600 via-purple-700 to-indigo-900",
+    image: "rg158-venue.jpg",
   },
   {
     name: "Tiny Home Wellness Resort",
@@ -49,6 +51,7 @@ const works: Work[] = [
       "A calm, premium resort brand — cedar-and-steel aesthetic built to convert browsers into bookings.",
     headline: "Rest. Reset. Restore.",
     gradient: "from-emerald-600 via-teal-700 to-slate-800",
+    image: "tiny-home-wellness-resort.jpg",
   },
   {
     name: "IDDI",
@@ -59,6 +62,7 @@ const works: Work[] = [
       "A polished SaaS marketing site for a vending-operator profit app — proof we scale from local shops to software.",
     headline: "Smarter vending. More profit.",
     gradient: "from-blue-600 via-indigo-700 to-slate-900",
+    image: "iddisolutions.jpg",
   },
 ];
 
@@ -118,6 +122,8 @@ export function Portfolio() {
                   <img
                     src={`/portfolio/${w.image}`}
                     alt={`${w.name} website`}
+                    loading="lazy"
+                    decoding="async"
                     className="aspect-[16/10] w-full object-cover object-top"
                   />
                 ) : (
