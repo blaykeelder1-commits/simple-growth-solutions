@@ -1,5 +1,5 @@
 import { Header, Footer } from "@/components/landing";
-import { ArrowLeft, Calendar, Clock, Video } from "lucide-react";
+import { ArrowLeft, ArrowRight, Calendar, Clock, Rocket, Video } from "lucide-react";
 import Link from "next/link";
 import { CalEmbed } from "@/components/booking/CalEmbed";
 
@@ -9,8 +9,20 @@ export const metadata = {
     "Schedule a free consultation to discuss your business goals and how we can help you grow online.",
 };
 
-export default function BookPage() {
+export default function BookPage({
+  searchParams,
+}: {
+  searchParams: { name?: string; email?: string };
+}) {
   const calLink = process.env.NEXT_PUBLIC_CAL_LINK || null;
+
+  // Bridge to account creation — carry the lead's name/email so signup is
+  // prefilled. This is the path for customers who'd rather start the free
+  // build now instead of waiting for a consultation call.
+  const signupParams = new URLSearchParams();
+  if (searchParams?.name) signupParams.set("name", searchParams.name);
+  if (searchParams?.email) signupParams.set("email", searchParams.email);
+  const signupHref = `/signup${signupParams.toString() ? `?${signupParams.toString()}` : ""}`;
   return (
     <>
       <Header />
@@ -35,6 +47,31 @@ export default function BookPage() {
                 Pick a time that works for you. We&apos;ll discuss your business
                 goals and create a plan to grow your online presence.
               </p>
+            </div>
+
+            {/* Start-now bridge — skip the call, create an account, begin the build */}
+            <div className="mb-10 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 to-secondary/5 p-6 md:p-8">
+              <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
+                <div className="rounded-xl bg-primary/10 p-3 text-primary">
+                  <Rocket className="h-7 w-7" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-xl font-semibold tracking-tight">
+                    Ready to start now? Skip the call.
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Create your free account and we&apos;ll begin your website
+                    build right away — no waiting for a consultation.
+                  </p>
+                </div>
+                <Link
+                  href={signupHref}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-md shadow-blue-500/20 transition-all hover:from-blue-700 hover:to-purple-700 hover:shadow-lg"
+                >
+                  Create my account
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
             </div>
 
             {/* Info cards */}

@@ -16,6 +16,7 @@ import {
 import {
   sendSubscriptionActivatedEmail,
   sendPaymentFailedEmail,
+  sendNewPaidCustomerInternalEmail,
 } from "@/lib/email/lifecycle-emails";
 import { apiLogger } from "@/lib/logger";
 
@@ -231,7 +232,8 @@ async function handlePaymentEvent(event: SquareEvent) {
           )
         );
 
-        // Payment confirmation + welcome (+ site-live if already deployed).
+        // Payment confirmation + welcome to the customer, plus an internal
+        // "new paying customer" alert to the Snak Group ops inbox.
         // Non-blocking: a mail hiccup must never fail the webhook.
         try {
           const owner =
@@ -243,19 +245,28 @@ async function handlePaymentEvent(event: SquareEvent) {
               where: { organizationId: subscription.organizationId },
               select: { email: true, name: true },
             }));
+
+          const org = await prisma.organization.findUnique({
+            where: { id: subscription.organizationId },
+            select: { name: true },
+          });
+
+          const liveProject = await prisma.websiteProject.findFirst({
+            where: { organizationId: subscription.organizationId, deployedUrl: { not: null } },
+            select: { deployedUrl: true },
+            orderBy: { createdAt: "desc" },
+          });
+
+          const founding = subscription.promoCodeId && isWebsitePlan(subscription.plan)
+            ? {
+                introCents: subscription.priceMonthly,
+                introMonths: FOUNDING_INTRO_MONTHS,
+                standardCents: STANDARD_PRICE_CENTS[subscription.plan],
+              }
+            : null;
+
+          // Customer-facing confirmation (only if we have their email).
           if (owner?.email) {
-            const liveProject = await prisma.websiteProject.findFirst({
-              where: { organizationId: subscription.organizationId, deployedUrl: { not: null } },
-              select: { deployedUrl: true },
-              orderBy: { createdAt: "desc" },
-            });
-            const founding = subscription.promoCodeId && isWebsitePlan(subscription.plan)
-              ? {
-                  introCents: subscription.priceMonthly,
-                  introMonths: FOUNDING_INTRO_MONTHS,
-                  standardCents: STANDARD_PRICE_CENTS[subscription.plan],
-                }
-              : null;
             await sendSubscriptionActivatedEmail({
               email: owner.email,
               name: owner.name || "there",
@@ -264,8 +275,20 @@ async function handlePaymentEvent(event: SquareEvent) {
               liveUrl: liveProject?.deployedUrl ?? null,
             });
           }
+
+          // Internal ops alert → Snak Group inbox. Fires on every new paying
+          // customer regardless of whether the owner email resolved.
+          await sendNewPaidCustomerInternalEmail({
+            plan: subscription.plan,
+            priceCents: subscription.priceMonthly,
+            founding: !!founding,
+            customerName: owner?.name || "Unknown",
+            customerEmail: owner?.email || "unknown",
+            organizationName: org?.name ?? null,
+            liveUrl: liveProject?.deployedUrl ?? null,
+          });
         } catch (mailErr) {
-          apiLogger.warn({ err: mailErr }, "Subscription activated but confirmation email failed");
+          apiLogger.warn({ err: mailErr }, "Subscription activated but notification email failed");
         }
       } catch (err) {
         apiLogger.error({ err }, "Failed to provision Square subscription after first payment");

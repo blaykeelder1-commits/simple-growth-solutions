@@ -47,12 +47,18 @@ export function LeadForm() {
         throw new Error("Failed to submit form");
       }
 
+      // Carry the lead's name + email forward so the next step (analysis or
+      // consultation → account creation) is prefilled, not re-typed.
+      const contact = new URLSearchParams();
+      if (data.contactName) contact.set("name", data.contactName);
+      if (data.email) contact.set("email", data.email);
+
       // If they have a website URL, go to analyze page
       if (data.hasWebsite === "yes" && data.websiteUrl) {
         router.push(`/analyze?url=${encodeURIComponent(data.websiteUrl)}`);
       } else {
-        // Otherwise, go to booking page
-        router.push("/book");
+        // Otherwise, go to the consultation page (which bridges to signup).
+        router.push(`/book?${contact.toString()}`);
       }
     } catch {
       setError("Something went wrong. Please try again.");

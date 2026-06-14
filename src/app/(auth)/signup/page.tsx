@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getProviders, signIn } from "next-auth/react";
 import Link from "next/link";
 import {
@@ -18,16 +18,20 @@ import {
   Star,
 } from "lucide-react";
 
-export default function SignupPage() {
+function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [showPassword, setShowPassword] = useState(false);
   const [hasGoogle, setHasGoogle] = useState(false);
+  // Prefill name/email when arriving from the questionnaire/consultation
+  // bridge (e.g. /signup?name=Jane&email=jane@acme.com) so the customer
+  // doesn't re-type what they already gave us.
   const [formData, setFormData] = useState({
-    name: "",
-    email: "",
+    name: searchParams.get("name") || "",
+    email: searchParams.get("email") || "",
     password: "",
     confirmPassword: "",
   });
@@ -393,5 +397,13 @@ export default function SignupPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
   );
 }

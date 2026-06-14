@@ -136,6 +136,62 @@ export async function sendFoundingStepUpEmail(args: {
 // 3. Failed recurring payment (dunning / recovery)
 // ============================================================
 
+// ============================================================
+// 4. Internal: new paying customer → Snak Group ops inbox
+// ============================================================
+
+// Where internal "new customer" alerts land. Defaults to the Snak Group team
+// inbox; override per-environment with INTERNAL_NOTIFY_EMAIL.
+const INTERNAL_NOTIFY_EMAIL =
+  process.env.INTERNAL_NOTIFY_EMAIL || "snakgroupteam@snakgroup.biz";
+
+export async function sendNewPaidCustomerInternalEmail(args: {
+  plan: string;
+  priceCents: number;
+  founding: boolean;
+  customerName: string;
+  customerEmail: string;
+  organizationName?: string | null;
+  liveUrl?: string | null;
+}) {
+  const label = planLabel(args.plan);
+  const row = (k: string, v: string, strong = false) =>
+    `<tr>
+      <td style="padding: 6px 0; color: #6b7280;">${escapeHtml(k)}</td>
+      <td style="padding: 6px 0; text-align: right; ${strong ? "font-weight: bold; color: #047857;" : "color: #111827;"}">${escapeHtml(v)}</td>
+    </tr>`;
+
+  const html = emailLayout(
+    `
+    <h2 style="color: #047857;">New paying customer 🎉</h2>
+    <p>A Simple Growth customer just completed their first payment — their subscription is now active.</p>
+    <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+      <table style="width: 100%; border-collapse: collapse;">
+        ${row("Customer", args.customerName)}
+        ${row("Email", args.customerEmail)}
+        ${args.organizationName ? row("Business", args.organizationName) : ""}
+        ${row("Plan", `${label}${args.founding ? " (founding rate)" : ""}`)}
+        ${row("First payment", dollars(args.priceCents), true)}
+        ${args.liveUrl ? row("Live site", args.liveUrl) : ""}
+      </table>
+    </div>
+    ${button(`${APP_URL}/admin`, "Open Admin Dashboard")}
+    <p style="color: #6b7280; font-size: 13px;">Internal notification — Simple Growth Solutions.</p>
+  `,
+    "New Customer"
+  );
+
+  return sendEmail({
+    to: INTERNAL_NOTIFY_EMAIL,
+    subject: `💰 New Simple Growth customer: ${args.customerName} — ${label}`,
+    html,
+  });
+}
+
+// ============================================================
+// 5. Failed recurring payment (dunning / recovery)
+// ============================================================
+
 export async function sendPaymentFailedEmail(args: {
   email: string;
   name: string;

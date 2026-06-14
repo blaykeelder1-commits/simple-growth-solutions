@@ -21,6 +21,9 @@ const envSchema = z.object({
   // Resend email (optional)
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().optional(),
+  // Internal ops inbox for "new paying customer" alerts (optional —
+  // defaults to snakgroupteam@snakgroup.biz)
+  INTERNAL_NOTIFY_EMAIL: z.string().email().optional(),
 
   // Upstash Redis (optional — rate limiting)
   UPSTASH_REDIS_REST_URL: z.string().optional(),
