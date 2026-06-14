@@ -99,24 +99,25 @@ export async function sendVerificationEmail(email: string, name: string, verifyU
 }
 
 export async function sendWelcomeEmail(email: string, name: string) {
+  const onboardingUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/onboarding`;
   const html = emailLayout(`
     <h2 style="color: #1f2937;">Welcome, ${escapeHtml(name || 'there')}!</h2>
-    <p>Thank you for joining Simple Growth Solutions. We're excited to help you grow your business with our suite of powerful tools:</p>
-    <ul style="padding-left: 20px;">
-      <li><strong>Website Management</strong> - Professional websites built and managed for you</li>
-      <li><strong>Cash Flow AI</strong> - Intelligent invoice tracking and recovery</li>
-      <li><strong>Cybersecurity Shield</strong> - Protect your online presence</li>
-      <li><strong>Business Chauffeur</strong> - AI-powered business intelligence</li>
-    </ul>
+    <p>Thanks for joining Simple Growth Solutions. You're two quick steps away from your free, professionally built website — let's get your profile set up so we can start building.</p>
     <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-      <p style="margin: 0;"><strong>Next Steps:</strong></p>
-      <ol style="margin: 10px 0 0 0; padding-left: 20px;">
+      <p style="margin: 0;"><strong>Your next steps:</strong></p>
+      <ol style="margin: 10px 0 0 0; padding-left: 20px; color: #4b5563;">
         <li>Complete your organization profile</li>
         <li>Choose your services</li>
-        <li>Start growing your business!</li>
+        <li>We build your site — free, no card needed</li>
       </ol>
     </div>
-    <p>If you have any questions, simply reply to this email or visit our help center.</p>
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${escapeHtml(onboardingUrl)}" style="display: inline-block; background: linear-gradient(to right, #2563eb, #4f46e5); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);">Complete My Profile &rarr;</a>
+    </div>
+    <p style="text-align: center; font-size: 13px; color: #6b7280;">Or paste this link into your browser:<br>
+      <a href="${escapeHtml(onboardingUrl)}" style="color: #2563eb; word-break: break-all;">${escapeHtml(onboardingUrl)}</a>
+    </p>
+    <p>If you have any questions, simply reply to this email — a real person reads it.</p>
     <p>Best regards,<br>The Simple Growth Solutions Team</p>
   `);
 

@@ -35,12 +35,12 @@ const websitePlans = [
     description: "We host, secure, and ship 2 edits a month. The simple plan for most small businesses.",
     price: "$49",
     priceCents: 4900,
-    period: "/month",
+    priceAnnual: "$490",
+    priceAnnualCents: 49000,
     icon: Headset,
     color: "text-blue-600",
     bgColor: "bg-blue-50",
     features: [
-      "Free custom website build — no card to start",
       "Managed hosting, SSL, and security monitoring",
       "2 change requests per month included",
       "5-business-day turnaround",
@@ -57,7 +57,8 @@ const websitePlans = [
     description: "24-hour turnaround on every ticket plus AI-powered features. The plan if you update often.",
     price: "$79",
     priceCents: 7900,
-    period: "/month",
+    priceAnnual: "$790",
+    priceAnnualCents: 79000,
     icon: Zap,
     color: "text-purple-600",
     bgColor: "bg-purple-50",
@@ -70,7 +71,7 @@ const websitePlans = [
       "Advanced analytics",
       "Priority support",
     ],
-    cta: "Start with Pro",
+    cta: "Start Free Build",
     href: "/questionnaire?plan=website_pro",
     planKey: "website_pro",
     popular: true,
@@ -80,7 +81,8 @@ const websitePlans = [
     description: "Same-day edits, dedicated account manager, and quarterly custom features. For high-touch businesses.",
     price: "$129",
     priceCents: 12900,
-    period: "/month",
+    priceAnnual: "$1,290",
+    priceAnnualCents: 129000,
     icon: Sparkles,
     color: "text-amber-600",
     bgColor: "bg-amber-50",
@@ -93,7 +95,7 @@ const websitePlans = [
       "Priority phone + Slack support",
       "Industry-specific features (menu mgmt, booking, etc.)",
     ],
-    cta: "Start with Premium",
+    cta: "Start Free Build",
     href: "/questionnaire?plan=website_premium",
     planKey: "website_premium",
     popular: false,
@@ -107,7 +109,8 @@ const testPlan: (typeof websitePlans)[number] = {
   description: "Internal end-to-end Square checkout test. Charges $1 to verify payments are firing.",
   price: "$1",
   priceCents: 100,
-  period: " one-time test",
+  priceAnnual: "$1",
+  priceAnnualCents: 100,
   icon: Zap,
   color: "text-emerald-600",
   bgColor: "bg-emerald-50",
@@ -124,23 +127,42 @@ const testPlan: (typeof websitePlans)[number] = {
 
 function PlanCard({
   plan,
+  billing,
   onCheckout,
   loadingPlan,
   foundingCents,
   introMonths,
 }: {
   plan: (typeof websitePlans)[number];
+  billing: "monthly" | "annual";
   onCheckout: (planKey: string) => void;
   loadingPlan: string | null;
   foundingCents?: number;
   introMonths?: number;
 }) {
+  const isTest = plan.planKey === "website_test";
+  const annual = billing === "annual" && !isTest;
+
+  // Founding rate only applies to monthly (annual is already discounted).
   const hasFounding =
-    typeof foundingCents === "number" && foundingCents < plan.priceCents;
+    !annual &&
+    typeof foundingCents === "number" &&
+    foundingCents < plan.priceCents;
   const foundingPrice = hasFounding
     ? `$${(foundingCents! / 100).toFixed(foundingCents! % 100 === 0 ? 0 : 2)}`
     : null;
   const months = introMonths ?? 3;
+
+  const displayPrice = annual ? plan.priceAnnual : plan.price;
+  const period = annual ? "/year" : isTest ? " one-time test" : "/month";
+  // Annual savings vs paying 12 months.
+  const annualSaveCents = plan.priceCents * 12 - plan.priceAnnualCents;
+  const perMonthAnnual = `$${Math.round(plan.priceAnnualCents / 12 / 100)}`;
+
+  // Where the button goes: real plans start with the free build (no card);
+  // the $1 test card runs the live Square checkout immediately.
+  const buildHref = `${plan.href}${annual ? "&billing=annual" : ""}`;
+
   return (
     <Card
       className={`relative flex flex-col ${
@@ -169,7 +191,7 @@ function PlanCard({
             <>
               <div className="flex items-baseline gap-2 flex-wrap">
                 <span className="text-4xl font-bold text-purple-600">{foundingPrice}</span>
-                <span className="text-gray-500">{plan.period}</span>
+                <span className="text-gray-500">/month</span>
                 <span className="text-lg text-gray-400 line-through">{plan.price}</span>
                 <Badge className="bg-purple-100 text-purple-700 border-purple-200">
                   Founding rate
@@ -182,8 +204,15 @@ function PlanCard({
             </>
           ) : (
             <>
-              <span className="text-4xl font-bold">{plan.price}</span>
-              <span className="text-gray-500">{plan.period}</span>
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span className="text-4xl font-bold">{displayPrice}</span>
+                <span className="text-gray-500">{period}</span>
+              </div>
+              {annual && (
+                <p className="mt-2 text-sm text-emerald-700">
+                  {perMonthAnnual}/mo billed annually — save ${(annualSaveCents / 100).toFixed(0)} vs monthly.
+                </p>
+              )}
             </>
           )}
         </div>
@@ -198,15 +227,11 @@ function PlanCard({
         </ul>
       </CardContent>
 
-      <CardFooter>
-        {plan.planKey ? (
+      <CardFooter className="flex-col items-stretch gap-2">
+        {isTest ? (
           <Button
-            className={`w-full ${
-              plan.popular
-                ? "bg-purple-500 hover:bg-purple-600 text-white"
-                : ""
-            }`}
-            variant={plan.popular ? "default" : "outline"}
+            className="w-full"
+            variant="outline"
             onClick={() => onCheckout(plan.planKey!)}
             disabled={loadingPlan === plan.planKey}
           >
@@ -223,19 +248,22 @@ function PlanCard({
             )}
           </Button>
         ) : (
-          <Link href={plan.href} className="w-full">
-            <Button
-              className={`w-full ${
-                plan.popular
-                  ? "bg-purple-500 hover:bg-purple-600 text-white"
-                  : ""
-              }`}
-              variant={plan.popular ? "default" : "outline"}
-            >
-              {plan.cta}
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
-          </Link>
+          <>
+            <Link href={buildHref} className="w-full">
+              <Button
+                className={`w-full ${
+                  plan.popular ? "bg-purple-500 hover:bg-purple-600 text-white" : ""
+                }`}
+                variant={plan.popular ? "default" : "outline"}
+              >
+                {plan.cta}
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
+            <p className="text-center text-xs text-gray-400">
+              Free build first — no card until you go live.
+            </p>
+          </>
         )}
       </CardFooter>
     </Card>
@@ -248,6 +276,7 @@ function PricingContent() {
   const { status } = useSession();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
 
   // Founding-rate promo code.
   const [promoInput, setPromoInput] = useState("");
@@ -352,8 +381,10 @@ function PricingContent() {
       setPromoInput(promoFromUrl);
       void applyPromo(promoFromUrl);
     }
-    if (planFromUrl && status === "authenticated") {
-      router.replace("/pricing");
+    // Only the internal $1 test auto-checkouts on return from login. Real plans
+    // now start with the free build (questionnaire) — no card up front.
+    if (planFromUrl === "website_test" && status === "authenticated") {
+      router.replace("/pricing?test=1");
       handleCheckout(planFromUrl, promoFromUrl);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -369,10 +400,11 @@ function PricingContent() {
           <div className="container mx-auto px-4 text-center">
             <Badge className="mb-4">Simple, Transparent Pricing</Badge>
             <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-              Free Website. Simple Monthly Fee.
+              Free Website. Simple Plan.
             </h1>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              We build your site for free, then run it for you. Cancel anytime.
+              We build your site for free — no card to start. You only pick a plan
+              once you&apos;re happy and ready to go live. Cancel anytime.
             </p>
           </div>
         </section>
@@ -380,6 +412,35 @@ function PricingContent() {
         {/* Plans */}
         <section className="py-16 -mt-8">
           <div className="container mx-auto px-4">
+            {/* Monthly / annual toggle */}
+            <div className="flex justify-center mb-8">
+              <div className="inline-flex items-center rounded-full border border-gray-200 bg-white p-1 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setBilling("monthly")}
+                  className={`rounded-full px-5 py-2 text-sm font-medium transition ${
+                    billing === "monthly"
+                      ? "bg-gray-900 text-white"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  Monthly
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBilling("annual")}
+                  className={`rounded-full px-5 py-2 text-sm font-medium transition ${
+                    billing === "annual"
+                      ? "bg-gray-900 text-white"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  Annual
+                  <span className="ml-1 text-emerald-500">save ~17%</span>
+                </button>
+              </div>
+            </div>
+
             {/* Founding-rate promo code */}
             <div className="max-w-md mx-auto mb-10">
               <form
@@ -428,6 +489,7 @@ function PricingContent() {
                 <PlanCard
                   key={plan.name}
                   plan={plan}
+                  billing={billing}
                   onCheckout={handleCheckout}
                   loadingPlan={loadingPlan}
                   foundingCents={foundingByPlan[plan.planKey]}
