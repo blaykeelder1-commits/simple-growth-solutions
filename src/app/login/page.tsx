@@ -17,21 +17,6 @@ import {
   Star,
 } from "lucide-react";
 
-// Reads /api/auth/session up to ~3s waiting for role to populate. After
-// signIn(redirect:false), the cookie is set but the JWT-encoded role isn't
-// always visible to the next request immediately — retry with backoff.
-async function pollForRole(maxMs = 3000): Promise<string | undefined> {
-  const start = Date.now();
-  while (Date.now() - start < maxMs) {
-    const session = await fetch("/api/auth/session", { cache: "no-store" }).then(
-      (r) => r.json()
-    );
-    if (session?.user?.role) return session.user.role;
-    await new Promise((r) => setTimeout(r, 200));
-  }
-  return undefined;
-}
-
 function safeCallback(raw: string | null): string | null {
   if (!raw) return null;
   try {
@@ -77,17 +62,12 @@ function LoginForm() {
       return;
     }
 
-    if (callbackUrl) {
-      router.push(callbackUrl);
-      return;
-    }
-
-    // Poll until role is populated — see pollForRole comment for the race.
-    const role = await pollForRole();
-    // Only SGS staff (role=admin) land on the admin dashboard.
-    // Customers (role=owner — they own their organization) and any other
-    // authenticated users go to the customer portal.
-    router.push(role === "admin" ? "/admin" : "/portal");
+    // The customer door always lands on the customer portal — even for SGS
+    // staff. Admins who want the command center use /admin/login (or the
+    // "Admin Dashboard" link inside the portal). This lets an admin sign in
+    // with their own credentials and experience the portal exactly as a
+    // customer would, instead of being bounced to /admin.
+    router.push(callbackUrl || "/portal");
   };
 
   return (

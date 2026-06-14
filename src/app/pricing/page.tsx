@@ -225,6 +225,7 @@ function PricingContent() {
   const searchParams = useSearchParams();
   const { status } = useSession();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   // Founding-rate promo code.
   const [promoInput, setPromoInput] = useState("");
@@ -296,6 +297,7 @@ function PricingContent() {
       }
 
       setLoadingPlan(planKey);
+      setCheckoutError(null);
 
       try {
         const response = await fetch("/api/billing/checkout", {
@@ -309,12 +311,12 @@ function PricingContent() {
         if (data.success && data.url) {
           window.location.href = data.url;
         } else {
-          alert(data.message || "Failed to start checkout");
+          setCheckoutError(data.message || "We couldn't start checkout. Please try again.");
           setLoadingPlan(null);
         }
       } catch (error) {
         console.error("Checkout error:", error);
-        alert("Failed to start checkout. Please try again.");
+        setCheckoutError("We couldn't start checkout. Please check your connection and try again.");
         setLoadingPlan(null);
       }
     },
@@ -389,6 +391,12 @@ function PricingContent() {
                 </p>
               )}
             </div>
+
+            {checkoutError && (
+              <div className="max-w-md mx-auto mb-8 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700 text-center">
+                {checkoutError}
+              </div>
+            )}
 
             <div className="grid gap-8 md:grid-cols-3 max-w-5xl mx-auto">
               {websitePlans.map((plan) => (

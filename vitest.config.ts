@@ -9,12 +9,12 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     include: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-    exclude: ['node_modules', '.next', 'prisma'],
+    exclude: ['**/node_modules/**', '.next', 'prisma'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       exclude: [
-        'node_modules/**',
+        '**/node_modules/**',
         '.next/**',
         'prisma/**',
         '**/*.d.ts',

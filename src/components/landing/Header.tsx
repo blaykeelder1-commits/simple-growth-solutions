@@ -48,7 +48,13 @@ export function Header() {
         </nav>
 
         {/* Desktop CTA */}
-        <div className="hidden md:block">
+        <div className="hidden items-center gap-6 md:flex">
+          <Link
+            href="/login"
+            className="text-sm font-medium text-gray-600 transition-colors hover:text-blue-600"
+          >
+            Sign In
+          </Link>
           <Link href="/questionnaire">
             <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-md shadow-blue-500/20 transition-all hover:shadow-lg hover:shadow-purple-500/25">
               <Sparkles className="mr-2 h-4 w-4" />
@@ -104,6 +110,13 @@ export function Header() {
               onClick={() => setMobileMenuOpen(false)}
             >
               Testimonials
+            </Link>
+            <Link
+              href="/login"
+              className="text-sm font-medium text-gray-600 transition-colors hover:text-blue-600 py-2"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Sign In
             </Link>
             <Link href="/questionnaire" onClick={() => setMobileMenuOpen(false)}>
               <Button className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">

@@ -197,7 +197,12 @@ async function handlePaymentEvent(event: SquareEvent) {
               where: { id: subscription.promoCodeId },
               data: { redeemedCount: { increment: 1 } },
             })
-            .catch(() => {});
+            .catch((err) =>
+              apiLogger.warn(
+                { err, promoCodeId: subscription.promoCodeId },
+                "Subscription activated but promo redemption count failed to increment"
+              )
+            );
         }
 
         // Advance journey to managed.
@@ -209,12 +214,22 @@ async function handlePaymentEvent(event: SquareEvent) {
             triggeredBy: "subscription",
             metadata: JSON.stringify({ subscriptionId: subscription.id, plan: subscription.plan }),
           },
-        }).catch(() => {});
+        }).catch((err) =>
+          apiLogger.warn(
+            { err, organizationId: subscription.organizationId },
+            "Subscription activated but journey event failed to record"
+          )
+        );
 
         await prisma.organization.update({
           where: { id: subscription.organizationId },
           data: { customerStage: "website_managed" },
-        }).catch(() => {});
+        }).catch((err) =>
+          apiLogger.warn(
+            { err, organizationId: subscription.organizationId },
+            "Subscription activated but customerStage failed to advance"
+          )
+        );
 
         // Payment confirmation + welcome (+ site-live if already deployed).
         // Non-blocking: a mail hiccup must never fail the webhook.
@@ -280,7 +295,12 @@ async function handlePaymentEvent(event: SquareEvent) {
         await prisma.changeRequest.update({
           where: { id: charge.changeRequestId },
           data: { status: "pending" },
-        }).catch(() => {});
+        }).catch((err) =>
+          apiLogger.warn(
+            { err, changeRequestId: charge.changeRequestId },
+            "Rush fee paid but change request failed to move out of awaiting_payment"
+          )
+        );
       }
     }
   }

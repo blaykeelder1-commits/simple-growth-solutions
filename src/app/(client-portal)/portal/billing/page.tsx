@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Card,
@@ -71,27 +71,6 @@ export default function BillingPage() {
   const [error, setError] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalMessage, setPortalMessage] = useState<string | null>(null);
-  const [activatingCfa, setActivatingCfa] = useState(false);
-
-  const activateCfa = useCallback(async () => {
-    setActivatingCfa(true);
-    try {
-      const res = await fetch("/api/onboarding/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ products: ["cashflow_ai"] }),
-      });
-      if (res.ok) {
-        window.location.reload();
-      } else {
-        setPortalMessage("Failed to activate Cash Flow AI. Please try again.");
-      }
-    } catch {
-      setPortalMessage("Something went wrong. Please try again.");
-    } finally {
-      setActivatingCfa(false);
-    }
-  }, []);
 
   useEffect(() => {
     async function fetchSubscriptions() {
@@ -303,7 +282,7 @@ export default function BillingPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-5 md:grid-cols-3">
+          <div className="grid gap-5 md:grid-cols-2">
             {/* Website Management */}
             <div className="p-5 rounded-xl border border-gray-100 bg-white hover:shadow-lg transition-all">
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mb-4 shadow-lg shadow-blue-500/25">
@@ -362,44 +341,6 @@ export default function BillingPage() {
                   View Plans
                 </Button>
               </Link>
-            </div>
-
-            {/* Cash Flow AI */}
-            <div className="p-5 rounded-xl border-2 border-blue-500 bg-gradient-to-br from-blue-50 to-indigo-50 relative hover:shadow-lg transition-all">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-lg">
-                Popular
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center mb-4 shadow-lg shadow-purple-500/25">
-                <BarChart3 className="h-6 w-6 text-white" />
-              </div>
-              <h4 className="font-semibold text-gray-900 mb-1">Cash Flow AI</h4>
-              <p className="text-2xl font-bold text-gray-900 mb-3">
-                8%<span className="text-sm font-normal text-gray-500"> of recovered</span>
-              </p>
-              <ul className="space-y-2 text-sm text-gray-600 mb-5">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  Invoice recovery
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  Cash flow forecasting
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  QuickBooks/Xero sync
-                </li>
-              </ul>
-              <Button
-                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25"
-                onClick={activateCfa}
-                disabled={activatingCfa}
-              >
-                {activatingCfa ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : null}
-                {activatingCfa ? "Activating..." : "Activate Free Trial"}
-              </Button>
             </div>
           </div>
         </CardContent>

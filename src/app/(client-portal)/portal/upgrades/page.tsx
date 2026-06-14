@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Card,
@@ -15,11 +14,8 @@ import {
   Search,
   Megaphone,
   Shield,
-  Brain,
-  TrendingUp,
   Sparkles,
   Lock,
-  CheckCircle2,
 } from "lucide-react";
 
 // In-portal upsells. These are the "back-half" services that aren't shown on
@@ -92,93 +88,9 @@ const upgrades: UpgradeCard[] = [
     status: "available",
     planKey: null, // Stripe-side; checkout API still works
   },
-  {
-    id: "geo",
-    name: "GEO — AI Business Mentor",
-    pitch: "24/7 AI advisor with real-time business data.",
-    pricing: "From $79/mo",
-    bullets: [
-      "Connects to your website + finances",
-      "Personalized weekly insights",
-      "Industry benchmarks",
-      "Actionable recommendations",
-    ],
-    icon: Brain,
-    iconBg: "bg-violet-50",
-    iconColor: "text-violet-600",
-    status: "available",
-    planKey: "geo_starter",
-  },
-  {
-    id: "cashflow",
-    name: "Cash Flow AI",
-    pitch: "Collect overdue invoices at 8% — only pay when we collect.",
-    pricing: "8% of recovered + free dashboard",
-    bullets: [
-      "Free cash flow dashboard",
-      "Automated AR follow-ups",
-      "8% on collections past 14 days",
-      "Cash gap predictions",
-    ],
-    icon: TrendingUp,
-    iconBg: "bg-teal-50",
-    iconColor: "text-teal-600",
-    status: "available",
-    planKey: "cashflow_pro",
-  },
 ];
 
-interface SubRow {
-  plan: string;
-  status: string;
-}
-
 export default function UpgradesPage() {
-  const [activePlans, setActivePlans] = useState<Set<string>>(new Set());
-  const [loadingCheckout, setLoadingCheckout] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/billing/subscriptions");
-        if (res.ok) {
-          const data = await res.json();
-          const subs: SubRow[] = data.subscriptions || [];
-          setActivePlans(
-            new Set(
-              subs
-                .filter((s) => s.status === "active" || s.status === "trialing")
-                .map((s) => s.plan)
-            )
-          );
-        }
-      } catch {
-        // ignore
-      }
-    })();
-  }, []);
-
-  const handleSubscribe = async (planKey: string) => {
-    setLoadingCheckout(planKey);
-    try {
-      const res = await fetch("/api/billing/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: planKey }),
-      });
-      const data = await res.json();
-      if (data.success && data.url) {
-        window.location.href = data.url;
-      } else {
-        alert(data.message || "Failed to start checkout");
-        setLoadingCheckout(null);
-      }
-    } catch {
-      alert("Something went wrong. Please try again.");
-      setLoadingCheckout(null);
-    }
-  };
-
   return (
     <div className="space-y-8 max-w-5xl">
       <div>
@@ -191,9 +103,6 @@ export default function UpgradesPage() {
 
       <div className="grid gap-5 md:grid-cols-2">
         {upgrades.map((upgrade) => {
-          const isActive = upgrade.planKey
-            ? activePlans.has(upgrade.planKey)
-            : false;
           const Icon = upgrade.icon;
           return (
             <Card key={upgrade.id} variant="professional" hover="lift" className="flex flex-col">
@@ -202,13 +111,7 @@ export default function UpgradesPage() {
                   <div className={`h-12 w-12 rounded-xl ${upgrade.iconBg} flex items-center justify-center`}>
                     <Icon className={`h-6 w-6 ${upgrade.iconColor}`} />
                   </div>
-                  {isActive && (
-                    <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
-                      <CheckCircle2 className="h-3 w-3 mr-1" />
-                      Active
-                    </Badge>
-                  )}
-                  {upgrade.status === "coming_soon" && !isActive && (
+                  {upgrade.status === "coming_soon" && (
                     <Badge className="bg-gray-100 text-gray-600 border-gray-200">
                       Coming Soon
                     </Badge>
@@ -227,24 +130,10 @@ export default function UpgradesPage() {
                     </li>
                   ))}
                 </ul>
-                {isActive ? (
-                  <Link href="/portal/billing">
-                    <Button variant="outline" className="w-full">
-                      Manage Subscription
-                    </Button>
-                  </Link>
-                ) : upgrade.status === "coming_soon" ? (
+                {upgrade.status === "coming_soon" ? (
                   <Button variant="outline" className="w-full" disabled>
                     <Lock className="h-3.5 w-3.5 mr-1.5" />
                     Notify Me When Live
-                  </Button>
-                ) : upgrade.planKey ? (
-                  <Button
-                    className="w-full"
-                    onClick={() => handleSubscribe(upgrade.planKey!)}
-                    disabled={loadingCheckout === upgrade.planKey}
-                  >
-                    {loadingCheckout === upgrade.planKey ? "Loading…" : "Add to Plan"}
                   </Button>
                 ) : (
                   <Link href="/portal/billing">

@@ -14,6 +14,7 @@ import {
   Menu,
   X,
   Sparkles,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { signOut } from "next-auth/react";
@@ -90,6 +91,7 @@ export default function ClientPortalLayout({
           <button
             className="lg:hidden"
             onClick={() => setSidebarOpen(false)}
+            aria-label="Close menu"
           >
             <X className="h-6 w-6 text-gray-500" />
           </button>
@@ -131,6 +133,19 @@ export default function ClientPortalLayout({
             </p>
             <p className="text-xs text-gray-500">{session.user?.email}</p>
           </div>
+          {/* Staff-only shortcut back to the command center. Lets an admin who
+              signed in through the customer door return to /admin in one click. */}
+          {session.user?.role === "admin" && (
+            <Link href="/admin">
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2 mb-2 bg-white/50 hover:bg-white border-gray-200 text-indigo-700"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Admin Dashboard
+              </Button>
+            </Link>
+          )}
           <Button
             variant="outline"
             className="w-full justify-start gap-2 bg-white/50 hover:bg-white border-gray-200"
@@ -147,7 +162,7 @@ export default function ClientPortalLayout({
         {/* Mobile header */}
         <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-100 lg:hidden">
           <div className="flex items-center justify-between h-16 px-4">
-            <button onClick={() => setSidebarOpen(true)}>
+            <button onClick={() => setSidebarOpen(true)} aria-label="Open menu">
               <Menu className="h-6 w-6 text-gray-600" />
             </button>
             <span className="font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">SGS Portal</span>
