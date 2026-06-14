@@ -9,6 +9,7 @@ import { emailLayout, escapeHtml, sendEmail } from "./index";
 const APP_URL = process.env.NEXTAUTH_URL || "http://localhost:3000";
 
 const PLAN_LABELS: Record<string, string> = {
+  website_test: "Square Test ($1)",
   website_managed: "Managed",
   website_pro: "Managed Pro",
   website_premium: "Managed Premium",

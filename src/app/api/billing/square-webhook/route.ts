@@ -393,6 +393,7 @@ async function handleInvoicePaid(_event: SquareEvent) {
 function pickPlanVariationId(plan: string): string | null {
   const cfg = getSgsSquareConfig();
   if (!cfg) return null;
+  if (plan === "website_test") return cfg.planIds.website_test;
   if (plan === "website_managed") return cfg.planIds.website_managed;
   if (plan === "website_pro") return cfg.planIds.website_pro;
   if (plan === "website_premium") return cfg.planIds.website_premium;

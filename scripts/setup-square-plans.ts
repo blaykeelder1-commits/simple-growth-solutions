@@ -33,6 +33,22 @@ async function main() {
   console.log(`Location ID: ${cfg.locationId}`);
   console.log(foundingOnly ? "Mode: founding variations only\n" : "Mode: standard + founding\n");
 
+  // $1 end-to-end connectivity test plan. Lets us verify checkout → payment →
+  // webhook → subscription → emails for a buck. Skipped in --founding-only.
+  if (!foundingOnly) {
+    try {
+      console.log("Creating plan: Square Test ($1.00/mo)...");
+      const test = await createSubscriptionPlanVariation(cfg, {
+        name: "Square Test",
+        phases: [{ amountCents: 100 }],
+      });
+      console.log(`  ✓ Test plan variation ID: ${test.planVariationId}`);
+      console.log(`  → Set SQUARE_PLAN_WEBSITE_TEST_ID=${test.planVariationId}\n`);
+    } catch (err) {
+      console.error("  ✗ Failed to create Square Test plan:", err);
+    }
+  }
+
   // Standard plans + their founding-rate counterparts. A subscription created
   // with a promo code is provisioned against the founding variation so the
   // discounted price persists every month (see the square-webhook handler).

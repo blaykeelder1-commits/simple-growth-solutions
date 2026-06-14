@@ -100,6 +100,28 @@ const websitePlans = [
   },
 ];
 
+// $1 end-to-end Square test card. Only shown on /pricing?test=1 so real
+// customers never see it. Routes through the exact same Square checkout path.
+const testPlan: (typeof websitePlans)[number] = {
+  name: "Square Test ($1)",
+  description: "Internal end-to-end Square checkout test. Charges $1 to verify payments are firing.",
+  price: "$1",
+  priceCents: 100,
+  period: " one-time test",
+  icon: Zap,
+  color: "text-emerald-600",
+  bgColor: "bg-emerald-50",
+  features: [
+    "Real Square payment link",
+    "Verifies checkout → webhook → subscription → emails",
+    "Internal testing only — not a customer plan",
+  ],
+  cta: "Run $1 Test",
+  href: "#",
+  planKey: "website_test",
+  popular: false,
+};
+
 function PlanCard({
   plan,
   onCheckout,
@@ -399,7 +421,10 @@ function PricingContent() {
             )}
 
             <div className="grid gap-8 md:grid-cols-3 max-w-5xl mx-auto">
-              {websitePlans.map((plan) => (
+              {(searchParams.get("test") === "1"
+                ? [...websitePlans, testPlan]
+                : websitePlans
+              ).map((plan) => (
                 <PlanCard
                   key={plan.name}
                   plan={plan}
