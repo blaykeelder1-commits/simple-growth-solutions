@@ -4,6 +4,7 @@ import { withAdmin } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
 import { withRateLimit } from "@/lib/rate-limit";
 import { startNurtureForLead } from "@/lib/nurture/engine";
+import { sendNewLeadInternalEmail } from "@/lib/email/lifecycle-emails";
 import { z } from "zod";
 
 // Full lead schema for questionnaire form
@@ -93,6 +94,21 @@ export async function POST(req: NextRequest) {
         console.error("Failed to start nurture for lead", lead.id, err)
       );
 
+      // Instant internal sales alert (fire-and-forget, don't block response)
+      sendNewLeadInternalEmail({
+        businessName: lead.businessName,
+        contactName: lead.contactName,
+        email: lead.email,
+        phone: lead.phone,
+        hasWebsite: lead.hasWebsite,
+        websiteUrl: lead.websiteUrl,
+        industry: lead.industry,
+        challenges: lead.challenges,
+        source: "url-analyzer",
+      }).catch((err) =>
+        console.error("Failed to send lead alert for", lead.id, err)
+      );
+
       return NextResponse.json({ success: true, lead }, { status: 201 });
     }
 
@@ -115,6 +131,21 @@ export async function POST(req: NextRequest) {
     // Start nurture sequence (fire-and-forget, don't block response)
     startNurtureForLead(lead.id, prisma).catch((err) =>
       console.error("Failed to start nurture for lead", lead.id, err)
+    );
+
+    // Instant internal sales alert (fire-and-forget, don't block response)
+    sendNewLeadInternalEmail({
+      businessName: lead.businessName,
+      contactName: lead.contactName,
+      email: lead.email,
+      phone: lead.phone,
+      hasWebsite: lead.hasWebsite,
+      websiteUrl: lead.websiteUrl,
+      industry: lead.industry,
+      challenges: lead.challenges,
+      source: "questionnaire",
+    }).catch((err) =>
+      console.error("Failed to send lead alert for", lead.id, err)
     );
 
     return NextResponse.json({ success: true, lead }, { status: 201 });

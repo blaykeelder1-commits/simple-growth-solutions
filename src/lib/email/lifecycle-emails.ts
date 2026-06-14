@@ -190,6 +190,68 @@ export async function sendNewPaidCustomerInternalEmail(args: {
 }
 
 // ============================================================
+// 4b. Internal: new lead / consultation request → Snak Group ops inbox
+// ============================================================
+
+// Fires synchronously the moment someone submits the landing-page
+// questionnaire or the URL-analyzer quick capture. This is the sales alert —
+// it does NOT depend on the nurture cron (which mails the lead, not us).
+export async function sendNewLeadInternalEmail(args: {
+  businessName: string;
+  contactName: string;
+  email: string;
+  phone?: string | null;
+  hasWebsite: boolean;
+  websiteUrl?: string | null;
+  industry?: string | null;
+  challenges?: string | null;
+  source: "questionnaire" | "url-analyzer";
+}) {
+  const row = (k: string, v: string) =>
+    `<tr>
+      <td style="padding: 6px 0; color: #6b7280; vertical-align: top;">${escapeHtml(k)}</td>
+      <td style="padding: 6px 0; text-align: right; color: #111827;">${escapeHtml(v)}</td>
+    </tr>`;
+
+  const sourceLabel =
+    args.source === "url-analyzer" ? "Website Analyzer" : "Consultation form";
+
+  const html = emailLayout(
+    `
+    <h2 style="color: #2563eb;">New lead 🌱</h2>
+    <p>Someone just submitted a request through the Simple Growth website (<strong>${escapeHtml(sourceLabel)}</strong>). Reach out while it's hot.</p>
+    <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+      <table style="width: 100%; border-collapse: collapse;">
+        ${row("Name", args.contactName)}
+        ${row("Business", args.businessName)}
+        ${row("Email", args.email)}
+        ${args.phone ? row("Phone", args.phone) : ""}
+        ${row("Has a website?", args.hasWebsite ? "Yes" : "No")}
+        ${args.websiteUrl ? row("Current site", args.websiteUrl) : ""}
+        ${args.industry ? row("Industry", args.industry) : ""}
+      </table>
+    </div>
+    ${
+      args.challenges
+        ? `<p style="margin: 0 0 6px 0; font-weight: 600; color: #374151;">What they said:</p>
+           <p style="background: #f9fafb; padding: 15px; border-radius: 6px; border-left: 4px solid #e5e7eb; color: #374151;">${escapeHtml(args.challenges)}</p>`
+        : ""
+    }
+    ${button(`${APP_URL}/admin/leads`, "View in Admin")}
+    <p style="color: #6b7280; font-size: 13px;">Internal notification — Simple Growth Solutions.</p>
+  `,
+    "New Lead"
+  );
+
+  return sendEmail({
+    to: INTERNAL_NOTIFY_EMAIL,
+    replyTo: args.email,
+    subject: `🌱 New lead: ${args.contactName} — ${args.businessName}`,
+    html,
+  });
+}
+
+// ============================================================
 // 5. Failed recurring payment (dunning / recovery)
 // ============================================================
 
