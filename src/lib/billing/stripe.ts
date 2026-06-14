@@ -66,6 +66,32 @@ export const PLANS = {
     ],
   },
 
+  // ── Website Management — Annual (pay yearly, ~17% off) ────────────────
+  // Flat annual price = 10× the monthly rate. Routes through Square like the
+  // monthly plans; the first payment link charges the full year and the
+  // recurring Square subscription bills annually thereafter.
+  website_managed_annual: {
+    name: "Managed Website (Annual)",
+    priceId: null,
+    amount: 49000, // $490/yr (vs $588 monthly)
+    interval: "year" as const,
+    features: ["Managed Website plan, billed annually — save ~17%"],
+  },
+  website_pro_annual: {
+    name: "Managed Pro (Annual)",
+    priceId: null,
+    amount: 79000, // $790/yr (vs $948 monthly)
+    interval: "year" as const,
+    features: ["Managed Pro plan, billed annually — save ~17%"],
+  },
+  website_premium_annual: {
+    name: "Managed Premium (Annual)",
+    priceId: null,
+    amount: 129000, // $1,290/yr (vs $1,548 monthly)
+    interval: "year" as const,
+    features: ["Managed Premium plan, billed annually — save ~17%"],
+  },
+
   // ── Cash Flow AI — Hybrid Pricing ───────────────────────────────────
   // Free tier: basic dashboard, invoice tracking, health score (no Stripe plan)
   cashflow_free: {

@@ -175,7 +175,7 @@ async function handlePaymentEvent(event: SquareEvent) {
           customerId: payment.customerId!,
           cardId: payment.cardId,
           planVariationId,
-          startDate: monthFromNow().toISOString().slice(0, 10),
+          startDate: nextPeriodStart(subscription.plan).toISOString().slice(0, 10),
         });
 
         await prisma.subscription.update({
@@ -186,7 +186,7 @@ async function handlePaymentEvent(event: SquareEvent) {
             squareSubscriptionId: sub.id,
             squarePlanVariationId: planVariationId,
             currentPeriodStart: new Date(),
-            currentPeriodEnd: monthFromNow(),
+            currentPeriodEnd: nextPeriodStart(subscription.plan),
           },
         });
 
@@ -397,12 +397,20 @@ function pickPlanVariationId(plan: string): string | null {
   if (plan === "website_managed") return cfg.planIds.website_managed;
   if (plan === "website_pro") return cfg.planIds.website_pro;
   if (plan === "website_premium") return cfg.planIds.website_premium;
+  if (plan === "website_managed_annual") return cfg.planIds.website_managed_annual;
+  if (plan === "website_pro_annual") return cfg.planIds.website_pro_annual;
+  if (plan === "website_premium_annual") return cfg.planIds.website_premium_annual;
   return null;
 }
 
-function monthFromNow(): Date {
+// The recurring Square subscription must start one full billing period out,
+// because the checkout payment link already collected period 1 (and saved the
+// card). For annual plans that's a year, otherwise a month — getting this wrong
+// double-charges the customer immediately.
+function nextPeriodStart(plan: string): Date {
   const d = new Date();
-  d.setMonth(d.getMonth() + 1);
+  if (plan.endsWith("_annual")) d.setFullYear(d.getFullYear() + 1);
+  else d.setMonth(d.getMonth() + 1);
   return d;
 }
 

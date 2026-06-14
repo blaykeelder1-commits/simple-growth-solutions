@@ -17,10 +17,14 @@ const checkoutSchema = z.object({
   plan: z.enum([
     // $1 Square connectivity test
     "website_test",
-    // Website tiers
+    // Website tiers (monthly)
     "website_managed",
     "website_pro",
     "website_premium",
+    // Website tiers (annual)
+    "website_managed_annual",
+    "website_pro_annual",
+    "website_premium_annual",
     // Cash Flow AI (only pro has a Stripe price)
     "cashflow_pro",
     // GEO / Business Chauffeur tiers
@@ -42,6 +46,9 @@ const SQUARE_PLAN_KEYS = new Set<string>([
   "website_managed",
   "website_pro",
   "website_premium",
+  "website_managed_annual",
+  "website_pro_annual",
+  "website_premium_annual",
 ]);
 
 // POST /api/billing/checkout - Create a hosted checkout session.
@@ -108,9 +115,10 @@ export async function POST(request: NextRequest) {
       // Optional founding-rate promo code. When valid, the customer pays the
       // founding price now and the webhook provisions the recurring sub against
       // the founding Square plan variation so the discount persists.
+      const isAnnual = plan.endsWith("_annual");
       let amountCents: number = planConfig.amount;
       let promoCodeId: string | null = null;
-      let descriptionSuffix = "first month";
+      let descriptionSuffix = isAnnual ? "first year" : "first month";
       if (promoCode) {
         const result = await validatePromoCode(prisma, promoCode, plan);
         if (!result.ok) {

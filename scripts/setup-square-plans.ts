@@ -21,6 +21,7 @@ import {
 
 async function main() {
   const foundingOnly = process.argv.includes("--founding-only");
+  const annualOnly = process.argv.includes("--annual-only");
   const cfg = getSgsSquareConfig();
   if (!cfg) {
     console.error(
@@ -35,7 +36,7 @@ async function main() {
 
   // $1 end-to-end connectivity test plan. Lets us verify checkout → payment →
   // webhook → subscription → emails for a buck. Skipped in --founding-only.
-  if (!foundingOnly) {
+  if (!foundingOnly && !annualOnly) {
     try {
       console.log("Creating plan: Square Test ($1.00/mo)...");
       const test = await createSubscriptionPlanVariation(cfg, {
@@ -59,6 +60,7 @@ async function main() {
   ] as const;
 
   for (const plan of plans) {
+    if (annualOnly) break; // annual-only run skips standard + founding entirely
     if (!foundingOnly) {
       try {
         console.log(`Creating plan: ${plan.name} ($${(plan.amountCents / 100).toFixed(2)}/mo)...`);
@@ -100,6 +102,31 @@ async function main() {
       console.log(`  → Set SQUARE_PLAN_${plan.key}_FOUNDING_ID=${result.planVariationId}\n`);
     } catch (err) {
       console.error(`  ✗ Failed to create founding ${plan.name}:`, err);
+    }
+  }
+
+  // Annual variations (ANNUAL cadence, flat price = 10× monthly). Skipped in
+  // --founding-only. Run with --annual-only to add just these to an account
+  // that already has the monthly + founding plans.
+  if (!foundingOnly) {
+    const annualPlans = [
+      { key: "WEBSITE_MANAGED_ANNUAL", name: "Managed Website (Annual)", amountCents: 49000 },
+      { key: "WEBSITE_PRO_ANNUAL", name: "Managed Pro (Annual)", amountCents: 79000 },
+      { key: "WEBSITE_PREMIUM_ANNUAL", name: "Managed Premium (Annual)", amountCents: 129000 },
+    ] as const;
+    for (const plan of annualPlans) {
+      try {
+        console.log(`Creating annual plan: ${plan.name} ($${(plan.amountCents / 100).toFixed(2)}/yr)...`);
+        const result = await createSubscriptionPlanVariation(cfg, {
+          name: plan.name,
+          cadence: "ANNUAL",
+          phases: [{ amountCents: plan.amountCents }],
+        });
+        console.log(`  ✓ Annual plan variation ID: ${result.planVariationId}`);
+        console.log(`  → Set SQUARE_PLAN_${plan.key}_ID=${result.planVariationId}\n`);
+      } catch (err) {
+        console.error(`  ✗ Failed to create annual ${plan.name}:`, err);
+      }
     }
   }
 

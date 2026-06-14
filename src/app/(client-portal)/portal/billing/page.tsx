@@ -13,7 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   CreditCard,
-  CheckCircle2,
   ExternalLink,
   Shield,
   Zap,
@@ -65,12 +64,63 @@ const statusColors: Record<string, { color: string; bgColor: string; label?: str
   expired: { color: "text-red-700", bgColor: "bg-red-100 border border-red-200", label: "Trial Expired" },
 };
 
+// Website tiers a customer can start from the portal once their free build is
+// ready. Monthly keys and their annual counterparts route through the same
+// Square checkout (/api/billing/checkout).
+const WEBSITE_TIERS = [
+  {
+    name: "Managed",
+    monthly: { plan: "website_managed", price: "$49", per: "/mo" },
+    annual: { plan: "website_managed_annual", price: "$490", per: "/yr" },
+    blurb: "Hosting, SSL, security monitoring, 2 edits/mo.",
+    popular: false,
+  },
+  {
+    name: "Managed Pro",
+    monthly: { plan: "website_pro", price: "$79", per: "/mo" },
+    annual: { plan: "website_pro_annual", price: "$790", per: "/yr" },
+    blurb: "24-hr edits, AI chatbot, lead forms, 4 edits/mo.",
+    popular: true,
+  },
+  {
+    name: "Managed Premium",
+    monthly: { plan: "website_premium", price: "$129", per: "/mo" },
+    annual: { plan: "website_premium_annual", price: "$1,290", per: "/yr" },
+    blurb: "Same-day edits, account manager, 10 edits/mo.",
+    popular: false,
+  },
+] as const;
+
 export default function BillingPage() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalMessage, setPortalMessage] = useState<string | null>(null);
+  const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
+  const [startingPlan, setStartingPlan] = useState<string | null>(null);
+  const [startError, setStartError] = useState<string | null>(null);
+
+  const handleStartPlan = async (planKey: string) => {
+    setStartingPlan(planKey);
+    setStartError(null);
+    try {
+      const res = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: planKey }),
+      });
+      const data = await res.json();
+      if (data.success && data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      setStartError(data.message || "We couldn't start checkout. Please try again.");
+    } catch {
+      setStartError("We couldn't start checkout. Please check your connection and try again.");
+    }
+    setStartingPlan(null);
+  };
 
   useEffect(() => {
     async function fetchSubscriptions() {
@@ -270,78 +320,90 @@ export default function BillingPage() {
         </Card>
       ) : null}
 
-      {/* Available plans */}
+      {/* Start a plan — the "go live" action after a free build */}
       <Card variant="professional">
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-amber-500" />
-            <CardTitle className="text-lg">Available Plans</CardTitle>
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-amber-500" />
+              <CardTitle className="text-lg">Start your plan</CardTitle>
+            </div>
+            {/* Monthly / annual toggle */}
+            <div className="inline-flex items-center rounded-full border border-gray-200 bg-white p-1">
+              <button
+                type="button"
+                onClick={() => setBilling("monthly")}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                  billing === "monthly" ? "bg-gray-900 text-white" : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Monthly
+              </button>
+              <button
+                type="button"
+                onClick={() => setBilling("annual")}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                  billing === "annual" ? "bg-gray-900 text-white" : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Annual <span className="text-emerald-500">save ~17%</span>
+              </button>
+            </div>
           </div>
           <CardDescription>
-            Enhance your business with our premium services
+            Pick a plan to take your site live. You only pay once you&apos;re ready —
+            cancel anytime.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-5 md:grid-cols-2">
-            {/* Website Management */}
-            <div className="p-5 rounded-xl border border-gray-100 bg-white hover:shadow-lg transition-all">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mb-4 shadow-lg shadow-blue-500/25">
-                <Zap className="h-6 w-6 text-white" />
-              </div>
-              <h4 className="font-semibold text-gray-900 mb-1">Website Management</h4>
-              <p className="text-2xl font-bold text-gray-900 mb-3">
-                $49<span className="text-sm font-normal text-gray-500">/mo</span>
-              </p>
-              <ul className="space-y-2 text-sm text-gray-600 mb-5">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  Managed hosting
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  Monthly updates
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  Priority support
-                </li>
-              </ul>
-              <Link href="/pricing">
-                <Button variant="outline" className="w-full bg-white/50 hover:bg-white">
-                  View Plans
-                </Button>
-              </Link>
+          {startError && (
+            <div className="mb-5 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+              {startError}
             </div>
-
-            {/* Cybersecurity */}
-            <div className="p-5 rounded-xl border border-gray-100 bg-white hover:shadow-lg transition-all">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mb-4 shadow-lg shadow-emerald-500/25">
-                <Shield className="h-6 w-6 text-white" />
-              </div>
-              <h4 className="font-semibold text-gray-900 mb-1">Cybersecurity Shield</h4>
-              <p className="text-2xl font-bold text-gray-900 mb-3">
-                $39<span className="text-sm font-normal text-gray-500">/mo</span>
-              </p>
-              <ul className="space-y-2 text-sm text-gray-600 mb-5">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  Weekly security scans
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  Vulnerability alerts
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  SSL monitoring
-                </li>
-              </ul>
-              <Link href="/pricing">
-                <Button variant="outline" className="w-full bg-white/50 hover:bg-white">
-                  View Plans
-                </Button>
-              </Link>
-            </div>
+          )}
+          <div className="grid gap-5 md:grid-cols-3">
+            {WEBSITE_TIERS.map((tier) => {
+              const opt = billing === "annual" ? tier.annual : tier.monthly;
+              const isLoading = startingPlan === opt.plan;
+              return (
+                <div
+                  key={tier.name}
+                  className={`relative p-5 rounded-xl border bg-white transition-all hover:shadow-lg ${
+                    tier.popular ? "border-purple-300 ring-1 ring-purple-200" : "border-gray-100"
+                  }`}
+                >
+                  {tier.popular && (
+                    <Badge className="absolute -top-2 right-4 bg-purple-500">Most Popular</Badge>
+                  )}
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mb-4 shadow-lg shadow-blue-500/25">
+                    <Zap className="h-6 w-6 text-white" />
+                  </div>
+                  <h4 className="font-semibold text-gray-900 mb-1">{tier.name}</h4>
+                  <p className="text-2xl font-bold text-gray-900 mb-1">
+                    {opt.price}
+                    <span className="text-sm font-normal text-gray-500">{opt.per}</span>
+                  </p>
+                  <p className="text-sm text-gray-600 mb-5">{tier.blurb}</p>
+                  <Button
+                    onClick={() => handleStartPlan(opt.plan)}
+                    disabled={startingPlan !== null}
+                    className={`w-full ${
+                      tier.popular ? "bg-purple-500 hover:bg-purple-600 text-white" : ""
+                    }`}
+                    variant={tier.popular ? "default" : "outline"}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Starting…
+                      </>
+                    ) : (
+                      `Start ${tier.name}`
+                    )}
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         </CardContent>
       </Card>

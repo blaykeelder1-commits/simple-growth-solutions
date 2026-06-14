@@ -13,6 +13,9 @@ const PLAN_LABELS: Record<string, string> = {
   website_managed: "Managed",
   website_pro: "Managed Pro",
   website_premium: "Managed Premium",
+  website_managed_annual: "Managed (Annual)",
+  website_pro_annual: "Managed Pro (Annual)",
+  website_premium_annual: "Managed Premium (Annual)",
 };
 
 export function planLabel(plan: string): string {

@@ -37,6 +37,9 @@ export interface SgsSquareConfig {
     website_managed: string | null;
     website_pro: string | null;
     website_premium: string | null;
+    website_managed_annual: string | null;
+    website_pro_annual: string | null;
+    website_premium_annual: string | null;
   };
 }
 
@@ -55,6 +58,9 @@ export function getSgsSquareConfig(): SgsSquareConfig | null {
       website_managed: process.env.SQUARE_PLAN_WEBSITE_MANAGED_ID || null,
       website_pro: process.env.SQUARE_PLAN_WEBSITE_PRO_ID || null,
       website_premium: process.env.SQUARE_PLAN_WEBSITE_PREMIUM_ID || null,
+      website_managed_annual: process.env.SQUARE_PLAN_WEBSITE_MANAGED_ANNUAL_ID || null,
+      website_pro_annual: process.env.SQUARE_PLAN_WEBSITE_PRO_ANNUAL_ID || null,
+      website_premium_annual: process.env.SQUARE_PLAN_WEBSITE_PREMIUM_ANNUAL_ID || null,
     },
   };
 }
@@ -301,11 +307,12 @@ export interface PlanPhase {
  */
 export async function createSubscriptionPlanVariation(
   cfg: SgsSquareConfig,
-  args: { name: string; phases: PlanPhase[] }
+  args: { name: string; phases: PlanPhase[]; cadence?: "MONTHLY" | "ANNUAL" }
 ): Promise<SquarePlanVariation> {
   if (!args.phases.length) throw new Error("At least one phase is required");
+  const cadence = args.cadence || "MONTHLY";
   const planObjectId = `#plan-${args.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
-  const variationObjectId = `${planObjectId}-monthly`;
+  const variationObjectId = `${planObjectId}-${cadence.toLowerCase()}`;
   const res = await request<{
     catalog_object: {
       id: string;
@@ -327,10 +334,10 @@ export async function createSubscriptionPlanVariation(
               type: "SUBSCRIPTION_PLAN_VARIATION",
               id: variationObjectId,
               subscription_plan_variation_data: {
-                name: `${args.name} — Monthly`,
+                name: `${args.name} — ${cadence === "ANNUAL" ? "Annual" : "Monthly"}`,
                 phases: args.phases.map((phase, i) => ({
                   ordinal: i,
-                  cadence: "MONTHLY",
+                  cadence,
                   ...(phase.periods ? { periods: phase.periods } : {}),
                   pricing: {
                     type: "STATIC",
