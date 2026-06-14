@@ -1,5 +1,3 @@
-"use client";
-
 import { ClipboardList, Globe, Headset, ArrowDown } from "lucide-react";
 import { ScrollAnimation } from "@/components/ui/scroll-animation";
 

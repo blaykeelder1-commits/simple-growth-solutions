@@ -18,6 +18,8 @@ const nextConfig = {
 
   // Image configuration for external images
   images: {
+    // Serve modern formats (smaller than JPEG/PNG) when the browser supports them.
+    formats: ["image/avif", "image/webp"],
     remotePatterns: [
       {
         protocol: "https",

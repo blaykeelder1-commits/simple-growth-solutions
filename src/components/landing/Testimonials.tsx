@@ -1,5 +1,3 @@
-"use client";
-
 import { Star, Quote } from "lucide-react";
 import { ScrollAnimation } from "@/components/ui/scroll-animation";
 

@@ -1,5 +1,4 @@
-"use client";
-
+import Image from "next/image";
 import { ArrowUpRight } from "lucide-react";
 import { ScrollAnimation } from "@/components/ui/scroll-animation";
 
@@ -118,12 +117,12 @@ export function Portfolio() {
 
                 {/* Preview panel — screenshot if provided, else brand panel */}
                 {w.image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <Image
                     src={`/portfolio/${w.image}`}
                     alt={`${w.name} website`}
-                    loading="lazy"
-                    decoding="async"
+                    width={800}
+                    height={500}
+                    sizes="(max-width: 768px) 100vw, 50vw"
                     className="aspect-[16/10] w-full object-cover object-top"
                   />
                 ) : (
