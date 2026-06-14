@@ -331,6 +331,29 @@ export default function AdminProjectDetailPage() {
                 </div>
               </div>
 
+              {status === "review_ready" && project?.status !== "review_ready" && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                  <p className="font-semibold mb-1">Before submitting for customer review</p>
+                  <p className="mb-2">
+                    Run the 3-pass review and fix anything you find first — a rough
+                    draft must not reach the customer with slop, rushed, or band-aid work:
+                  </p>
+                  <ol className="list-decimal pl-5 space-y-0.5">
+                    <li>Requirement fidelity — fully solves the original request, nothing faked or partial.</li>
+                    <li>Code &amp; build quality — no slop / band-aid / silent failures; build clean.</li>
+                    <li>Design &amp; function — walked live on desktop <strong>and</strong> mobile; no dead buttons or layout breaks.</li>
+                  </ol>
+                  <a
+                    href="https://github.com/blaykeelder1-commits/simple-growth-solutions/blob/master/docs/website-edit-review-protocol.md"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-block font-medium underline"
+                  >
+                    Website Edit Review Protocol →
+                  </a>
+                </div>
+              )}
+
               <div>
                 <Label>Deployment Platform</Label>
                 <Select value={deploymentPlatform} onValueChange={setDeploymentPlatform}>
