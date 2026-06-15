@@ -498,9 +498,16 @@ function nextPeriodStart(plan: string): Date {
 }
 
 function mapSquareSubscriptionStatus(status: string): string {
-  // Square statuses: ACTIVE, CANCELED, DEACTIVATED, PAUSED
+  // Square statuses: ACTIVE, CANCELED, DEACTIVATED, PAUSED, PENDING.
   switch (status.toUpperCase()) {
     case "ACTIVE":
+      return "active";
+    // PENDING = the recurring subscription is scheduled but hasn't hit its first
+    // billing date yet. In our flow we deliberately future-date the start by one
+    // period (the payment link already collected and the customer paid for
+    // month 1), so PENDING means "paid and entitled now, recurring starts next
+    // cycle." Treat it as active so the customer isn't locked out for a month.
+    case "PENDING":
       return "active";
     case "PAUSED":
       return "past_due";
