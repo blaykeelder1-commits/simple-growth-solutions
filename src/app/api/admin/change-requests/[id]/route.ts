@@ -8,13 +8,20 @@ import { z } from "zod";
 
 const updateSchema = z.object({
   status: z
-    .enum(["pending", "approved", "in_progress", "completed", "rejected"])
+    .enum(["pending", "review_ready", "approved", "in_progress", "completed", "rejected"])
     .optional(),
   resolution: z.string().optional(),
   // Operator assignment — null clears, string sets. Used by the kanban
   // dispatch board so multiple admins can claim/hand off tickets.
   assigneeId: z.string().nullable().optional(),
+  // Set by Andy when it prepares an autonomous edit awaiting approval.
+  previewUrl: z.string().url().nullable().optional(),
+  agentNote: z.string().nullable().optional(),
 });
+
+// Statuses the CUSTOMER should be emailed about. review_ready/approved are
+// internal hand-offs between Andy and Blayke — the customer never sees them.
+const CUSTOMER_NOTIFY_STATUSES = new Set(["in_progress", "completed", "rejected"]);
 
 // PATCH /api/admin/change-requests/[id] - Update change request status
 export const PATCH = withAdmin(async (req, ctx) => {
@@ -41,17 +48,21 @@ export const PATCH = withAdmin(async (req, ctx) => {
         ...(validatedData.status && { status: validatedData.status }),
         ...(validatedData.resolution && { resolution: validatedData.resolution }),
         ...(validatedData.assigneeId !== undefined && { assigneeId: validatedData.assigneeId }),
+        ...(validatedData.previewUrl !== undefined && { previewUrl: validatedData.previewUrl }),
+        ...(validatedData.agentNote !== undefined && { agentNote: validatedData.agentNote }),
       },
       include: {
         project: { select: { id: true, projectName: true, organizationId: true } },
       },
     });
 
-    // Notify the customer only if status actually changed
+    // Notify the customer only on customer-visible status changes. Andy's
+    // internal hand-offs (review_ready, approved) must never email the customer.
     if (
       validatedData.status &&
       changeRequest.project &&
-      oldChangeRequest.status !== validatedData.status
+      oldChangeRequest.status !== validatedData.status &&
+      CUSTOMER_NOTIFY_STATUSES.has(validatedData.status)
     ) {
       prisma.user.findUnique({
         where: { id: changeRequest.requesterId },

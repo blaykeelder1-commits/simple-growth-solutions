@@ -471,9 +471,17 @@ model ChangeRequest {
   type        String @default("feature") // feature, bug, content, design
   priority    String @default("normal") // low, normal, high, urgent
 
-  // Status: pending, awaiting_payment, approved, in_progress, completed, rejected
+  // Status: pending, awaiting_payment, review_ready, approved, in_progress, completed, rejected
+  // review_ready = Andy prepared a preview and it's awaiting Blayke's approval
+  // (internal — the customer is NOT emailed on this or `approved`).
   status     String  @default("pending")
   resolution String? @db.Text
+
+  // Andy autonomous-fulfillment fields. Set when the agent prepares an edit:
+  // previewUrl = the deployed preview to review; agentNote = its tri-lens summary
+  // of what it changed and why. NULL for human-handled tickets.
+  previewUrl String? @map("preview_url")
+  agentNote  String? @db.Text @map("agent_note")
 
   // SLA + rush
   isRush       Boolean       @default(false) @map("is_rush")
