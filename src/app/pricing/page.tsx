@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -102,46 +101,18 @@ const websitePlans = [
   },
 ];
 
-// $1 end-to-end Square test card. Only shown on /pricing?test=1 so real
-// customers never see it. Routes through the exact same Square checkout path.
-const testPlan: (typeof websitePlans)[number] = {
-  name: "Square Test ($1)",
-  description: "Internal end-to-end Square checkout test. Charges $1 to verify payments are firing.",
-  price: "$1",
-  priceCents: 100,
-  priceAnnual: "$1",
-  priceAnnualCents: 100,
-  icon: Zap,
-  color: "text-emerald-600",
-  bgColor: "bg-emerald-50",
-  features: [
-    "Real Square payment link",
-    "Verifies checkout → webhook → subscription → emails",
-    "Internal testing only — not a customer plan",
-  ],
-  cta: "Run $1 Test",
-  href: "#",
-  planKey: "website_test",
-  popular: false,
-};
-
 function PlanCard({
   plan,
   billing,
-  onCheckout,
-  loadingPlan,
   foundingCents,
   introMonths,
 }: {
   plan: (typeof websitePlans)[number];
   billing: "monthly" | "annual";
-  onCheckout: (planKey: string) => void;
-  loadingPlan: string | null;
   foundingCents?: number;
   introMonths?: number;
 }) {
-  const isTest = plan.planKey === "website_test";
-  const annual = billing === "annual" && !isTest;
+  const annual = billing === "annual";
 
   // Founding rate only applies to monthly (annual is already discounted).
   const hasFounding =
@@ -154,13 +125,12 @@ function PlanCard({
   const months = introMonths ?? 3;
 
   const displayPrice = annual ? plan.priceAnnual : plan.price;
-  const period = annual ? "/year" : isTest ? " one-time test" : "/month";
+  const period = annual ? "/year" : "/month";
   // Annual savings vs paying 12 months.
   const annualSaveCents = plan.priceCents * 12 - plan.priceAnnualCents;
   const perMonthAnnual = `$${Math.round(plan.priceAnnualCents / 12 / 100)}`;
 
-  // Where the button goes: real plans start with the free build (no card);
-  // the $1 test card runs the live Square checkout immediately.
+  // Real plans start with the free build (no card up front).
   const buildHref = `${plan.href}${annual ? "&billing=annual" : ""}`;
 
   return (
@@ -228,54 +198,27 @@ function PlanCard({
       </CardContent>
 
       <CardFooter className="flex-col items-stretch gap-2">
-        {isTest ? (
+        <Link href={buildHref} className="w-full">
           <Button
-            className="w-full"
-            variant="outline"
-            onClick={() => onCheckout(plan.planKey!)}
-            disabled={loadingPlan === plan.planKey}
+            className={`w-full ${
+              plan.popular ? "bg-purple-500 hover:bg-purple-600 text-white" : ""
+            }`}
+            variant={plan.popular ? "default" : "outline"}
           >
-            {loadingPlan === plan.planKey ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Loading...
-              </>
-            ) : (
-              <>
-                {plan.cta}
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </>
-            )}
+            {plan.cta}
+            <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
-        ) : (
-          <>
-            <Link href={buildHref} className="w-full">
-              <Button
-                className={`w-full ${
-                  plan.popular ? "bg-purple-500 hover:bg-purple-600 text-white" : ""
-                }`}
-                variant={plan.popular ? "default" : "outline"}
-              >
-                {plan.cta}
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </Link>
-            <p className="text-center text-xs text-gray-400">
-              Free build first — no card until you go live.
-            </p>
-          </>
-        )}
+        </Link>
+        <p className="text-center text-xs text-gray-400">
+          Free build first — no card until you go live.
+        </p>
       </CardFooter>
     </Card>
   );
 }
 
 function PricingContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const { status } = useSession();
-  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
 
   // Founding-rate promo code.
@@ -338,57 +281,14 @@ function PricingContent() {
     }
   }, []);
 
-  const handleCheckout = useCallback(
-    async (planKey: string, code?: string | null) => {
-      const promo = code ?? appliedCode;
-      if (status !== "authenticated") {
-        const cb = `/pricing?plan=${planKey}${promo ? `&promo=${encodeURIComponent(promo)}` : ""}`;
-        router.push(`/login?callbackUrl=${encodeURIComponent(cb)}`);
-        return;
-      }
-
-      setLoadingPlan(planKey);
-      setCheckoutError(null);
-
-      try {
-        const response = await fetch("/api/billing/checkout", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(promo ? { plan: planKey, promoCode: promo } : { plan: planKey }),
-        });
-
-        const data = await response.json();
-
-        if (data.success && data.url) {
-          window.location.href = data.url;
-        } else {
-          setCheckoutError(data.message || "We couldn't start checkout. Please try again.");
-          setLoadingPlan(null);
-        }
-      } catch (error) {
-        console.error("Checkout error:", error);
-        setCheckoutError("We couldn't start checkout. Please check your connection and try again.");
-        setLoadingPlan(null);
-      }
-    },
-    [status, router, appliedCode]
-  );
-
   useEffect(() => {
-    const planFromUrl = searchParams.get("plan");
     const promoFromUrl = searchParams.get("promo");
     if (promoFromUrl && !appliedCode) {
       setPromoInput(promoFromUrl);
       void applyPromo(promoFromUrl);
     }
-    // Only the internal $1 test auto-checkouts on return from login. Real plans
-    // now start with the free build (questionnaire) — no card up front.
-    if (planFromUrl === "website_test" && status === "authenticated") {
-      router.replace("/pricing?test=1");
-      handleCheckout(planFromUrl, promoFromUrl);
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, searchParams, router, handleCheckout]);
+  }, [searchParams]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -475,23 +375,12 @@ function PricingContent() {
               )}
             </div>
 
-            {checkoutError && (
-              <div className="max-w-md mx-auto mb-8 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700 text-center">
-                {checkoutError}
-              </div>
-            )}
-
             <div className="grid gap-8 md:grid-cols-3 max-w-5xl mx-auto">
-              {(searchParams.get("test") === "1"
-                ? [...websitePlans, testPlan]
-                : websitePlans
-              ).map((plan) => (
+              {websitePlans.map((plan) => (
                 <PlanCard
                   key={plan.name}
                   plan={plan}
                   billing={billing}
-                  onCheckout={handleCheckout}
-                  loadingPlan={loadingPlan}
                   foundingCents={foundingByPlan[plan.planKey]}
                   introMonths={introMonths}
                 />

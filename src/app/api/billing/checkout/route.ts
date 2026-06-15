@@ -15,8 +15,6 @@ import { z } from "zod";
 const checkoutSchema = z.object({
   promoCode: z.string().trim().min(1).max(40).optional(),
   plan: z.enum([
-    // $1 Square connectivity test
-    "website_test",
     // Website tiers (monthly)
     "website_managed",
     "website_pro",
@@ -42,7 +40,6 @@ const checkoutSchema = z.object({
 // Plans that route through Square (the customer-facing front-half of SGS).
 // All other plans still go through the legacy Stripe path.
 const SQUARE_PLAN_KEYS = new Set<string>([
-  "website_test",
   "website_managed",
   "website_pro",
   "website_premium",

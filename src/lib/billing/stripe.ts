@@ -10,18 +10,6 @@ export const stripe = process.env.STRIPE_SECRET_KEY
 
 // Plan configurations — matches business analysis pricing
 export const PLANS = {
-  // ── $1 Square connectivity test ───────────────────────────────────────
-  // Routes through Square exactly like a real website plan, but charges $1.
-  // Only visible on /pricing?test=1 and only provisions a subscription if
-  // SQUARE_PLAN_WEBSITE_TEST_ID is set. Remove once go-live is confirmed.
-  website_test: {
-    name: "Square Test ($1)",
-    priceId: null,
-    amount: 100, // $1.00
-    interval: "month" as const,
-    features: ["End-to-end Square checkout test — charges $1"],
-  },
-
   // ── Website Management Tiers ──────────────────────────────────────────
   website_managed: {
     name: "Managed Website",

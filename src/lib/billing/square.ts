@@ -33,7 +33,6 @@ export interface SgsSquareConfig {
   environment: SquareEnv;
   webhookKey: string | null;
   planIds: {
-    website_test: string | null;
     website_managed: string | null;
     website_pro: string | null;
     website_premium: string | null;
@@ -54,7 +53,6 @@ export function getSgsSquareConfig(): SgsSquareConfig | null {
     environment,
     webhookKey: process.env.SQUARE_WEBHOOK_SIGNATURE_KEY || null,
     planIds: {
-      website_test: process.env.SQUARE_PLAN_WEBSITE_TEST_ID || null,
       website_managed: process.env.SQUARE_PLAN_WEBSITE_MANAGED_ID || null,
       website_pro: process.env.SQUARE_PLAN_WEBSITE_PRO_ID || null,
       website_premium: process.env.SQUARE_PLAN_WEBSITE_PREMIUM_ID || null,

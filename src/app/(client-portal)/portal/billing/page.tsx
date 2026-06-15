@@ -36,6 +36,10 @@ const planInfo: Record<string, { name: string; icon: React.ElementType; color: s
   website_managed: { name: "Managed Website", icon: Zap, color: "from-blue-500 to-indigo-600" },
   website_pro: { name: "Managed Pro", icon: Zap, color: "from-purple-500 to-indigo-600" },
   website_premium: { name: "Managed Premium", icon: Zap, color: "from-amber-500 to-orange-600" },
+  // Annual variants
+  website_managed_annual: { name: "Managed Website (Annual)", icon: Zap, color: "from-blue-500 to-indigo-600" },
+  website_pro_annual: { name: "Managed Pro (Annual)", icon: Zap, color: "from-purple-500 to-indigo-600" },
+  website_premium_annual: { name: "Managed Premium (Annual)", icon: Zap, color: "from-amber-500 to-orange-600" },
   // AR
   cashflow_ai: { name: "AR Collection (8%)", icon: BarChart3, color: "from-emerald-500 to-teal-600" },
   ar_proactive: { name: "Proactive AR", icon: BarChart3, color: "from-emerald-500 to-green-600" },
@@ -245,7 +249,10 @@ export default function BillingPage() {
         <div className="grid gap-5">
           {activeSubscriptions.map((subscription) => {
             const plan = planInfo[subscription.plan] || {
-              name: subscription.plan,
+              // Never show a raw plan key — humanize anything unmapped.
+              name: subscription.plan
+                .replace(/_/g, " ")
+                .replace(/\b\w/g, (c) => c.toUpperCase()),
               icon: CreditCard,
               color: "from-gray-500 to-gray-600",
             };
