@@ -202,19 +202,31 @@ async function handlePaymentEvent(event: SquareEvent) {
           cardId,
           planVariationId,
           startDate: nextPeriodStart(subscription.plan).toISOString().slice(0, 10),
+          // Stable key so duplicate payment events (created + updated + retries)
+          // return the SAME Square subscription instead of creating duplicates.
+          idempotencyKey: `sub-${subscription.id}`,
         });
 
-        await prisma.subscription.update({
-          where: { id: subscription.id },
+        // Atomically claim the activation: only the FIRST delivery flips
+        // awaiting_payment → active. Duplicate deliveries get count 0 and bail
+        // out before re-running the journey update and (critically) re-sending
+        // the welcome + internal emails.
+        const claimed = await prisma.subscription.updateMany({
+          where: { id: subscription.id, status: "awaiting_payment" },
           data: {
             status: "active",
-            squareCardId: payment.cardId,
+            squareCardId: cardId,
             squareSubscriptionId: sub.id,
             squarePlanVariationId: planVariationId,
             currentPeriodStart: new Date(),
             currentPeriodEnd: nextPeriodStart(subscription.plan),
           },
         });
+        if (claimed.count === 0) {
+          // Already activated by a concurrent/duplicate event — Square deduped
+          // the subscription via the idempotency key, so just stop here.
+          return;
+        }
 
         // Count the founding-code redemption now that the sub is live. Bounded
         // by maxRedemptions at validation time; this is the authoritative tally.

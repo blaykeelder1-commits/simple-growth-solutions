@@ -404,6 +404,11 @@ export interface CreateSubscriptionParams {
   cardId: string;
   planVariationId: string;
   startDate?: string; // YYYY-MM-DD; defaults to today
+  // Stable idempotency key. Square sends a payment event more than once
+  // (created + updated + retries); keying off the local subscription id makes
+  // Square return the SAME subscription for every duplicate call instead of
+  // creating a new one each time. Falls back to a unique key when omitted.
+  idempotencyKey?: string;
 }
 
 export interface SquareSubscription {
@@ -430,7 +435,9 @@ export async function createSubscription(
   }>(cfg, "/subscriptions", {
     method: "POST",
     body: {
-      idempotency_key: `sub-${params.customerId}-${params.planVariationId}-${Date.now()}`,
+      idempotency_key:
+        params.idempotencyKey ||
+        `sub-${params.customerId}-${params.planVariationId}-${Date.now()}`,
       location_id: cfg.locationId,
       plan_variation_id: params.planVariationId,
       customer_id: params.customerId,
