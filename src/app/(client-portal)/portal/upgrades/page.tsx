@@ -133,7 +133,7 @@ export default function UpgradesPage() {
                 {upgrade.status === "coming_soon" ? (
                   <Button variant="outline" className="w-full" disabled>
                     <Lock className="h-3.5 w-3.5 mr-1.5" />
-                    Notify Me When Live
+                    Coming Soon
                   </Button>
                 ) : (
                   <Link href="/portal/billing">

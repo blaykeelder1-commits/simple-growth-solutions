@@ -1,7 +1,6 @@
 "use client";
 
-import { useSession } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -14,19 +13,69 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, User, Building, Bell } from "lucide-react";
 
+interface Settings {
+  name: string;
+  email: string;
+  organizationName: string;
+  industry: string;
+}
+
 export default function SettingsPage() {
-  const { data: session } = useSession();
+  const [form, setForm] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/portal/settings");
+        const data = await res.json();
+        if (data.success) setForm(data.settings);
+        else setError("Couldn't load your settings.");
+      } catch {
+        setError("Couldn't load your settings.");
+      }
+    })();
+  }, []);
 
   const handleSave = async () => {
+    if (!form) return;
     setLoading(true);
-    // Simulate save
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setLoading(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    setError(null);
+    setSaved(false);
+    try {
+      const res = await fetch("/api/portal/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          organizationName: form.organizationName,
+          industry: form.industry,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || "Save failed");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save your changes.");
+    } finally {
+      setLoading(false);
+    }
   };
+
+  if (!form) {
+    return (
+      <div className="flex items-center justify-center py-20 text-gray-500">
+        {error ? (
+          <p className="text-red-600">{error}</p>
+        ) : (
+          <Loader2 className="h-6 w-6 animate-spin" />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -34,6 +83,12 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
         <p className="text-gray-600">Manage your account and preferences</p>
       </div>
+
+      {error && (
+        <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
       {/* Profile settings */}
       <Card>
@@ -49,28 +104,19 @@ export default function SettingsPage() {
             <Label htmlFor="name">Full Name</Label>
             <Input
               id="name"
-              defaultValue={session?.user?.name || ""}
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
               placeholder="Your name"
             />
           </div>
 
           <div>
             <Label htmlFor="email">Email Address</Label>
-            <Input
-              id="email"
-              type="email"
-              defaultValue={session?.user?.email || ""}
-              disabled
-            />
+            <Input id="email" type="email" value={form.email} disabled />
             <p className="text-sm text-gray-500 mt-1">
               Contact support to change your email address
             </p>
           </div>
-
-          <Button onClick={handleSave} disabled={loading}>
-            {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            {saved ? "Saved!" : "Save Changes"}
-          </Button>
         </CardContent>
       </Card>
 
@@ -86,94 +132,74 @@ export default function SettingsPage() {
         <CardContent className="space-y-4">
           <div>
             <Label htmlFor="orgName">Organization Name</Label>
-            <Input id="orgName" placeholder="Your business name" />
+            <Input
+              id="orgName"
+              value={form.organizationName}
+              onChange={(e) =>
+                setForm({ ...form, organizationName: e.target.value })
+              }
+              placeholder="Your business name"
+            />
           </div>
 
           <div>
             <Label htmlFor="industry">Industry</Label>
-            <Input id="industry" placeholder="e.g., Restaurant, Retail" />
+            <Input
+              id="industry"
+              value={form.industry}
+              onChange={(e) => setForm({ ...form, industry: e.target.value })}
+              placeholder="e.g., Restaurant, Retail"
+            />
           </div>
-
-          <div>
-            <Label htmlFor="timezone">Timezone</Label>
-            <Input id="timezone" defaultValue="America/New_York" />
-          </div>
-
-          <Button onClick={handleSave} disabled={loading}>
-            {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            {saved ? "Saved!" : "Save Changes"}
-          </Button>
         </CardContent>
       </Card>
 
-      {/* Notification settings */}
+      <div className="flex items-center gap-3">
+        <Button onClick={handleSave} disabled={loading}>
+          {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+          {saved ? "Saved!" : "Save Changes"}
+        </Button>
+        {saved && <span className="text-sm text-emerald-600">Your changes are saved.</span>}
+      </div>
+
+      {/* Notifications — honest: these are how we reach you, not fake toggles. */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <Bell className="h-5 w-5 text-gray-500" />
             <CardTitle>Notifications</CardTitle>
           </div>
-          <CardDescription>How you receive updates</CardDescription>
+          <CardDescription>How we keep you updated</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium">Project Updates</p>
-                <p className="text-sm text-gray-500">
-                  Get notified when your project status changes
-                </p>
-              </div>
-              <Button variant="outline" size="sm">
-                Enabled
-              </Button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium">Security Alerts</p>
-                <p className="text-sm text-gray-500">
-                  Receive alerts for security issues
-                </p>
-              </div>
-              <Button variant="outline" size="sm">
-                Enabled
-              </Button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium">Marketing Updates</p>
-                <p className="text-sm text-gray-500">
-                  Tips and news about our services
-                </p>
-              </div>
-              <Button variant="outline" size="sm">
-                Disabled
-              </Button>
-            </div>
-          </div>
+          <p className="text-sm text-gray-600">
+            We email you at <strong>{form.email}</strong> about your project
+            status, change requests, and billing. To adjust what you receive,
+            just reply to any of our emails or contact support.
+          </p>
         </CardContent>
       </Card>
 
-      {/* Danger zone */}
+      {/* Account — deletion is handled by support so data removal is verified. */}
       <Card className="border-red-200">
         <CardHeader>
-          <CardTitle className="text-red-600">Danger Zone</CardTitle>
-          <CardDescription>Irreversible actions</CardDescription>
+          <CardTitle className="text-red-600">Delete Account</CardTitle>
+          <CardDescription>
+            Permanently delete your account and all associated data
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">Delete Account</p>
-              <p className="text-sm text-gray-500">
-                Permanently delete your account and all data
-              </p>
-            </div>
-            <Button variant="destructive" size="sm">
-              Delete Account
-            </Button>
-          </div>
+          <p className="text-sm text-gray-600">
+            Account deletion is permanent and removes your projects, requests,
+            and billing history. To delete your account, email{" "}
+            <a
+              href="mailto:hello@simple-growth-solution.com?subject=Delete%20my%20account"
+              className="text-red-600 font-medium hover:underline"
+            >
+              hello@simple-growth-solution.com
+            </a>{" "}
+            and we&apos;ll confirm and process it within 2 business days.
+          </p>
         </CardContent>
       </Card>
     </div>
