@@ -93,6 +93,11 @@ export const GET = withAdmin(async (req, _ctx, session) => {
         isRush: r.isRush,
         slaDueAt: r.slaDueAt,
         createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+        // Andy autonomous-fulfillment fields (null for human-handled tickets).
+        previewUrl: r.previewUrl,
+        agentNote: r.agentNote,
+        resolution: r.resolution,
         project: {
           id: r.project.id,
           name: r.project.projectName,
