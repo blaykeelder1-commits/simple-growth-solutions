@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Menu, X, Sparkles } from "lucide-react";
+import { Menu, X, Sparkles, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
 export function Header() {
@@ -53,7 +53,14 @@ export function Header() {
             href="/login"
             className="text-sm font-medium text-gray-600 transition-colors hover:text-blue-600"
           >
-            Sign In
+            Customer Login
+          </Link>
+          <Link
+            href="/admin/login"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 transition-colors hover:text-indigo-600"
+          >
+            <ShieldCheck className="h-4 w-4" />
+            Staff Login
           </Link>
           <Link href="/questionnaire">
             <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-md shadow-blue-500/20 transition-all hover:shadow-lg hover:shadow-purple-500/25">
@@ -116,7 +123,15 @@ export function Header() {
               className="text-sm font-medium text-gray-600 transition-colors hover:text-blue-600 py-2"
               onClick={() => setMobileMenuOpen(false)}
             >
-              Sign In
+              Customer Login
+            </Link>
+            <Link
+              href="/admin/login"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 transition-colors hover:text-indigo-600 py-2"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <ShieldCheck className="h-4 w-4" />
+              Staff Login
             </Link>
             <Link href="/questionnaire" onClick={() => setMobileMenuOpen(false)}>
               <Button className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
