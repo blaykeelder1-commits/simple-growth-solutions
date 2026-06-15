@@ -56,6 +56,31 @@ export const GET = withAdmin(async (req, _ctx, session) => {
       ],
     });
 
+    // Attach each org's active managed plan so the board can show the tier
+    // (Premium/Pro tickets matter more than Managed at the same SLA).
+    const orgIds = Array.from(
+      new Set(
+        requests
+          .map((r) => r.project.organization?.id)
+          .filter((id): id is string => Boolean(id))
+      )
+    );
+    const subs = orgIds.length
+      ? await prisma.subscription.findMany({
+          where: {
+            organizationId: { in: orgIds },
+            status: { in: ["active", "trialing"] },
+            plan: { startsWith: "website_" },
+          },
+          select: { organizationId: true, plan: true },
+          orderBy: { createdAt: "desc" },
+        })
+      : [];
+    const planByOrg = new Map<string, string>();
+    for (const s of subs) {
+      if (!planByOrg.has(s.organizationId)) planByOrg.set(s.organizationId, s.plan);
+    }
+
     return NextResponse.json({
       success: true,
       changeRequests: requests.map((r) => ({
@@ -73,6 +98,9 @@ export const GET = withAdmin(async (req, _ctx, session) => {
           name: r.project.projectName,
           organizationName: r.project.organization?.name ?? null,
         },
+        plan: r.project.organization
+          ? planByOrg.get(r.project.organization.id) ?? null
+          : null,
         assignee: r.assignee
           ? { id: r.assignee.id, name: r.assignee.name, email: r.assignee.email }
           : null,

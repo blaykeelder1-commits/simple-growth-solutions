@@ -29,6 +29,7 @@ interface ChangeRequest {
   isRush: boolean;
   slaDueAt: string | null;
   createdAt: string;
+  plan: string | null;
   project: { id: string; name: string; organizationName: string | null };
   assignee: { id: string; name: string | null; email: string } | null;
   requester: { id: string; name: string | null; email: string } | null;
@@ -47,6 +48,21 @@ const PRIORITY_COLORS: Record<string, string> = {
   normal: "bg-gray-100 text-gray-700 border-gray-200",
   low: "bg-gray-50 text-gray-500 border-gray-200",
 };
+
+// Customer plan tier — Premium/Pro tickets carry tighter SLAs, so surface the
+// tier at a glance. Returns null for customers with no managed plan.
+function planBadge(plan: string | null): { label: string; className: string } | null {
+  if (!plan) return null;
+  const annual = plan.endsWith("_annual");
+  const suffix = annual ? " · yr" : "";
+  if (plan.startsWith("website_premium"))
+    return { label: `Premium${suffix}`, className: "bg-amber-100 text-amber-800 border-amber-200" };
+  if (plan.startsWith("website_pro"))
+    return { label: `Pro${suffix}`, className: "bg-purple-100 text-purple-700 border-purple-200" };
+  if (plan.startsWith("website_managed"))
+    return { label: `Managed${suffix}`, className: "bg-blue-50 text-blue-700 border-blue-200" };
+  return null;
+}
 
 function slaInfo(slaDueAt: string | null) {
   if (!slaDueAt) return { label: "No SLA", tone: "gray" as const, ms: Infinity };
@@ -242,6 +258,7 @@ export default function DispatchPage() {
               )}
               {byColumn[col.key].map((r) => {
                 const sla = slaInfo(r.slaDueAt);
+                const tier = planBadge(r.plan);
                 return (
                   <div
                     key={r.id}
@@ -272,6 +289,11 @@ export default function DispatchPage() {
                         {r.description}
                       </p>
                       <div className="flex items-center gap-1.5 flex-wrap">
+                        {tier && (
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold border ${tier.className}`}>
+                            {tier.label}
+                          </span>
+                        )}
                         <span className={`px-2 py-0.5 rounded text-xs font-medium border ${PRIORITY_COLORS[r.priority] || PRIORITY_COLORS.normal}`}>
                           {r.priority}
                         </span>
@@ -435,6 +457,13 @@ function RequestDetailModal({
                 ))}
               </select>
             </Meta>
+            {planBadge(request.plan) && (
+              <Meta label="Plan">
+                <span className={`inline-block px-2 py-0.5 rounded font-semibold border ${planBadge(request.plan)!.className}`}>
+                  {planBadge(request.plan)!.label}
+                </span>
+              </Meta>
+            )}
             <Meta label="Priority">
               <span className={`inline-block px-2 py-0.5 rounded font-medium border ${PRIORITY_COLORS[request.priority] || PRIORITY_COLORS.normal}`}>
                 {request.priority}
