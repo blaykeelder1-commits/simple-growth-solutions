@@ -368,10 +368,7 @@ function SignupForm() {
                 </form>
 
                 <p className="mt-5 text-center text-xs text-gray-500">
-                  By signing up, you agree to our{" "}
-                  <Link href="/questionnaire" className="underline hover:text-gray-700">Terms of Service</Link>
-                  {" "}and{" "}
-                  <Link href="/questionnaire" className="underline hover:text-gray-700">Privacy Policy</Link>
+                  By signing up, you agree to our Terms of Service and Privacy Policy.
                 </p>
               </div>
             </div>

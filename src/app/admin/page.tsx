@@ -206,7 +206,7 @@ export default function AdminCommandCenter() {
             cta="Open Dispatch Board"
           />
           <ActionCard
-            href="/admin?filter=hot"
+            href="/admin#lead-pipeline"
             icon={Flame}
             iconBg="bg-orange-100"
             iconColor="text-orange-600"
@@ -275,7 +275,7 @@ export default function AdminCommandCenter() {
       </section>
 
       {/* ─────────────────── LEAD PIPELINE (existing, demoted) ─────────────────── */}
-      <section>
+      <section id="lead-pipeline" className="scroll-mt-20">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
             Lead pipeline

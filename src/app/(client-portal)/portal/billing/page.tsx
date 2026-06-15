@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Card,
@@ -20,6 +20,7 @@ import {
   Loader2,
   Sparkles,
   AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 
 interface Subscription {
@@ -104,6 +105,7 @@ export default function BillingPage() {
   const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
   const [startingPlan, setStartingPlan] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
+  const [justPaid, setJustPaid] = useState(false);
 
   const handleStartPlan = async (planKey: string) => {
     setStartingPlan(planKey);
@@ -126,22 +128,35 @@ export default function BillingPage() {
     setStartingPlan(null);
   };
 
-  useEffect(() => {
-    async function fetchSubscriptions() {
-      try {
-        const res = await fetch("/api/billing/subscriptions");
-        if (!res.ok) throw new Error("Failed to load subscriptions");
-        const data = await res.json();
-        setSubscriptions(data.subscriptions || []);
-      } catch {
-        setError("Unable to load your billing information. Please try again.");
-      } finally {
-        setLoading(false);
-      }
+  const fetchSubscriptions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/billing/subscriptions");
+      if (!res.ok) throw new Error("Failed to load subscriptions");
+      const data = await res.json();
+      setSubscriptions(data.subscriptions || []);
+    } catch {
+      setError("Unable to load your billing information. Please try again.");
+    } finally {
+      setLoading(false);
     }
-
-    fetchSubscriptions();
   }, []);
+
+  useEffect(() => {
+    fetchSubscriptions();
+  }, [fetchSubscriptions]);
+
+  // Acknowledge a successful Square checkout redirect
+  // (?success=true&plan=...). The webhook provisions the recurring subscription
+  // a moment after the redirect lands, so confirm receipt immediately and
+  // re-poll once so the now-active plan shows up without a manual reload.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("success") === "true") {
+      setJustPaid(true);
+      const t = setTimeout(() => fetchSubscriptions(), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [fetchSubscriptions]);
 
   const handleManageBilling = async () => {
     setPortalLoading(true);
@@ -216,6 +231,22 @@ export default function BillingPage() {
           </Button>
         )}
       </div>
+
+      {/* Post-checkout confirmation — the webhook activates the plan a moment
+          after Square redirects back here, so reassure the customer immediately. */}
+      {justPaid && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex items-start gap-3">
+          <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+          <div className="text-sm">
+            <p className="font-semibold text-emerald-900">Payment received</p>
+            <p className="text-emerald-800 mt-0.5">
+              We&apos;re activating your plan now — this can take a moment. A
+              confirmation email is on its way, and your subscription will appear
+              here shortly.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Square portal message */}
       {portalMessage && (

@@ -36,7 +36,13 @@ export async function middleware(request: NextRequest) {
       // everyone else goes to the customer-branded sign-in.
       const loginPath = isAdminRoute(pathname) ? "/admin/login" : "/login";
       const loginUrl = new URL(loginPath, request.url);
-      loginUrl.searchParams.set("callbackUrl", request.url);
+      // Use the relative path (not request.url) for callbackUrl: behind Render's
+      // proxy request.url's host is the internal localhost:10000, which would
+      // otherwise leak into the sign-in URL. The login pages' safeCallback()
+      // resolves a relative path against the real origin, preserving deep-link
+      // intent (e.g. returning to /admin/dispatch after sign-in).
+      const callbackPath = request.nextUrl.pathname + request.nextUrl.search;
+      loginUrl.searchParams.set("callbackUrl", callbackPath);
       return NextResponse.redirect(loginUrl);
     }
 

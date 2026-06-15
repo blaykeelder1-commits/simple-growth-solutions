@@ -158,8 +158,10 @@
   }
 
   /* Fade in up animation */
+  /* `both` fill-mode holds the start (hidden) state during animation-delay so
+     staggered elements don't flash visible → snap hidden → animate (jank). */
   .fade-in-up {
-    animation: fadeInUp 0.8s ease-out forwards;
+    animation: fadeInUp 0.8s ease-out both;
   }
 
   @keyframes fadeInUp {
@@ -175,7 +177,7 @@
 
   /* Fade in scale animation */
   .fade-in-scale {
-    animation: fadeInScale 0.6s ease-out forwards;
+    animation: fadeInScale 0.6s ease-out both;
   }
 
   @keyframes fadeInScale {
@@ -191,7 +193,7 @@
 
   /* Slide in from left */
   .slide-in-left {
-    animation: slideInLeft 0.7s ease-out forwards;
+    animation: slideInLeft 0.7s ease-out both;
   }
 
   @keyframes slideInLeft {
@@ -207,7 +209,7 @@
 
   /* Slide in from right */
   .slide-in-right {
-    animation: slideInRight 0.7s ease-out forwards;
+    animation: slideInRight 0.7s ease-out both;
   }
 
   @keyframes slideInRight {

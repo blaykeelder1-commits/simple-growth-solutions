@@ -21,19 +21,39 @@ export function ScrollAnimation({
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    // Never gate content behind JS for users who can't run the observer or
+    // prefer no motion — reveal immediately in those cases.
+    const prefersReduced = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+    if (prefersReduced || typeof IntersectionObserver === "undefined") {
+      setIsVisible(true);
+      return;
+    }
+
+    // Already on screen at mount (above the fold, or a deep-link/hash jump into
+    // this section): show right away so it's never left blank waiting on scroll.
+    const rect = el.getBoundingClientRect();
+    if (rect.top < window.innerHeight && rect.bottom > 0) {
+      setIsVisible(true);
+      return;
+    }
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
           setIsVisible(true);
-          observer.unobserve(entry.target);
+          observer.disconnect();
         }
       },
-      { threshold }
+      // Trigger a touch before the element fully enters view for a smoother reveal.
+      { threshold, rootMargin: "0px 0px -10% 0px" }
     );
 
-    if (ref.current) {
-      observer.observe(ref.current);
-    }
+    observer.observe(el);
 
     return () => observer.disconnect();
   }, [threshold]);

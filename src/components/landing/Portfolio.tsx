@@ -123,6 +123,11 @@ export function Portfolio() {
                     width={800}
                     height={500}
                     sizes="(max-width: 768px) 100vw, 50vw"
+                    // Serve the static file directly. The on-the-fly Next image
+                    // optimizer is unreliable on our Render tier (502s/timeouts
+                    // under load → broken images), and these screenshots are
+                    // already card-sized, so optimization buys little here.
+                    unoptimized
                     className="aspect-[16/10] w-full object-cover object-top"
                   />
                 ) : (
