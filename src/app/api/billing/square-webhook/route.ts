@@ -6,6 +6,7 @@ import {
   verifyWebhookSignature,
   getPayment,
   createSubscription,
+  createCardOnFile,
 } from "@/lib/billing/square";
 import {
   foundingPlanVariationId,
@@ -17,6 +18,7 @@ import {
   sendSubscriptionActivatedEmail,
   sendPaymentFailedEmail,
   sendNewPaidCustomerInternalEmail,
+  sendProvisioningStuckInternalEmail,
 } from "@/lib/email/lifecycle-emails";
 import { apiLogger } from "@/lib/logger";
 
@@ -147,8 +149,27 @@ async function handlePaymentEvent(event: SquareEvent) {
       orderBy: { createdAt: "desc" },
     });
 
-    if (subscription && payment.cardId) {
-      // Provision the recurring Square Subscription against the saved card.
+    if (subscription) {
+      // Provision the recurring Square Subscription against a saved card.
+      // Payment Links capture the card for the first charge but do NOT persist a
+      // reusable card, so payment.cardId is null here — store the card-on-file
+      // explicitly before we can bill the subscription against it.
+      let cardId = payment.cardId;
+      if (!cardId && payment.customerId) {
+        try {
+          const saved = await createCardOnFile(cfg, {
+            paymentId: payment.id,
+            customerId: payment.customerId,
+          });
+          cardId = saved.id;
+        } catch (err) {
+          apiLogger.error(
+            { err, paymentId: payment.id, subscriptionId: subscription.id },
+            "Failed to store card-on-file after first payment"
+          );
+        }
+      }
+
       // Founding subs (created with a promo code) bill against the founding
       // plan variation so the discounted price persists every month.
       const isFounding = !!subscription.promoCodeId;
@@ -156,10 +177,15 @@ async function handlePaymentEvent(event: SquareEvent) {
         isFounding && isWebsitePlan(subscription.plan)
           ? foundingPlanVariationId(subscription.plan)
           : pickPlanVariationId(subscription.plan);
-      if (!planVariationId) {
-        apiLogger.error(
-          { plan: subscription.plan, founding: isFounding },
-          "No Square plan variation ID configured for plan"
+
+      // LOUD FAIL: payment captured but we cannot provision (no stored card or
+      // no plan variation). Never strand the customer silently behind a success
+      // page — alert ops and leave the sub in awaiting_payment for recovery.
+      if (!cardId || !planVariationId) {
+        await alertProvisioningStuck(
+          subscription,
+          payment,
+          !cardId ? "card_not_stored" : "missing_plan_variation"
         );
         return;
       }
@@ -173,7 +199,7 @@ async function handlePaymentEvent(event: SquareEvent) {
         // is the first founding month.
         const sub = await createSubscription(cfg, {
           customerId: payment.customerId!,
-          cardId: payment.cardId,
+          cardId,
           planVariationId,
           startDate: nextPeriodStart(subscription.plan).toISOString().slice(0, 10),
         });
@@ -292,6 +318,7 @@ async function handlePaymentEvent(event: SquareEvent) {
         }
       } catch (err) {
         apiLogger.error({ err }, "Failed to provision Square subscription after first payment");
+        await alertProvisioningStuck(subscription, payment, "square_subscription_error");
       }
       return;
     }
@@ -326,6 +353,50 @@ async function handlePaymentEvent(event: SquareEvent) {
         );
       }
     }
+  }
+}
+
+// Anti-silent-failure backstop: a first payment landed but we couldn't turn it
+// into an active subscription. Log it AND email ops so the paid-but-stranded
+// customer gets recovered instead of sitting behind a "success" page forever.
+async function alertProvisioningStuck(
+  subscription: {
+    id: string;
+    organizationId: string;
+    plan: string;
+    priceMonthly: number;
+  },
+  payment: { id: string; totalCents?: number },
+  reason: string
+) {
+  apiLogger.error(
+    { subscriptionId: subscription.id, paymentId: payment.id, reason },
+    "First payment captured but subscription could NOT be provisioned"
+  );
+  try {
+    const owner =
+      (await prisma.user.findFirst({
+        where: { organizationId: subscription.organizationId, role: "owner" },
+        select: { email: true },
+      })) ||
+      (await prisma.user.findFirst({
+        where: { organizationId: subscription.organizationId },
+        select: { email: true },
+      }));
+    const org = await prisma.organization.findUnique({
+      where: { id: subscription.organizationId },
+      select: { name: true },
+    });
+    await sendProvisioningStuckInternalEmail({
+      reason,
+      plan: subscription.plan,
+      amountCents: payment.totalCents ?? subscription.priceMonthly,
+      paymentId: payment.id,
+      customerEmail: owner?.email ?? null,
+      organizationName: org?.name ?? null,
+    });
+  } catch (mailErr) {
+    apiLogger.error({ err: mailErr }, "Failed to send provisioning-stuck alert");
   }
 }
 

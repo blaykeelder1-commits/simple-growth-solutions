@@ -193,6 +193,61 @@ export async function sendNewPaidCustomerInternalEmail(args: {
 }
 
 // ============================================================
+// 4a. Internal: payment captured but subscription NOT provisioned (LOUD FAIL)
+// ============================================================
+
+// The anti-silent-failure backstop. If a customer's first payment lands but we
+// can't turn it into an active subscription (card couldn't be stored, plan
+// variation missing, Square API error), the money moved with nothing to show
+// for it. That must NEVER be silent — this alert fires so a human can recover
+// the customer instead of them sitting in limbo behind a "success" page.
+export async function sendProvisioningStuckInternalEmail(args: {
+  reason: string;
+  plan: string;
+  amountCents: number;
+  paymentId: string;
+  customerEmail?: string | null;
+  organizationName?: string | null;
+}) {
+  const label = planLabel(args.plan);
+  const row = (k: string, v: string) =>
+    `<tr>
+      <td style="padding: 6px 0; color: #6b7280; vertical-align: top;">${escapeHtml(k)}</td>
+      <td style="padding: 6px 0; text-align: right; color: #111827;">${escapeHtml(v)}</td>
+    </tr>`;
+
+  const html = emailLayout(
+    `
+    <h2 style="color: #b91c1c;">⚠️ Payment captured — subscription NOT provisioned</h2>
+    <p>A customer's first payment went through, but we could <strong>not</strong> activate
+    their recurring subscription. They have paid and are sitting behind a success page with
+    nothing active. Recover this manually before they notice.</p>
+    <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 20px; border-radius: 8px; margin: 20px 0;">
+      <table style="width: 100%; border-collapse: collapse;">
+        ${row("Reason", args.reason)}
+        ${row("Plan", label)}
+        ${row("Amount paid", dollars(args.amountCents))}
+        ${row("Square payment", args.paymentId)}
+        ${args.customerEmail ? row("Customer", args.customerEmail) : ""}
+        ${args.organizationName ? row("Business", args.organizationName) : ""}
+      </table>
+    </div>
+    <p style="color: #4b5563;">Next step: confirm the payment in Square, store the card on file
+    if needed, and provision or refund. The subscription row is still <code>awaiting_payment</code>.</p>
+    ${button(`${APP_URL}/admin`, "Open Admin Dashboard")}
+    <p style="color: #6b7280; font-size: 13px;">Internal alert — Simple Growth Solutions billing.</p>
+  `,
+    "Billing Alert"
+  );
+
+  return sendEmail({
+    to: INTERNAL_NOTIFY_EMAIL,
+    subject: `⚠️ Payment captured but NOT provisioned — ${label} (${dollars(args.amountCents)})`,
+    html,
+  });
+}
+
+// ============================================================
 // 4b. Internal: new lead / consultation request → Snak Group ops inbox
 // ============================================================
 

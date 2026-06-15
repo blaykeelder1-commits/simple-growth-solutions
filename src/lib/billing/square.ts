@@ -244,6 +244,49 @@ export async function createPaymentLink(
 }
 
 // ============================================================
+// Cards on file (reusable cards for recurring subscriptions)
+// ============================================================
+
+export interface CardOnFile {
+  id: string;
+  last4?: string;
+  brand?: string;
+}
+
+/**
+ * Save a REUSABLE card-on-file to a customer from a completed payment.
+ *
+ * Critical: Square Payment Links capture the card for the one-off charge but do
+ * NOT persist a reusable card — the resulting Payment has `card_details` (brand,
+ * last 4) yet `card_details.card.id` is null. A Subscription needs a stored
+ * card (`ccof:` id), so after the first payment we explicitly store the card via
+ * the Cards API using the payment id as the source. Returns the reusable id.
+ *
+ * Idempotent on the payment id: Square returns the same card for retried
+ * webhooks, so duplicate deliveries never create duplicate cards.
+ */
+export async function createCardOnFile(
+  cfg: SgsSquareConfig,
+  params: { paymentId: string; customerId: string }
+): Promise<CardOnFile> {
+  const res = await request<{
+    card: { id: string; last_4?: string; card_brand?: string };
+  }>(cfg, "/cards", {
+    method: "POST",
+    idempotencyKey: `card-${params.paymentId}`,
+    body: {
+      source_id: params.paymentId,
+      card: { customer_id: params.customerId },
+    },
+  });
+  return {
+    id: res.card.id,
+    last4: res.card.last_4,
+    brand: res.card.card_brand,
+  };
+}
+
+// ============================================================
 // Payments (used by webhook to read card-on-file after payment)
 // ============================================================
 
