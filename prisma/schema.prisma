@@ -483,6 +483,13 @@ model ChangeRequest {
   previewUrl String? @map("preview_url")
   agentNote  String? @db.Text @map("agent_note")
 
+  // Anti-retrigger "set-once" guard (mirrors Subscription.foundingReminderSentAt).
+  // Stamped the first time Andy's intake sweep processes this ticket — whether it
+  // claims it (→ in_progress) or flags it for a human (stays pending). The sweep
+  // only considers `status='pending' AND andySeenAt IS NULL`, so a ticket is never
+  // re-notified or re-worked. NULL = Andy has not touched it yet.
+  andySeenAt DateTime? @map("andy_seen_at")
+
   // SLA + rush
   isRush       Boolean       @default(false) @map("is_rush")
   slaDueAt     DateTime?     @map("sla_due_at")
@@ -496,6 +503,7 @@ model ChangeRequest {
   @@index([projectId])
   @@index([status])
   @@index([assigneeId, status])
+  @@index([status, andySeenAt])
   @@map("change_requests")
 }
 

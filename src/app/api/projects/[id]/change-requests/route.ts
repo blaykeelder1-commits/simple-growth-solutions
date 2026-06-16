@@ -128,9 +128,12 @@ export const POST = withAuth(async (req, ctx, session) => {
         currentPeriodStart: activeSub.currentPeriodStart,
         currentPeriodEnd: activeSub.currentPeriodEnd,
       });
+      // Caps are PER-SITE: each website carries its own plan allotment, because
+      // each additional site is billed as its own add-on line (see
+      // src/lib/billing/multi-site.ts). Count only this project's CRs this period.
       const usedThisPeriod = await prisma.changeRequest.count({
         where: {
-          project: { organizationId: project.organizationId },
+          projectId,
           createdAt: { gte: from, lte: to },
           status: { not: "rejected" },
         },

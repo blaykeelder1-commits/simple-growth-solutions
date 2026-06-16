@@ -14,11 +14,18 @@ export const GET = withAdmin(async (req, _ctx, session) => {
     const assigneeFilter = url.searchParams.get("assigneeId");
     const statusFilter = url.searchParams.get("status");
     const dueWithinHours = url.searchParams.get("dueWithin");
+    // Anti-retrigger sweep filters (used by Andy's intake sweep):
+    //   ?unseen=true        → only tickets Andy hasn't processed (andySeenAt IS NULL)
+    //   ?createdWithin=<h>  → maxAge guard: only tickets created within the last <h> hours
+    const unseenOnly = url.searchParams.get("unseen") === "true";
+    const createdWithinHours = url.searchParams.get("createdWithin");
 
     type Where = {
       assigneeId?: string | null;
       status?: { in: string[] };
       slaDueAt?: { lte: Date };
+      andySeenAt?: null;
+      createdAt?: { gte: Date };
     };
     const where: Where = {};
     if (assigneeFilter === "me") {
@@ -34,6 +41,14 @@ export const GET = withAdmin(async (req, _ctx, session) => {
     if (dueWithinHours) {
       const cutoff = new Date(Date.now() + parseInt(dueWithinHours, 10) * 60 * 60 * 1000);
       where.slaDueAt = { lte: cutoff };
+    }
+    if (unseenOnly) {
+      where.andySeenAt = null;
+    }
+    if (createdWithinHours) {
+      where.createdAt = {
+        gte: new Date(Date.now() - parseInt(createdWithinHours, 10) * 60 * 60 * 1000),
+      };
     }
 
     const requests = await prisma.changeRequest.findMany({
@@ -97,6 +112,7 @@ export const GET = withAdmin(async (req, _ctx, session) => {
         // Andy autonomous-fulfillment fields (null for human-handled tickets).
         previewUrl: r.previewUrl,
         agentNote: r.agentNote,
+        andySeenAt: r.andySeenAt,
         resolution: r.resolution,
         project: {
           id: r.project.id,

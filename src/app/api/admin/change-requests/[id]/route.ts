@@ -17,11 +17,20 @@ const updateSchema = z.object({
   // Set by Andy when it prepares an autonomous edit awaiting approval.
   previewUrl: z.string().url().nullable().optional(),
   agentNote: z.string().nullable().optional(),
+  // Anti-retrigger primitives for Andy's intake sweep (mutually exclusive with
+  // a normal status update):
+  //  - claim: atomically take a still-`pending`, never-seen ticket → `in_progress`
+  //    and stamp andySeenAt. Returns `claimed:false` if another run already took it.
+  //  - markSeen: stamp andySeenAt WITHOUT changing status (used when a ticket is
+  //    triaged to a human — it stays `pending` but is never re-flagged).
+  claim: z.boolean().optional(),
+  markSeen: z.boolean().optional(),
 });
 
-// Statuses the CUSTOMER should be emailed about. review_ready/approved are
-// internal hand-offs between Andy and Blayke — the customer never sees them.
-const CUSTOMER_NOTIFY_STATUSES = new Set(["in_progress", "completed", "rejected"]);
+// Statuses the CUSTOMER should be emailed about. Andy's internal steps
+// (in_progress claim, review_ready, approved) must NOT email the customer — only
+// the original submit-ack and the final outcome do. This is the anti-wildfire gate.
+const CUSTOMER_NOTIFY_STATUSES = new Set(["completed", "rejected"]);
 
 // PATCH /api/admin/change-requests/[id] - Update change request status
 export const PATCH = withAdmin(async (req, ctx) => {
@@ -40,6 +49,32 @@ export const PATCH = withAdmin(async (req, ctx) => {
         { success: false, message: "Change request not found" },
         { status: 404 }
       );
+    }
+
+    // --- Atomic claim: pending + never-seen → in_progress. The updateMany WHERE
+    // is the lock: only one caller's update affects a row, so concurrent sweeps
+    // can't both grab the same ticket. No customer email (in_progress isn't in
+    // the notify set), so claiming is silent to the customer.
+    if (validatedData.claim) {
+      const result = await prisma.changeRequest.updateMany({
+        where: { id, status: "pending", andySeenAt: null },
+        data: { status: "in_progress", andySeenAt: new Date() },
+      });
+      const claimed = result.count === 1;
+      const changeRequest = await prisma.changeRequest.findUnique({ where: { id } });
+      return NextResponse.json({ success: true, claimed, changeRequest });
+    }
+
+    // --- Mark-seen: stamp the guard without changing status. Used when a ticket
+    // is triaged to a human — it stays `pending` for Blayke but the sweep won't
+    // re-flag it. Idempotent (only stamps if not already stamped).
+    if (validatedData.markSeen) {
+      await prisma.changeRequest.updateMany({
+        where: { id, andySeenAt: null },
+        data: { andySeenAt: new Date() },
+      });
+      const changeRequest = await prisma.changeRequest.findUnique({ where: { id } });
+      return NextResponse.json({ success: true, changeRequest });
     }
 
     const changeRequest = await prisma.changeRequest.update({

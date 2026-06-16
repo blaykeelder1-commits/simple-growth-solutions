@@ -425,6 +425,20 @@ function PricingContent() {
 
               <div className="bg-white rounded-lg p-6 shadow-sm">
                 <h3 className="font-semibold mb-2">
+                  Can I manage more than one website?
+                </h3>
+                <p className="text-gray-600">
+                  Yes. Run all your sites from one account. Your first website is
+                  covered by your plan; each additional site is a discounted add-on
+                  &mdash; <strong>+$35/mo</strong> on Managed, <strong>+$59/mo</strong>
+                  {" "}on Pro, <strong>+$99/mo</strong> on Premium &mdash; and every
+                  site keeps its own monthly change-request allotment. Add or remove
+                  sites anytime from your portal.
+                </p>
+              </div>
+
+              <div className="bg-white rounded-lg p-6 shadow-sm">
+                <h3 className="font-semibold mb-2">
                   Where does my site live?
                 </h3>
                 <p className="text-gray-600">

@@ -132,7 +132,36 @@ get them to year 2 where they're pure margin.
 
 ---
 
+## Multi-site (one customer, many websites)
+
+A customer (organization) can run several managed websites. The **first** site is
+covered by the base plan; each **additional** site is a discounted recurring
+add-on and carries its **own** per-period change-request cap (caps are enforced
+per-site, not pooled — so two sites = two independent CR allotments).
+
+| Base plan | Standalone | Additional-site add-on | 2 sites total | 3 sites total |
+| --- | --- | --- | --- | --- |
+| Managed | $49 | **+$35/mo** | $84 | $119 |
+| Pro | $79 | **+$59/mo** | $138 | $197 |
+| Premium | $129 | **+$99/mo** | $228 | $327 |
+
+**Why the add-on is ~95% margin:** the marginal cost of an extra site is only its
+hosting (Cloudflare Pages/R2, **< $2/mo** — see §1) plus its edit labor. With
+Andy/NanoClaw auto-preparing edits (preview-first, human-approved), the per-CR
+operator labor that used to dominate unit economics collapses toward Blayke's
+review time (minutes, not the $50/hr × 1hr modeled above). An additional Managed
+site at **+$35/mo** nets roughly **+$33/mo** before labor savings, approaching the
+full $35 with them.
+
+Encoded in `src/lib/billing/multi-site.ts` (prices, env-overridable) +
+`src/lib/billing/additional-site.ts` (recurring Square provisioning on the card on
+file). Per-site caps enforced in `api/projects/[id]/change-requests/route.ts`.
+
+---
+
 ## Update log
 
 - **2026-04-26** — Initial doc. Plan caps shipped: Managed (2 CRs), Pro (4),
   Premium (10). $25 overage fee, $499 transfer fee, hosting lock during trial.
+- **2026-06-16** — Multi-site add-on pricing shipped (+$35/$59/$99 per extra
+  site, per-site CR caps). Margin ~95% because Andy automates edit fulfillment.

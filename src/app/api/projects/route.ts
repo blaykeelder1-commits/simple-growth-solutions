@@ -5,6 +5,9 @@ import { apiError } from "@/lib/api/errors";
 import { getAdminEmails, sendNewProjectNotification } from "@/lib/email";
 import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
+import { isWebsitePlan, type WebsitePlanKey } from "@/lib/billing/founding";
+import { additionalSitePriceCents } from "@/lib/billing/multi-site";
+import { provisionAdditionalSite } from "@/lib/billing/additional-site";
 
 const createProjectSchema = z.object({
   projectName: z.string().min(2),
@@ -18,6 +21,10 @@ const createProjectSchema = z.object({
     references: z.string().optional(),
   }).optional(),
   additionalNotes: z.string().optional(),
+  // Customer explicitly accepting the recurring add-on fee for a 2nd+ managed
+  // website (mirrors acceptOverageFee on change requests). Without it, the route
+  // 402s with the price so the portal can confirm before billing.
+  acceptAdditionalSiteFee: z.boolean().optional().default(false),
 });
 
 // GET /api/projects - List projects for current user's organization
@@ -87,6 +94,59 @@ export const POST = withAuth(async (req, _ctx, session) => {
       organizationId = organization.id;
     }
 
+    // ── Additional-site billing gate ─────────────────────────────────────
+    // The first site is covered by the base plan. Each ADDITIONAL site is a
+    // discounted recurring add-on (src/lib/billing/multi-site.ts). Admins (and
+    // the headless Andy service) bypass; ordinary customers must have an active
+    // plan and accept the fee before a 2nd+ site is created.
+    let additionalSiteBilling: { billed: boolean; reason?: string; priceCents: number } | null = null;
+    if (user?.role !== "admin") {
+      const existingSites = await prisma.websiteProject.count({ where: { organizationId } });
+      if (existingSites >= 1) {
+        const baseSub = await prisma.subscription.findFirst({
+          where: {
+            organizationId,
+            plan: { startsWith: "website_" },
+            status: { in: ["active", "trialing"] },
+          },
+          orderBy: { createdAt: "desc" },
+        });
+        if (!baseSub || !isWebsitePlan(baseSub.plan)) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                "Add a management plan to your first website before adding another site. Upgrade at /portal/billing.",
+              code: "plan_required_for_additional_site",
+            },
+            { status: 402 }
+          );
+        }
+        const basePlan = baseSub.plan as WebsitePlanKey;
+        const priceCents = additionalSitePriceCents(basePlan);
+        if (!validatedData.acceptAdditionalSiteFee) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: `Adding a 2nd website is +$${(priceCents / 100).toFixed(0)}/mo (each site keeps its own change-request allotment). Confirm to add it.`,
+              code: "additional_site_fee_required",
+              additionalSite: { priceCents, plan: basePlan, siteNumber: existingSites + 1 },
+            },
+            { status: 402 }
+          );
+        }
+        // Charge the recurring add-on to the card on file. Loud, never silent.
+        const result = await provisionAdditionalSite(organizationId, basePlan, validatedData.projectName);
+        additionalSiteBilling = { billed: result.billed, reason: result.reason, priceCents: result.priceCents };
+        if (!result.billed) {
+          apiLogger.warn(
+            { organizationId, basePlan, reason: result.reason },
+            "Additional site created but add-on NOT billed — needs follow-up"
+          );
+        }
+      }
+    }
+
     const project = await prisma.websiteProject.create({
       data: {
         organizationId,
@@ -127,7 +187,7 @@ export const POST = withAuth(async (req, _ctx, session) => {
       .catch((e) => apiLogger.warn({ err: e }, "Failed to send new project notification"));
 
     return NextResponse.json(
-      { success: true, project },
+      { success: true, project, additionalSiteBilling },
       { status: 201 }
     );
   } catch (error) {
