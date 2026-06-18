@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { MessageCircle, Send, Loader2, LifeBuoy } from "lucide-react";
+import { MessageCircle, Send, Loader2 } from "lucide-react";
 import Link from "next/link";
 
 interface Msg {
@@ -15,43 +15,77 @@ interface Msg {
 const GREETING: Msg = {
   role: "assistant",
   content:
-    "Hi! I'm Andy, your support assistant. Ask me anything about your website, your plan, or a change request — I'm here to help. If you want an edit made, I can help you write it up as a request.",
+    "Hi! I'm Andy, your support assistant. Ask me anything about your website, your plan, or a change request. I usually reply within a few minutes — your message comes straight to me.",
 };
 
 export default function SupportPage() {
-  const [messages, setMessages] = useState<Msg[]>([GREETING]);
+  const [serverMsgs, setServerMsgs] = useState<Msg[]>([]);
+  const [pending, setPending] = useState<Msg[]>([]); // optimistic, not yet in server history
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [escalated, setEscalated] = useState(false);
+  const [awaitingReply, setAwaitingReply] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const endRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    fetch("/api/support/chat")
-      .then((r) => (r.ok ? r.json() : { messages: [] }))
-      .then((data) => {
-        const history: Msg[] = (data.messages || []).map(
-          (m: { role: string; content: string }) => ({
-            role: m.role === "user" ? "user" : "assistant",
-            content: m.content,
-          })
-        );
-        if (history.length) setMessages([GREETING, ...history]);
-      })
-      .catch(() => {})
-      .finally(() => setLoadingHistory(false));
+  const fetchHistory = useCallback(async (): Promise<Msg[]> => {
+    const res = await fetch("/api/support/chat");
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.messages || []).map((m: { role: string; content: string }) => ({
+      role: m.role === "user" ? "user" : "assistant",
+      content: m.content,
+    }));
   }, []);
 
   useEffect(() => {
+    fetchHistory()
+      .then((h) => setServerMsgs(h))
+      .catch(() => {})
+      .finally(() => setLoadingHistory(false));
+  }, [fetchHistory]);
+
+  useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sending]);
+  }, [serverMsgs, pending, awaitingReply]);
+
+  // Poll for Andy's reply after the customer sends. Stops when a new assistant
+  // message lands or after ~4 minutes.
+  const pollForReply = useCallback(
+    (assistantCountBefore: number) => {
+      let tries = 0;
+      const maxTries = 34; // ~4 min at 7s
+      const tick = async () => {
+        tries += 1;
+        const h = await fetchHistory().catch(() => null);
+        if (h) {
+          const assistantNow = h.filter((m) => m.role === "assistant").length;
+          if (assistantNow > assistantCountBefore) {
+            setServerMsgs(h);
+            setPending([]);
+            setAwaitingReply(false);
+            return;
+          }
+          setServerMsgs(h);
+        }
+        if (tries >= maxTries) {
+          setAwaitingReply(false);
+          return;
+        }
+        setTimeout(tick, 7000);
+      };
+      setTimeout(tick, 7000);
+    },
+    [fetchHistory]
+  );
 
   const send = async () => {
     const text = input.trim();
     if (!text || sending) return;
     setInput("");
-    setMessages((m) => [...m, { role: "user", content: text }]);
     setSending(true);
+    const userMsg: Msg = { role: "user", content: text };
+    setPending((p) => [...p, userMsg]);
+    const assistantCountBefore = serverMsgs.filter((m) => m.role === "assistant").length;
     try {
       const res = await fetch("/api/support/chat", {
         method: "POST",
@@ -59,18 +93,26 @@ export default function SupportPage() {
         body: JSON.stringify({ message: text }),
       });
       const data = await res.json().catch(() => ({}));
-      const reply: string =
-        data.reply ||
-        "Sorry — something went wrong on my end. Please try again, or submit a change request and we'll follow up.";
-      setMessages((m) => [...m, { role: "assistant", content: reply }]);
-      if (data.escalate) setEscalated(true);
+      if (data.ok) {
+        setAwaitingReply(true);
+        pollForReply(assistantCountBefore);
+      } else {
+        setPending((p) => [
+          ...p,
+          {
+            role: "assistant",
+            content:
+              data.message ||
+              "Sorry — I couldn't send that. Please try again, or submit a change request and we'll follow up.",
+          },
+        ]);
+      }
     } catch {
-      setMessages((m) => [
-        ...m,
+      setPending((p) => [
+        ...p,
         {
           role: "assistant",
-          content:
-            "I couldn't reach the server just now. Please try again in a moment.",
+          content: "I couldn't reach the server just now. Please try again in a moment.",
         },
       ]);
     } finally {
@@ -85,6 +127,11 @@ export default function SupportPage() {
     }
   };
 
+  // Render = greeting + server history + any optimistic pending not yet in server.
+  const serverContents = new Set(serverMsgs.map((m) => m.role + "|" + m.content));
+  const shownPending = pending.filter((m) => !serverContents.has(m.role + "|" + m.content));
+  const messages = [GREETING, ...serverMsgs, ...shownPending];
+
   return (
     <div className="max-w-3xl mx-auto space-y-4">
       <div className="flex items-center gap-3">
@@ -94,23 +141,10 @@ export default function SupportPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Support</h1>
           <p className="text-sm text-gray-500">
-            Chat with Andy — answers in plain language, any time.
+            Chat with Andy — he usually replies within a few minutes.
           </p>
         </div>
       </div>
-
-      {escalated && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 flex items-start gap-3">
-          <LifeBuoy className="h-5 w-5 text-amber-600 mt-0.5" />
-          <div className="text-sm">
-            <p className="font-medium text-amber-900">Flagged for our team</p>
-            <p className="text-amber-800">
-              A teammate will follow up with you. You can keep chatting with Andy
-              in the meantime.
-            </p>
-          </div>
-        </div>
-      )}
 
       <Card className="overflow-hidden">
         <CardContent className="p-0">
@@ -137,10 +171,10 @@ export default function SupportPage() {
                 </div>
               ))
             )}
-            {sending && (
+            {awaitingReply && (
               <div className="flex justify-start">
                 <div className="rounded-2xl px-4 py-2.5 bg-gray-100 text-gray-500 text-sm flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Andy is typing…
+                  <Loader2 className="h-4 w-4 animate-spin" /> Andy is looking into this — a reply will appear here shortly.
                 </div>
               </div>
             )}
