@@ -248,12 +248,27 @@ export async function sendSecurityAlertEmail(
 const APP_URL = process.env.NEXTAUTH_URL || 'http://localhost:3000';
 
 /** Get all admin user emails for notifications */
-export async function getAdminEmails(): Promise<string[]> {
+export async function getAdminEmails(opts?: { exclude?: string | null }): Promise<string[]> {
   const admins = await prisma.user.findMany({
     where: { role: 'admin' },
     select: { email: true },
   });
-  return admins.map((a) => a.email).filter(Boolean);
+  // Dedupe (case-insensitive) and optionally drop the submitter's own address so
+  // an admin who is also the customer/requester isn't double-notified — i.e. gets
+  // the staff "new request" email AND their own customer acknowledgment for the
+  // same event. One human, one relevant email per event.
+  const excluded = opts?.exclude?.trim().toLowerCase() || null;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const a of admins) {
+    const email = a.email?.trim();
+    if (!email) continue;
+    const key = email.toLowerCase();
+    if (key === excluded || seen.has(key)) continue;
+    seen.add(key);
+    out.push(email);
+  }
+  return out;
 }
 
 /** Notify admins when a customer submits a new website project */

@@ -176,7 +176,7 @@ export const POST = withAuth(async (req, _ctx, session) => {
     }
 
     // Notify admins of new project submission
-    getAdminEmails()
+    getAdminEmails({ exclude: session.user.email })
       .then((emails) =>
         sendNewProjectNotification(
           emails,

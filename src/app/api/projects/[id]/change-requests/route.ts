@@ -249,7 +249,7 @@ export const POST = withAuth(async (req, ctx, session) => {
     // Notify admins (skip if awaiting_payment so we don't poke them about
     // tickets that haven't been paid for yet).
     if (changeRequest.status === "pending") {
-      getAdminEmails()
+      getAdminEmails({ exclude: session.user.email })
         .then((emails) =>
           sendNewChangeRequestNotification(
             emails,
