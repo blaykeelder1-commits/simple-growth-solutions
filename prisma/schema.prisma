@@ -1630,3 +1630,25 @@ model ChatMessage {
   @@index([userId, createdAt])
   @@map("chat_messages")
 }
+
+// Customer-facing support chat ("Andy" in the client portal). Advisory only:
+// Andy answers questions and helps the customer file a change request, but never
+// takes outbound/destructive actions from here. One rolling thread per org.
+// Plain scalar org/user columns (no relation nav) to keep blast radius minimal.
+model SupportMessage {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  userId         String   @map("user_id")
+
+  role    String // "user" | "assistant"
+  content String @db.Text
+
+  // Set on assistant turns where Andy handed the conversation to a human.
+  escalated      Boolean @default(false)
+  escalateReason String? @map("escalate_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, createdAt])
+  @@map("support_messages")
+}

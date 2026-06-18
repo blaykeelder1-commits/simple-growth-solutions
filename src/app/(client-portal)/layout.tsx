@@ -15,6 +15,7 @@ import {
   X,
   Sparkles,
   ShieldCheck,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { signOut } from "next-auth/react";
@@ -24,6 +25,7 @@ const navigation = [
   { name: "Dashboard", href: "/portal", icon: LayoutDashboard },
   { name: "My Projects", href: "/portal/projects", icon: Globe },
   { name: "Change Requests", href: "/portal/requests", icon: FileText },
+  { name: "Support", href: "/portal/support", icon: MessageCircle },
   { name: "Upgrades", href: "/portal/upgrades", icon: Sparkles },
   { name: "Billing", href: "/portal/billing", icon: CreditCard },
   { name: "Settings", href: "/portal/settings", icon: Settings },

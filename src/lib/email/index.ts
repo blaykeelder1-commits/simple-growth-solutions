@@ -415,6 +415,32 @@ export async function sendNewChangeRequestNotification(
   });
 }
 
+/** Notify staff when Andy hands a portal support chat to a human. */
+export async function sendSupportEscalationEmail(
+  adminEmails: string[],
+  args: { orgName: string; customerName: string; reason: string; lastMessage: string }
+) {
+  if (adminEmails.length === 0) return;
+
+  const html = emailLayout(`
+    <h2 style="color: #1f2937;">Support chat escalated</h2>
+    <p>Andy flagged a portal support conversation with <strong>${escapeHtml(args.orgName)}</strong> for a human to follow up.</p>
+    <div style="background: #fef2f2; padding: 16px; border-radius: 8px; border-left: 4px solid #dc2626; margin: 20px 0;">
+      <p style="margin: 0 0 8px;"><strong>Reason:</strong> ${escapeHtml(args.reason)}</p>
+      <p style="margin: 0;"><strong>Customer (${escapeHtml(args.customerName)}) said:</strong><br/>${escapeHtml(args.lastMessage)}</p>
+    </div>
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${APP_URL}/admin/dispatch" style="display: inline-block; background: linear-gradient(to right, #2563eb, #4f46e5); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600;">Open Dispatch Board</a>
+    </div>
+  `, 'Customer Support');
+
+  return sendEmail({
+    to: adminEmails,
+    subject: `Support escalation — ${args.orgName}`,
+    html,
+  });
+}
+
 /** Acknowledge a freshly-submitted change request back to the customer — so they
  *  see the ticket land in their inbox alongside the on-screen confirmation. */
 export async function sendChangeRequestReceivedEmail(
