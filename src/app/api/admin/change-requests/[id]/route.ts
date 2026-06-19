@@ -25,6 +25,12 @@ const updateSchema = z.object({
   //    triaged to a human — it stays `pending` but is never re-flagged).
   claim: z.boolean().optional(),
   markSeen: z.boolean().optional(),
+  //  - reopen: recover an ORPHANED ticket (claimed → in_progress but the sweep
+  //    that claimed it died mid-run, e.g. a service restart, so it never reached
+  //    review_ready). Resets it to a fresh, claimable state (status=pending,
+  //    andySeenAt cleared, any half-built preview/note dropped) so the next
+  //    intake sweep re-processes it from scratch.
+  reopen: z.boolean().optional(),
 });
 
 // Statuses the CUSTOMER should be emailed about. Andy's internal steps
@@ -74,6 +80,22 @@ export const PATCH = withAdmin(async (req, ctx) => {
         data: { andySeenAt: new Date() },
       });
       const changeRequest = await prisma.changeRequest.findUnique({ where: { id } });
+      return NextResponse.json({ success: true, changeRequest });
+    }
+
+    // --- Reopen: reset an orphaned in_progress ticket to a fresh pending state so
+    // the intake sweep claims and processes it again. Clears the seen-guard and any
+    // partial preview/note. No customer email (pending isn't a notify status).
+    if (validatedData.reopen) {
+      const changeRequest = await prisma.changeRequest.update({
+        where: { id },
+        data: {
+          status: "pending",
+          andySeenAt: null,
+          previewUrl: null,
+          agentNote: null,
+        },
+      });
       return NextResponse.json({ success: true, changeRequest });
     }
 
