@@ -9,8 +9,6 @@ export const GET = withAuth(async (req, _ctx, session) => {
     const { searchParams } = new URL(req.url);
     const limit = Math.min(Math.max(1, parseInt(searchParams.get("limit") || "50") || 50), 100);
 
-    const isAdmin = session.user.role === "admin";
-
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
     });
@@ -22,17 +20,20 @@ export const GET = withAuth(async (req, _ctx, session) => {
       );
     }
 
-    if (!isAdmin && !user.organizationId) {
+    // This is a CUSTOMER-portal endpoint — it is ALWAYS scoped to the caller's
+    // own organization, even for staff. An admin account does NOT see other
+    // tenants' change requests here (that caused Waste Rescue's requests to
+    // surface in another customer's portal). Cross-org views live exclusively
+    // under /api/admin/* + the admin dashboard. Never widen tenant scope here.
+    if (!user.organizationId) {
       return NextResponse.json({ success: true, requests: [] });
     }
 
-    const whereClause = isAdmin
-      ? {}
-      : {
-          project: {
-            organizationId: user.organizationId!,
-          },
-        };
+    const whereClause = {
+      project: {
+        organizationId: user.organizationId,
+      },
+    };
 
     const requests = await prisma.changeRequest.findMany({
       where: whereClause,
