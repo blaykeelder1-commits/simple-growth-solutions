@@ -20,6 +20,8 @@ import {
   ArrowLeft,
   ExternalLink,
   Plus,
+  Palette,
+  Eye,
 } from "lucide-react";
 import { ProjectUpcharges } from "@/components/portal/ProjectUpcharges";
 
@@ -39,6 +41,15 @@ interface Project {
   updatedAt: string;
   changeRequests: ChangeRequest[];
   projectNotes: ProjectNote[];
+  designOptions: string | null;
+  selectedDesignOption: string | null;
+}
+
+interface DesignOption {
+  key: string;
+  label: string;
+  blurb?: string;
+  previewUrl: string;
 }
 
 interface ProjectResponse {
@@ -94,6 +105,8 @@ export default function ProjectDetailPage() {
   const [deployedUrlLocked, setDeployedUrlLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [choosingKey, setChoosingKey] = useState<string | null>(null);
+  const [chooseError, setChooseError] = useState<string | null>(null);
 
   const fetchProject = async () => {
     setLoading(true);
@@ -113,6 +126,28 @@ export default function ProjectDetailPage() {
       setError("Unable to connect. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const chooseDesign = async (key: string) => {
+    setChoosingKey(key);
+    setChooseError(null);
+    try {
+      const res = await fetch(`/api/projects/${params.id}/choose-design`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key }),
+      });
+      if (res.ok) {
+        await fetchProject();
+      } else {
+        const data = await res.json().catch(() => null);
+        setChooseError(data?.message || "Couldn't save your choice. Please try again.");
+      }
+    } catch {
+      setChooseError("Unable to connect. Please try again.");
+    } finally {
+      setChoosingKey(null);
     }
   };
 
@@ -159,6 +194,19 @@ export default function ProjectDetailPage() {
     }
   }
   const clientNotes = project.projectNotes?.filter((n) => !n.isInternal) || [];
+
+  let designOptions: DesignOption[] = [];
+  if (project.designOptions) {
+    try {
+      const parsed = JSON.parse(project.designOptions);
+      if (Array.isArray(parsed)) designOptions = parsed as DesignOption[];
+    } catch {
+      // Invalid design_options JSON — show nothing rather than break the page.
+    }
+  }
+  const selectedOption = designOptions.find(
+    (o) => o.key === project.selectedDesignOption
+  );
 
   return (
     <div className="space-y-8">
@@ -223,6 +271,84 @@ export default function ProjectDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Design-direction picker — when staff have attached mockup directions,
+          the customer previews each and picks one, entirely in-portal. Once a
+          direction is chosen we collapse to a confirmation. */}
+      {designOptions.length > 0 && (
+        <Card variant="professional" className="border-orange-200 bg-gradient-to-br from-orange-50 to-blue-50">
+          <CardHeader>
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
+                <Palette className="h-5 w-5 text-orange-600" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">
+                  {selectedOption ? "Your chosen design direction" : "Choose your design direction"}
+                </CardTitle>
+                <CardDescription>
+                  {selectedOption
+                    ? "Thanks! We're building out the direction you picked. Want a tweak? Use Request Changes."
+                    : "We put together a few directions for your site. Preview each one, then pick the look you like best — we'll build that direction out."}
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {chooseError && (
+              <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                {chooseError}
+              </div>
+            )}
+            <div className="grid gap-4 md:grid-cols-3">
+              {designOptions.map((opt) => {
+                const isSelected = project.selectedDesignOption === opt.key;
+                const dimmed = !!selectedOption && !isSelected;
+                return (
+                  <div
+                    key={opt.key}
+                    className={`rounded-2xl border bg-white p-5 flex flex-col transition-all ${
+                      isSelected
+                        ? "border-orange-400 ring-2 ring-orange-200 shadow-md"
+                        : "border-gray-200"
+                    } ${dimmed ? "opacity-60" : ""}`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <h3 className="font-semibold text-gray-900">{opt.label}</h3>
+                      {isSelected && (
+                        <Badge className="bg-orange-100 text-orange-800 border border-orange-200">
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                          Selected
+                        </Badge>
+                      )}
+                    </div>
+                    {opt.blurb && (
+                      <p className="text-sm text-gray-600 mb-4 flex-1">{opt.blurb}</p>
+                    )}
+                    <div className="mt-auto flex flex-col gap-2">
+                      <a href={opt.previewUrl} target="_blank" rel="noopener noreferrer">
+                        <Button variant="outline" className="w-full">
+                          <Eye className="h-4 w-4 mr-2" />
+                          Preview
+                        </Button>
+                      </a>
+                      {!selectedOption && (
+                        <Button
+                          className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+                          onClick={() => chooseDesign(opt.key)}
+                          disabled={!!choosingKey}
+                        >
+                          {choosingKey === opt.key ? "Saving…" : "Choose this design"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Custom upcharges (only renders if any exist) */}
       <ProjectUpcharges projectId={project.id} />

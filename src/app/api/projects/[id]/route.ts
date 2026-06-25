@@ -15,6 +15,10 @@ const updateProjectSchema = z.object({
   repositoryUrl: z.string().url().or(z.literal("")).nullable().optional(),
   deploymentPlatform: z.string().nullable().optional(),
   estimatedCompletion: z.string().datetime().optional(),
+  // JSON-array string of design directions [{ key, label, blurb, previewUrl }]
+  // the customer picks from in-portal. "" / null clears it.
+  designOptions: z.string().nullable().optional(),
+  selectedDesignOption: z.string().nullable().optional(),
 });
 
 // GET /api/projects/[id] - Get single project
@@ -108,6 +112,12 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
         }),
         ...(validatedData.status === "completed" && {
           actualCompletion: new Date(),
+        }),
+        ...(validatedData.designOptions !== undefined && {
+          designOptions: validatedData.designOptions || null,
+        }),
+        ...(validatedData.selectedDesignOption !== undefined && {
+          selectedDesignOption: validatedData.selectedDesignOption || null,
         }),
       },
     });
