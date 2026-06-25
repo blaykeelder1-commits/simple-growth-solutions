@@ -143,10 +143,11 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
         .catch((e) => apiLogger.warn({ err: e }, "Failed to send project status notification"));
     }
 
-    // Audit log
+    // Audit log. The headless service account ("andy-service") isn't a real
+    // User row, so record a null actor rather than violating the userId FK.
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
+        userId: session.user.id === "andy-service" ? null : session.user.id,
         organizationId: project.organizationId,
         action: "project_updated",
         entityType: "website_project",

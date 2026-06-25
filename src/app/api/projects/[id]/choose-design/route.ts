@@ -127,9 +127,10 @@ export const POST = withAuth(async (req, ctx, session) => {
         apiLogger.warn({ err: e }, "Failed to send design-selected notification")
       );
 
+    // Null actor for the headless service account (not a real User row).
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
+        userId: session.user.id === "andy-service" ? null : session.user.id,
         organizationId: project.organizationId,
         action: "design_option_selected",
         entityType: "website_project",
