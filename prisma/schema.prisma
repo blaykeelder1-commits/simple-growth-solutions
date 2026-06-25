@@ -439,6 +439,14 @@ model WebsiteProject {
   deployedUrl        String? @map("deployed_url")
   repositoryUrl      String? @map("repository_url")
 
+  // Design options (new_build): admin attaches 2–3 mockup directions, the
+  // customer previews them and picks one — entirely in-portal, no email.
+  // designOptions is a JSON-array string of { key, label, blurb, previewUrl }
+  // (same JSON-as-text convention as desiredFeatures/designPreferences above).
+  designOptions        String?   @map("design_options") @db.Text
+  selectedDesignOption String?   @map("selected_design_option")
+  designSelectedAt     DateTime? @map("design_selected_at")
+
   // Timeline
   estimatedCompletion DateTime? @map("estimated_completion")
   actualCompletion    DateTime? @map("actual_completion")
