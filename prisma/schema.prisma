@@ -229,6 +229,9 @@ model Lead {
   notes         String?  @db.Text
   analysisScore Int?     @map("analysis_score")
   analysisData  String?  @map("analysis_data") @db.Text
+  // Set once when Andy (NanoClaw) first surfaces this inquiry to Blayke on WhatsApp,
+  // so the inquiry sweep notifies exactly once and never re-fires on a later poll.
+  andySeenAt    DateTime? @map("andy_seen_at")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
