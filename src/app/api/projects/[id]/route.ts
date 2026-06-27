@@ -19,6 +19,9 @@ const updateProjectSchema = z.object({
   // the customer picks from in-portal. "" / null clears it.
   designOptions: z.string().nullable().optional(),
   selectedDesignOption: z.string().nullable().optional(),
+  // Gate 2: true = approve sending options to the customer (stamp now), false =
+  // pull them back to staff-only. Controls customer-side picker visibility.
+  releaseDesignOptions: z.boolean().optional(),
 });
 
 // GET /api/projects/[id] - Get single project
@@ -118,6 +121,9 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
         }),
         ...(validatedData.selectedDesignOption !== undefined && {
           selectedDesignOption: validatedData.selectedDesignOption || null,
+        }),
+        ...(validatedData.releaseDesignOptions !== undefined && {
+          designOptionsReleasedAt: validatedData.releaseDesignOptions ? new Date() : null,
         }),
       },
     });

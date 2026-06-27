@@ -43,6 +43,7 @@ interface Project {
   projectNotes: ProjectNote[];
   designOptions: string | null;
   selectedDesignOption: string | null;
+  designOptionsReleasedAt: string | null;
 }
 
 interface DesignOption {
@@ -272,10 +273,11 @@ export default function ProjectDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Design-direction picker — when staff have attached mockup directions,
-          the customer previews each and picks one, entirely in-portal. Once a
-          direction is chosen we collapse to a confirmation. */}
-      {designOptions.length > 0 && (
+      {/* Design-direction picker — shown only AFTER staff approve sending the
+          options to the customer (Gate 2: designOptionsReleasedAt). The customer
+          previews each and picks one, entirely in-portal; once chosen we collapse
+          to a confirmation. */}
+      {designOptions.length > 0 && project.designOptionsReleasedAt && (
         <Card variant="professional" className="border-orange-200 bg-gradient-to-br from-orange-50 to-blue-50">
           <CardHeader>
             <div className="flex items-start gap-3">

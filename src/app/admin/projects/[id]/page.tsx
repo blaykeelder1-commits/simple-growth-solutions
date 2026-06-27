@@ -30,6 +30,10 @@ import {
   Save,
   Loader2,
   CheckCircle2,
+  Palette,
+  Eye,
+  Send,
+  Undo2,
 } from "lucide-react";
 
 interface Project {
@@ -53,6 +57,16 @@ interface Project {
   };
   changeRequests: ChangeRequest[];
   projectNotes: ProjectNote[];
+  designOptions: string | null;
+  selectedDesignOption: string | null;
+  designOptionsReleasedAt: string | null;
+}
+
+interface DesignOption {
+  key: string;
+  label: string;
+  blurb?: string;
+  previewUrl: string;
 }
 
 interface ChangeRequest {
@@ -101,6 +115,7 @@ export default function AdminProjectDetailPage() {
   const [deploymentPlatform, setDeploymentPlatform] = useState("");
   const [newNote, setNewNote] = useState("");
   const [noteInternal, setNoteInternal] = useState(true);
+  const [releasing, setReleasing] = useState(false);
 
   useEffect(() => {
     async function fetchProject() {
@@ -184,6 +199,25 @@ export default function AdminProjectDetailPage() {
     }
   };
 
+  const handleReleaseOptions = async (release: boolean) => {
+    setReleasing(true);
+    try {
+      const res = await fetch(`/api/projects/${params.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ releaseDesignOptions: release }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProject((prev) => (prev ? { ...prev, ...data.project } : data.project));
+      }
+    } catch {
+      // Failed to update release state
+    } finally {
+      setReleasing(false);
+    }
+  };
+
   const handleUpdateRequest = async (requestId: string, newStatus: string) => {
     try {
       const res = await fetch(`/api/admin/change-requests/${requestId}`, {
@@ -225,6 +259,20 @@ export default function AdminProjectDetailPage() {
   const preferences = project.designPreferences
     ? JSON.parse(project.designPreferences)
     : {};
+
+  let designOptions: DesignOption[] = [];
+  if (project.designOptions) {
+    try {
+      const parsed = JSON.parse(project.designOptions);
+      if (Array.isArray(parsed)) designOptions = parsed as DesignOption[];
+    } catch {
+      // Malformed design_options — render nothing rather than crash the page.
+    }
+  }
+  const optionsReleased = !!project.designOptionsReleasedAt;
+  const selectedOption = designOptions.find(
+    (o) => o.key === project.selectedDesignOption
+  );
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -290,6 +338,97 @@ export default function AdminProjectDetailPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left column - Project management */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Design options — staff review file (Gate 2). Built options land here
+              for desktop review; nothing reaches the customer until "Approve & send". */}
+          <Card className="border-orange-200">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Palette className="h-5 w-5 text-orange-600" />
+                <CardTitle>Design Options — Review &amp; Send</CardTitle>
+              </div>
+              <CardDescription>
+                {designOptions.length === 0
+                  ? "No design options have been built for this project yet."
+                  : optionsReleased
+                  ? selectedOption
+                    ? `Customer chose "${selectedOption.label}".`
+                    : "Sent to the customer — awaiting their choice."
+                  : "Review each option on desktop, then approve to send to the customer."}
+              </CardDescription>
+            </CardHeader>
+            {designOptions.length > 0 && (
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {designOptions.map((opt) => {
+                    const isSelected = project.selectedDesignOption === opt.key;
+                    return (
+                      <div
+                        key={opt.key}
+                        className={`rounded-xl border p-4 flex flex-col ${
+                          isSelected ? "border-orange-400 ring-2 ring-orange-200" : "border-gray-200"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <h4 className="font-semibold text-sm">{opt.label}</h4>
+                          {isSelected && (
+                            <Badge className="bg-orange-100 text-orange-800 border border-orange-200">
+                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              Chosen
+                            </Badge>
+                          )}
+                        </div>
+                        {opt.blurb && <p className="text-xs text-gray-500 mb-3 flex-1">{opt.blurb}</p>}
+                        <a href={opt.previewUrl} target="_blank" rel="noopener noreferrer" className="mt-auto">
+                          <Button variant="outline" size="sm" className="w-full">
+                            <Eye className="h-4 w-4 mr-2" />
+                            Preview
+                          </Button>
+                        </a>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {!optionsReleased ? (
+                  <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-sm text-orange-900">
+                      <span className="font-semibold">Staff review only.</span> The customer can&apos;t see
+                      these until you approve. Make final edits, then send.
+                    </div>
+                    <Button
+                      onClick={() => handleReleaseOptions(true)}
+                      disabled={releasing}
+                      className="bg-orange-600 hover:bg-orange-700 text-white"
+                    >
+                      {releasing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                      Approve &amp; send to customer
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-sm text-emerald-900">
+                      <span className="font-semibold">Sent to customer</span>
+                      {project.designOptionsReleasedAt
+                        ? ` on ${new Date(project.designOptionsReleasedAt).toLocaleDateString()}`
+                        : ""}
+                      {selectedOption ? ` · they chose "${selectedOption.label}".` : " · awaiting their pick."}
+                    </div>
+                    {!selectedOption && (
+                      <Button
+                        variant="outline"
+                        onClick={() => handleReleaseOptions(false)}
+                        disabled={releasing}
+                      >
+                        {releasing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Undo2 className="h-4 w-4 mr-2" />}
+                        Pull back to review
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            )}
+          </Card>
+
           {/* Status & deployment */}
           <Card>
             <CardHeader>

@@ -446,6 +446,10 @@ model WebsiteProject {
   designOptions        String?   @map("design_options") @db.Text
   selectedDesignOption String?   @map("selected_design_option")
   designSelectedAt     DateTime? @map("design_selected_at")
+  // Gate 2 (staff → customer): set when staff approve sending the design
+  // options to the customer. The customer picker stays hidden until this is
+  // stamped — staff review on the admin board first.
+  designOptionsReleasedAt DateTime? @map("design_options_released_at")
 
   // Timeline
   estimatedCompletion DateTime? @map("estimated_completion")
