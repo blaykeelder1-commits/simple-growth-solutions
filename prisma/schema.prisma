@@ -451,6 +451,15 @@ model WebsiteProject {
   // stamped — staff review on the admin board first.
   designOptionsReleasedAt DateTime? @map("design_options_released_at")
 
+  // New-build surfacing + Gate 1. Mirrors the Lead.andySeenAt set-once guard:
+  // a new_build project is "pending" for Andy only while status='submitted'
+  // AND andySeenAt is null. Andy stamps andySeenAt the moment he surfaces it to
+  // Blayke on WhatsApp, so a later sweep never re-fires. buildApprovedAt is
+  // Gate 1 (Blayke → "build it"): no design options get built until it is
+  // stamped, symmetric with designOptionsReleasedAt (Gate 2, staff → customer).
+  andySeenAt      DateTime? @map("andy_seen_at")
+  buildApprovedAt DateTime? @map("build_approved_at")
+
   // Timeline
   estimatedCompletion DateTime? @map("estimated_completion")
   actualCompletion    DateTime? @map("actual_completion")

@@ -22,6 +22,9 @@ const updateProjectSchema = z.object({
   // Gate 2: true = approve sending options to the customer (stamp now), false =
   // pull them back to staff-only. Controls customer-side picker visibility.
   releaseDesignOptions: z.boolean().optional(),
+  // Gate 1: true = Blayke approves Andy to build the design options (stamp now),
+  // false = revoke. No options should be built until buildApprovedAt is set.
+  approveBuild: z.boolean().optional(),
 });
 
 // GET /api/projects/[id] - Get single project
@@ -124,6 +127,9 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
         }),
         ...(validatedData.releaseDesignOptions !== undefined && {
           designOptionsReleasedAt: validatedData.releaseDesignOptions ? new Date() : null,
+        }),
+        ...(validatedData.approveBuild !== undefined && {
+          buildApprovedAt: validatedData.approveBuild ? new Date() : null,
         }),
       },
     });

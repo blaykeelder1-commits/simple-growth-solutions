@@ -34,6 +34,7 @@ import {
   Eye,
   Send,
   Undo2,
+  Hammer,
 } from "lucide-react";
 
 interface Project {
@@ -60,6 +61,7 @@ interface Project {
   designOptions: string | null;
   selectedDesignOption: string | null;
   designOptionsReleasedAt: string | null;
+  buildApprovedAt: string | null;
 }
 
 interface DesignOption {
@@ -116,6 +118,7 @@ export default function AdminProjectDetailPage() {
   const [newNote, setNewNote] = useState("");
   const [noteInternal, setNoteInternal] = useState(true);
   const [releasing, setReleasing] = useState(false);
+  const [approvingBuild, setApprovingBuild] = useState(false);
 
   useEffect(() => {
     async function fetchProject() {
@@ -218,6 +221,25 @@ export default function AdminProjectDetailPage() {
     }
   };
 
+  const handleApproveBuild = async (approve: boolean) => {
+    setApprovingBuild(true);
+    try {
+      const res = await fetch(`/api/projects/${params.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approveBuild: approve }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProject((prev) => (prev ? { ...prev, ...data.project } : data.project));
+      }
+    } catch {
+      // Failed to update build approval
+    } finally {
+      setApprovingBuild(false);
+    }
+  };
+
   const handleUpdateRequest = async (requestId: string, newStatus: string) => {
     try {
       const res = await fetch(`/api/admin/change-requests/${requestId}`, {
@@ -273,6 +295,8 @@ export default function AdminProjectDetailPage() {
   const selectedOption = designOptions.find(
     (o) => o.key === project.selectedDesignOption
   );
+  const buildApproved = !!project.buildApprovedAt;
+  const isNewBuild = project.projectType === "new_build";
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -338,6 +362,69 @@ export default function AdminProjectDetailPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left column - Project management */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Gate 1 — approve to build (new_build only). Andy surfaces the request
+              on WhatsApp; Blayke approves here before any design options get built.
+              Symmetric with the Gate-2 "Approve & send" control below. */}
+          {isNewBuild && (
+            <Card className={buildApproved ? "border-emerald-200" : "border-blue-200"}>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Hammer className="h-5 w-5 text-blue-600" />
+                  <CardTitle>Gate 1 — Approve to Build</CardTitle>
+                </div>
+                <CardDescription>
+                  {buildApproved
+                    ? "Build approved — design options can now be created and attached below."
+                    : "New build request. Approve to greenlight building the design options."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {!buildApproved ? (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-sm text-blue-900">
+                      <span className="font-semibold">Awaiting your go-ahead.</span> Nothing gets
+                      built until you approve.
+                    </div>
+                    <Button
+                      onClick={() => handleApproveBuild(true)}
+                      disabled={approvingBuild}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      {approvingBuild ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Hammer className="h-4 w-4 mr-2" />
+                      )}
+                      Approve to build
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-sm text-emerald-900">
+                      <span className="font-semibold">Build approved</span>
+                      {project.buildApprovedAt
+                        ? ` on ${new Date(project.buildApprovedAt).toLocaleDateString()}`
+                        : ""}
+                      .
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleApproveBuild(false)}
+                      disabled={approvingBuild}
+                    >
+                      {approvingBuild ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Undo2 className="h-4 w-4 mr-2" />
+                      )}
+                      Revoke
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Design options — staff review file (Gate 2). Built options land here
               for desktop review; nothing reaches the customer until "Approve & send". */}
           <Card className="border-orange-200">
