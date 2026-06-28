@@ -540,6 +540,10 @@ model ProjectNote {
   isInternal Boolean @default(true) @map("is_internal") // Internal notes vs client-visible
   authorId   String? @map("author_id")
 
+  // Set-once guard so Andy's design-feedback sweep surfaces each [DESIGN]-tagged
+  // edit/deny note to Blayke on WhatsApp exactly once (mirrors Lead/WebsiteProject).
+  andySeenAt DateTime? @map("andy_seen_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
