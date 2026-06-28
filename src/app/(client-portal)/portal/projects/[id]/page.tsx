@@ -22,7 +22,10 @@ import {
   Plus,
   Palette,
   Eye,
+  MessageSquareText,
+  Send,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { ProjectUpcharges } from "@/components/portal/ProjectUpcharges";
 
 interface Project {
@@ -108,6 +111,10 @@ export default function ProjectDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [choosingKey, setChoosingKey] = useState<string | null>(null);
   const [chooseError, setChooseError] = useState<string | null>(null);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [feedbackDone, setFeedbackDone] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
   const fetchProject = async () => {
     setLoading(true);
@@ -149,6 +156,33 @@ export default function ProjectDetailPage() {
       setChooseError("Unable to connect. Please try again.");
     } finally {
       setChoosingKey(null);
+    }
+  };
+
+  // Customer-side design feedback: "none of these" (reject all) or "tweak this one".
+  // Lands in the shared [DESIGN] thread → surfaces to staff → we revise and re-post.
+  const submitDesignFeedback = async (decision: "none" | "edit", optionKey?: string) => {
+    if (!feedbackText.trim()) return;
+    setSubmittingFeedback(true);
+    setFeedbackError(null);
+    try {
+      const res = await fetch(`/api/projects/${params.id}/design-feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, feedback: feedbackText.trim(), optionKey }),
+      });
+      if (res.ok) {
+        setFeedbackText("");
+        setFeedbackDone(true);
+        await fetchProject();
+      } else {
+        const data = await res.json().catch(() => null);
+        setFeedbackError(data?.message || "Couldn't send your feedback. Please try again.");
+      }
+    } catch {
+      setFeedbackError("Unable to connect. Please try again.");
+    } finally {
+      setSubmittingFeedback(false);
     }
   };
 
@@ -347,6 +381,72 @@ export default function ProjectDetailPage() {
                   </div>
                 );
               })}
+            </div>
+
+            {/* Customer design feedback + the shared conversation thread */}
+            <div className="mt-6 border-t border-orange-100 pt-5 space-y-4">
+              {(() => {
+                const thread = project.projectNotes.filter((n) => n.content.startsWith("[DESIGN]"));
+                return thread.length > 0 ? (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                      <MessageSquareText className="h-4 w-4 text-orange-600" /> Your design conversation
+                    </h4>
+                    {thread.map((n) => (
+                      <div key={n.id} className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700">
+                        {n.content
+                          .replace(/^\[DESIGN\]\s*(DENIED|EDITS REQUESTED):\s*/, "")
+                          .replace(/^\[customer[^\]]*\]\s*/, "")}
+                        <div className="text-xs text-gray-400 mt-1">{new Date(n.createdAt).toLocaleString()}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null;
+              })()}
+
+              {feedbackDone ? (
+                <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800 flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4" /> Thanks! We got your notes — we&apos;ll revise and send updated options.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-gray-800">
+                    {selectedOption ? "Want a tweak to this direction?" : "None of these feel right?"}
+                  </h4>
+                  <p className="text-xs text-gray-500">
+                    {selectedOption
+                      ? "Tell us what you'd change — we'll refine this direction and send it back."
+                      : "Tell us what you're after — colors, vibe, layout — and we'll send fresh options. We won't re-send a look you've turned down."}
+                  </p>
+                  {feedbackError && (
+                    <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">{feedbackError}</div>
+                  )}
+                  <Textarea
+                    value={feedbackText}
+                    onChange={(e) => setFeedbackText(e.target.value)}
+                    rows={3}
+                    placeholder={
+                      selectedOption
+                        ? "e.g. Love this one, but can the hero be brighter and add a kids section?"
+                        : "e.g. These feel too corporate — we'd like warmer and more family-focused."
+                    }
+                  />
+                  <Button
+                    onClick={() => submitDesignFeedback(selectedOption ? "edit" : "none", selectedOption?.key)}
+                    disabled={submittingFeedback || !feedbackText.trim()}
+                    variant="outline"
+                    className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                  >
+                    {submittingFeedback ? (
+                      "Sending…"
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4 mr-2" /> {selectedOption ? "Request a tweak" : "Send feedback"}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

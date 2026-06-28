@@ -18,9 +18,10 @@ const BASE_URL = "https://simple-growth-solution.com";
 export const GET = withAdmin(async () => {
   try {
     const since = new Date(Date.now() - MAX_AGE_MS);
+    // Surface BOTH staff (internal) and customer (client-visible) [DESIGN] notes —
+    // the design conversation flows both ways through the one thread.
     const notes = await prisma.projectNote.findMany({
       where: {
-        isInternal: true,
         andySeenAt: null,
         createdAt: { gte: since },
         content: { startsWith: DESIGN_TAG },
@@ -30,6 +31,7 @@ export const GET = withAdmin(async () => {
       select: {
         id: true,
         content: true,
+        isInternal: true,
         createdAt: true,
         projectId: true,
         project: {
@@ -51,6 +53,8 @@ export const GET = withAdmin(async () => {
           projectName: n.project?.projectName ?? null,
           businessName: n.project?.organization?.name ?? null,
           decision: denied ? "denied" : "edits",
+          // Customer notes are client-visible; staff notes are internal.
+          source: n.isInternal ? "staff" : "customer",
           // Strip the "[DESIGN] DENIED: " / "[DESIGN] EDITS REQUESTED: " prefix.
           feedback: n.content.replace(/^\[DESIGN\]\s*(DENIED|EDITS REQUESTED):\s*/, ""),
           adminUrl: `${BASE_URL}/admin/projects/${n.projectId}`,

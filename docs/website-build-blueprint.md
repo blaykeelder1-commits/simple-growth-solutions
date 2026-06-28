@@ -50,9 +50,17 @@ interactions. The customer should feel immersed in their own site — that is th
 
 **6. The conversation lives on the platform, not in chat.** The owner reviews options on the
 admin board and **Requests edits / Denies with notes there** (recorded as `[DESIGN]`-tagged
-project notes → a tracked thread with a derived decision state). Claude/Andy revise from that
-feedback and re-post updated options. Never split the design conversation between a terminal
-and the site.
+project notes → a tracked thread with a derived decision state). The customer mirrors this from
+their portal — pick a direction, "tweak this one", or "none of these feel right" — all into the
+**same `[DESIGN]` thread**, which Andy's `sgs-design-feedback-sweep` surfaces to WhatsApp. Claude/
+Andy revise from that feedback and re-post updated options. Never split the design conversation
+between a terminal and the site.
+
+**DON'T-REPEAT-DENIED (mandatory before any re-send):** read the project's full `[DESIGN]`
+thread first. **Never re-send a direction, look, or platform that was already denied** — a
+revision must visibly move away from what was rejected and *toward* the feedback, not recycle a
+turned-down option. Log the denied direction + the reason in the thread so the next round (and
+the blueprint Lessons Log) carries it forward.
 
 **7. Gates + deploy architecture.** new-build surfaced to WhatsApp → **Gate 1** owner
 approves the build → build from this blueprint → admin **review board** → **Gate 2** owner
