@@ -336,15 +336,17 @@ export default function AdminProjectDetailPage() {
   // On-platform design conversation: notes tagged DESIGN_TAG, newest first.
   const designNotes = project.projectNotes.filter((n) => n.content.startsWith(DESIGN_TAG));
   const latestDesignNote = designNotes[0];
-  // Current review decision, derived (no extra state column needed):
-  //   sent → released to customer; denied / edits → revision pending; else ready.
-  const reviewDecision = optionsReleased
-    ? "sent"
-    : latestDesignNote?.content.includes("DENIED")
+  // Current review decision, derived (no extra state column needed). Outstanding
+  // feedback (denied/edits) wins even AFTER release, so customer feedback surfaces
+  // on the card instead of being masked by a flat "sent" once options go out.
+  const reviewDecision = latestDesignNote?.content.includes("DENIED")
     ? "denied"
     : latestDesignNote?.content.includes("EDITS REQUESTED")
     ? "edits"
+    : optionsReleased
+    ? "sent"
     : "ready";
+  const hasCustomerFeedback = designNotes.some((n) => n.content.includes("[customer"));
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -526,16 +528,17 @@ export default function AdminProjectDetailPage() {
                   })}
                 </div>
 
-                {/* On-platform design conversation — request edits / deny with notes
-                    instead of going to chat. Claude/Andy revise from this feedback. */}
-                {!optionsReleased && (
+                {/* On-platform design conversation — the [DESIGN] thread (staff + customer)
+                    stays visible even after sending, so customer feedback is never hidden.
+                    The compose controls below are staff-only and only show before sending. */}
+                {(designNotes.length > 0 || !optionsReleased) && (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       <MessageSquareText className="h-4 w-4 text-slate-600" />
-                      <h4 className="font-semibold text-sm text-slate-800">Design review &amp; feedback</h4>
+                      <h4 className="font-semibold text-sm text-slate-800">Design conversation</h4>
                       {reviewDecision === "edits" && (
                         <Badge className="bg-amber-100 text-amber-800 border border-amber-200">
-                          <Pencil className="h-3 w-3 mr-1" /> Edits requested — revision pending
+                          <Pencil className="h-3 w-3 mr-1" /> Edits requested
                         </Badge>
                       )}
                       {reviewDecision === "denied" && (
@@ -549,21 +552,24 @@ export default function AdminProjectDetailPage() {
                         </Badge>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500">
-                      Keep the design conversation here, not in chat. Request edits or deny with notes —
-                      Claude/Andy revise from your feedback and re-post updated options.
-                    </p>
+                    {!optionsReleased && (
+                      <p className="text-xs text-slate-500">
+                        Keep the design conversation here, not in chat. Request edits or deny with notes —
+                        Claude/Andy revise from your feedback and re-post updated options.
+                      </p>
+                    )}
 
                     {designNotes.length > 0 && (
-                      <div className="space-y-2 max-h-56 overflow-y-auto">
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
                         {designNotes.map((n) => {
                           const denied = n.content.includes("DENIED");
+                          const fromCustomer = n.content.includes("[customer");
                           return (
                             <div
                               key={n.id}
                               className={`rounded-lg border p-3 text-sm ${denied ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"}`}
                             >
-                              <div className="flex items-center gap-2 mb-1">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
                                 {denied ? (
                                   <Ban className="h-3.5 w-3.5 text-red-600" />
                                 ) : (
@@ -572,12 +578,17 @@ export default function AdminProjectDetailPage() {
                                 <span className={`text-xs font-bold uppercase tracking-wide ${denied ? "text-red-700" : "text-amber-700"}`}>
                                   {denied ? "Denied" : "Edits requested"}
                                 </span>
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${fromCustomer ? "bg-blue-100 text-blue-700" : "bg-slate-200 text-slate-600"}`}>
+                                  {fromCustomer ? "Customer" : "Staff"}
+                                </span>
                                 <span className="text-xs text-slate-400">
                                   {new Date(n.createdAt).toLocaleString()}
                                 </span>
                               </div>
                               <p className="text-slate-700">
-                                {n.content.replace(/^\[DESIGN\]\s*(DENIED|EDITS REQUESTED):\s*/, "")}
+                                {n.content
+                                  .replace(/^\[DESIGN\]\s*(DENIED|EDITS REQUESTED):\s*/, "")
+                                  .replace(/^\[customer[^\]]*\]\s*/, "")}
                               </p>
                             </div>
                           );
@@ -585,35 +596,40 @@ export default function AdminProjectDetailPage() {
                       </div>
                     )}
 
-                    <Textarea
-                      value={designFeedback}
-                      onChange={(e) => setDesignFeedback(e.target.value)}
-                      placeholder="What should change? Be specific — colors, copy, layout, which option(s)…"
-                      rows={3}
-                    />
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        onClick={() => handleDesignDecision("edit")}
-                        disabled={submittingFeedback || !designFeedback.trim()}
-                        className="bg-amber-500 hover:bg-amber-600 text-white"
-                      >
-                        {submittingFeedback ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <Pencil className="h-4 w-4 mr-2" />
-                        )}
-                        Request edits
-                      </Button>
-                      <Button
-                        onClick={() => handleDesignDecision("deny")}
-                        disabled={submittingFeedback || !designFeedback.trim()}
-                        variant="outline"
-                        className="border-red-300 text-red-700 hover:bg-red-50"
-                      >
-                        <Ban className="h-4 w-4 mr-2" />
-                        Deny &amp; rebuild
-                      </Button>
-                    </div>
+                    {/* Staff compose — request edits / deny BEFORE sending only. */}
+                    {!optionsReleased && (
+                      <>
+                        <Textarea
+                          value={designFeedback}
+                          onChange={(e) => setDesignFeedback(e.target.value)}
+                          placeholder="What should change? Be specific — colors, copy, layout, which option(s)…"
+                          rows={3}
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            onClick={() => handleDesignDecision("edit")}
+                            disabled={submittingFeedback || !designFeedback.trim()}
+                            className="bg-amber-500 hover:bg-amber-600 text-white"
+                          >
+                            {submittingFeedback ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Pencil className="h-4 w-4 mr-2" />
+                            )}
+                            Request edits
+                          </Button>
+                          <Button
+                            onClick={() => handleDesignDecision("deny")}
+                            disabled={submittingFeedback || !designFeedback.trim()}
+                            variant="outline"
+                            className="border-red-300 text-red-700 hover:bg-red-50"
+                          >
+                            <Ban className="h-4 w-4 mr-2" />
+                            Deny &amp; rebuild
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -633,13 +649,23 @@ export default function AdminProjectDetailPage() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 flex flex-wrap items-center justify-between gap-3">
-                    <div className="text-sm text-emerald-900">
+                  <div
+                    className={`rounded-lg border p-4 flex flex-wrap items-center justify-between gap-3 ${
+                      hasCustomerFeedback && !selectedOption
+                        ? "border-amber-300 bg-amber-50"
+                        : "border-emerald-200 bg-emerald-50"
+                    }`}
+                  >
+                    <div className={`text-sm ${hasCustomerFeedback && !selectedOption ? "text-amber-900" : "text-emerald-900"}`}>
                       <span className="font-semibold">Sent to customer</span>
                       {project.designOptionsReleasedAt
                         ? ` on ${new Date(project.designOptionsReleasedAt).toLocaleDateString()}`
                         : ""}
-                      {selectedOption ? ` · they chose "${selectedOption.label}".` : " · awaiting their pick."}
+                      {selectedOption
+                        ? ` · they chose "${selectedOption.label}".`
+                        : hasCustomerFeedback
+                        ? " · the customer left feedback above — pull back to revise, then re-send."
+                        : " · awaiting their pick."}
                     </div>
                     {!selectedOption && (
                       <Button
@@ -648,7 +674,7 @@ export default function AdminProjectDetailPage() {
                         disabled={releasing}
                       >
                         {releasing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Undo2 className="h-4 w-4 mr-2" />}
-                        Pull back to review
+                        Pull back to revise
                       </Button>
                     )}
                   </div>
