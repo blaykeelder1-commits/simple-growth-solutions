@@ -3,6 +3,20 @@
 These rules govern all work in this repository and bind any agent that produces
 website work for customers — human admin, Claude, or Andy/NanoClaw automation.
 
+## Website Build Blueprint (MANDATORY)
+
+**Before scaffolding or building ANY customer website, load
+[`docs/website-build-blueprint.md`](docs/website-build-blueprint.md) and apply it.**
+It is the reusable foundation ("the bones") distilled from every site we've shipped —
+the proven stack, page structure, performance/schema/conversion rules, and the specific
+bugs we've already solved. Starting from the blueprint is how we stop re-discovering the
+same traps on every build.
+
+**Learning loop:** when a build's 3-pass review (below) surfaces a *new* recurring trap —
+or a pattern that clearly performs better — append a dated one-liner to the blueprint's
+**Lessons Log** before closing the build. Andy's weekly `sgs-rulebook-review` promotes
+durable lessons up into the blueprint's rules. The bones get stronger every site.
+
 ## Website Edit Review Protocol (MANDATORY)
 
 **Before any website build or edit is submitted to a customer for approval/denial
