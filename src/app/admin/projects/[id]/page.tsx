@@ -35,6 +35,9 @@ import {
   Send,
   Undo2,
   Hammer,
+  MessageSquareText,
+  Pencil,
+  Ban,
 } from "lucide-react";
 
 interface Project {
@@ -88,6 +91,11 @@ interface ProjectNote {
   createdAt: string;
 }
 
+// Design-feedback convention: review decisions are recorded as ProjectNotes that
+// start with this tag, so the review card can pull them into a dedicated on-platform
+// design thread and derive the current decision — no schema change, reuses notes.
+const DESIGN_TAG = "[DESIGN]";
+
 const statusOptions = [
   { value: "submitted", label: "Submitted" },
   { value: "reviewing", label: "Reviewing" },
@@ -119,6 +127,8 @@ export default function AdminProjectDetailPage() {
   const [noteInternal, setNoteInternal] = useState(true);
   const [releasing, setReleasing] = useState(false);
   const [approvingBuild, setApprovingBuild] = useState(false);
+  const [designFeedback, setDesignFeedback] = useState("");
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
 
   useEffect(() => {
     async function fetchProject() {
@@ -240,6 +250,31 @@ export default function AdminProjectDetailPage() {
     }
   };
 
+  const handleDesignDecision = async (decision: "edit" | "deny") => {
+    if (!designFeedback.trim()) return;
+    setSubmittingFeedback(true);
+    const label = decision === "deny" ? "DENIED" : "EDITS REQUESTED";
+    const content = `${DESIGN_TAG} ${label}: ${designFeedback.trim()}`;
+    try {
+      const res = await fetch(`/api/admin/projects/${params.id}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, isInternal: true }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProject((prev) =>
+          prev ? { ...prev, projectNotes: [data.note, ...prev.projectNotes] } : null
+        );
+        setDesignFeedback("");
+      }
+    } catch {
+      // Failed to record design feedback
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
+
   const handleUpdateRequest = async (requestId: string, newStatus: string) => {
     try {
       const res = await fetch(`/api/admin/change-requests/${requestId}`, {
@@ -297,6 +332,19 @@ export default function AdminProjectDetailPage() {
   );
   const buildApproved = !!project.buildApprovedAt;
   const isNewBuild = project.projectType === "new_build";
+
+  // On-platform design conversation: notes tagged DESIGN_TAG, newest first.
+  const designNotes = project.projectNotes.filter((n) => n.content.startsWith(DESIGN_TAG));
+  const latestDesignNote = designNotes[0];
+  // Current review decision, derived (no extra state column needed):
+  //   sent → released to customer; denied / edits → revision pending; else ready.
+  const reviewDecision = optionsReleased
+    ? "sent"
+    : latestDesignNote?.content.includes("DENIED")
+    ? "denied"
+    : latestDesignNote?.content.includes("EDITS REQUESTED")
+    ? "edits"
+    : "ready";
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -477,6 +525,97 @@ export default function AdminProjectDetailPage() {
                     );
                   })}
                 </div>
+
+                {/* On-platform design conversation — request edits / deny with notes
+                    instead of going to chat. Claude/Andy revise from this feedback. */}
+                {!optionsReleased && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <MessageSquareText className="h-4 w-4 text-slate-600" />
+                      <h4 className="font-semibold text-sm text-slate-800">Design review &amp; feedback</h4>
+                      {reviewDecision === "edits" && (
+                        <Badge className="bg-amber-100 text-amber-800 border border-amber-200">
+                          <Pencil className="h-3 w-3 mr-1" /> Edits requested — revision pending
+                        </Badge>
+                      )}
+                      {reviewDecision === "denied" && (
+                        <Badge className="bg-red-100 text-red-800 border border-red-200">
+                          <Ban className="h-3 w-3 mr-1" /> Denied — needs rebuild
+                        </Badge>
+                      )}
+                      {reviewDecision === "ready" && (
+                        <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          <CheckCircle2 className="h-3 w-3 mr-1" /> Ready for your review
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Keep the design conversation here, not in chat. Request edits or deny with notes —
+                      Claude/Andy revise from your feedback and re-post updated options.
+                    </p>
+
+                    {designNotes.length > 0 && (
+                      <div className="space-y-2 max-h-56 overflow-y-auto">
+                        {designNotes.map((n) => {
+                          const denied = n.content.includes("DENIED");
+                          return (
+                            <div
+                              key={n.id}
+                              className={`rounded-lg border p-3 text-sm ${denied ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"}`}
+                            >
+                              <div className="flex items-center gap-2 mb-1">
+                                {denied ? (
+                                  <Ban className="h-3.5 w-3.5 text-red-600" />
+                                ) : (
+                                  <Pencil className="h-3.5 w-3.5 text-amber-600" />
+                                )}
+                                <span className={`text-xs font-bold uppercase tracking-wide ${denied ? "text-red-700" : "text-amber-700"}`}>
+                                  {denied ? "Denied" : "Edits requested"}
+                                </span>
+                                <span className="text-xs text-slate-400">
+                                  {new Date(n.createdAt).toLocaleString()}
+                                </span>
+                              </div>
+                              <p className="text-slate-700">
+                                {n.content.replace(/^\[DESIGN\]\s*(DENIED|EDITS REQUESTED):\s*/, "")}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <Textarea
+                      value={designFeedback}
+                      onChange={(e) => setDesignFeedback(e.target.value)}
+                      placeholder="What should change? Be specific — colors, copy, layout, which option(s)…"
+                      rows={3}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        onClick={() => handleDesignDecision("edit")}
+                        disabled={submittingFeedback || !designFeedback.trim()}
+                        className="bg-amber-500 hover:bg-amber-600 text-white"
+                      >
+                        {submittingFeedback ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Pencil className="h-4 w-4 mr-2" />
+                        )}
+                        Request edits
+                      </Button>
+                      <Button
+                        onClick={() => handleDesignDecision("deny")}
+                        disabled={submittingFeedback || !designFeedback.trim()}
+                        variant="outline"
+                        className="border-red-300 text-red-700 hover:bg-red-50"
+                      >
+                        <Ban className="h-4 w-4 mr-2" />
+                        Deny &amp; rebuild
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {!optionsReleased ? (
                   <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 flex flex-wrap items-center justify-between gap-3">
