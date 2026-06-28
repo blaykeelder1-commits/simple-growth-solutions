@@ -24,6 +24,10 @@ import {
   Globe,
   Search,
   Briefcase,
+  Eye,
+  Send,
+  CheckCircle2,
+  ArrowRight,
 } from "lucide-react";
 
 interface Project {
@@ -38,6 +42,33 @@ interface Project {
   createdAt: string;
   updatedAt: string;
   changeRequests: { id: string; status: string }[];
+  designOptions: string | null;
+  designOptionsReleasedAt: string | null;
+  selectedDesignOption: string | null;
+}
+
+// Count the design options staged on a project (JSON-array string). 0 if none/malformed.
+function countOptions(designOptions: string | null): number {
+  if (!designOptions) return 0;
+  try {
+    const parsed = JSON.parse(designOptions);
+    return Array.isArray(parsed) ? parsed.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
+// Where a project sits in the design-options review lifecycle, for the admin board.
+//   needs_review     — options built + staged, NOT yet sent → awaiting Blayke's review (Gate 2)
+//   awaiting_pick    — sent to the customer, they haven't chosen yet
+//   customer_chose   — customer picked one
+//   none             — no options in play
+type ReviewState = "needs_review" | "awaiting_pick" | "customer_chose" | "none";
+function reviewState(p: Project): ReviewState {
+  if (countOptions(p.designOptions) === 0) return "none";
+  if (!p.designOptionsReleasedAt) return "needs_review";
+  if (!p.selectedDesignOption) return "awaiting_pick";
+  return "customer_chose";
 }
 
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -123,6 +154,10 @@ export default function AdminProjectsPage() {
     return acc;
   }, {} as Record<string, number>);
 
+  // Projects with design options built + staged but NOT yet sent to the customer —
+  // this is the owner's review queue (Gate 2): review Andy/Claude's work, then send.
+  const needsReview = projects.filter((p) => reviewState(p) === "needs_review");
+
   return (
     <div className="space-y-6">
       {/* Hero strip with embedded stage counters */}
@@ -171,6 +206,52 @@ export default function AdminProjectsPage() {
           </div>
         </div>
       </div>
+
+      {/* Owner review queue (Gate 2) — design options built + staged, awaiting your
+          review before they go to the customer. Only shows when something is waiting. */}
+      {needsReview.length > 0 && (
+        <Card className="border-orange-300 bg-orange-50">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <Eye className="h-5 w-5 text-orange-600" />
+              <h2 className="text-lg font-bold text-orange-900">
+                Awaiting your review ({needsReview.length})
+              </h2>
+            </div>
+            <p className="text-sm text-orange-800">
+              Website options are built and staged. Review them, make any edits, then approve to send to the customer.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {needsReview.map((p) => (
+              <div
+                key={p.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-orange-200 bg-white p-3"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded bg-orange-100 flex items-center justify-center">
+                    <Globe className="h-4 w-4 text-orange-600" />
+                  </div>
+                  <div>
+                    <div className="font-semibold">{p.projectName}</div>
+                    <div className="text-xs text-gray-500">
+                      {p.organization?.name || "—"} &bull; {countOptions(p.designOptions)} option
+                      {countOptions(p.designOptions) === 1 ? "" : "s"} ready
+                    </div>
+                  </div>
+                </div>
+                <Link href={`/admin/projects/${p.id}`}>
+                  <Button className="bg-orange-600 hover:bg-orange-700 text-white" size="sm">
+                    <Send className="h-4 w-4 mr-2" />
+                    Review &amp; send
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </Button>
+                </Link>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters */}
       <Card>
@@ -249,7 +330,34 @@ export default function AdminProjectsPage() {
                         {project.projectType.replace("_", " ")}
                       </TableCell>
                       <TableCell>
-                        <Badge className={status.color}>{status.label}</Badge>
+                        <div className="flex flex-col gap-1 items-start">
+                          <Badge className={status.color}>{status.label}</Badge>
+                          {(() => {
+                            const rs = reviewState(project);
+                            if (rs === "needs_review")
+                              return (
+                                <Badge className="bg-orange-100 text-orange-800 border border-orange-200">
+                                  <Eye className="h-3 w-3 mr-1" />
+                                  Needs your review
+                                </Badge>
+                              );
+                            if (rs === "awaiting_pick")
+                              return (
+                                <Badge className="bg-blue-100 text-blue-800 border border-blue-200">
+                                  <Send className="h-3 w-3 mr-1" />
+                                  Sent — awaiting pick
+                                </Badge>
+                              );
+                            if (rs === "customer_chose")
+                              return (
+                                <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                  Customer chose
+                                </Badge>
+                              );
+                            return null;
+                          })()}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {project.priority > 0 ? (
