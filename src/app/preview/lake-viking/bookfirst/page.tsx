@@ -54,27 +54,29 @@ export default function JoinTheEggPreview() {
         </div>
       </header>
 
-      {/* Hero with inline claim form */}
-      <section style={{ background: `linear-gradient(135deg, ${NAVY} 0%, ${BLUE} 100%)` }}>
-        <div className="max-w-6xl mx-auto px-6 py-16 md:py-20 grid md:grid-cols-2 gap-10 items-center">
+      {/* Hero — full-bleed cinematic with floating claim card */}
+      <section className="relative min-h-[88vh] flex items-center">
+        <img src={img("1593079831268-3381b0db4a77", 1600)} alt="The Egg training floor" className="absolute inset-0 h-full w-full object-cover" loading="eager" fetchPriority="high" />
+        <div className="absolute inset-0" style={{ background: "linear-gradient(105deg, rgba(14,35,80,0.95) 0%, rgba(14,35,80,0.82) 45%, rgba(14,35,80,0.45) 75%, rgba(14,35,80,0.2) 100%)" }} />
+        <div className="relative max-w-6xl mx-auto px-6 w-full py-20 grid md:grid-cols-2 gap-10 items-center">
           <div className="text-white lv-up">
             <div className="flex items-center gap-2 text-sm text-white/80">
               <div className="flex" style={{ color: ORANGE }}>{[...Array(5)].map((_, i) => <Star key={i} className="h-4 w-4 fill-current" />)}</div>
               4.9 from Lake Viking members
             </div>
-            <h1 className="mt-4 text-4xl md:text-6xl font-black leading-[1.05]">
+            <h1 className="mt-4 text-5xl md:text-7xl font-black leading-[0.98]">
               The gym near Lake Viking <span style={{ color: ORANGE }}>worth driving to.</span>
             </h1>
-            <p className="mt-5 text-lg text-white/80 max-w-md">
+            <p className="mt-6 text-lg md:text-xl text-white/85 max-w-md">
               Modern equipment, real coaching, and classes that fit your day. Try the whole place free for 7 days — then join in under a minute.
             </p>
-            <ul className="mt-6 space-y-2 text-white/85 text-sm">
+            <ul className="mt-7 space-y-2.5 text-white/90 text-sm">
               {["No contracts, cancel anytime", "Book classes from your phone", "Minutes from the lake"].map((x) => (
                 <li key={x} className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" style={{ color: ORANGE }} /> {x}</li>
               ))}
             </ul>
           </div>
-          <form id="claim" className="bg-white rounded-3xl p-7 shadow-2xl">
+          <form id="claim" className="bg-white rounded-3xl p-7 shadow-2xl lv-fade">
             <h3 className="font-black text-xl" style={{ color: NAVY }}>Start your free week</h3>
             <p className="text-sm text-slate-500 mt-1 mb-5">Takes 30 seconds. We&apos;ll have your pass ready.</p>
             <div className="space-y-3">

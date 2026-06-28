@@ -57,39 +57,33 @@ export default function HometownStrongPreview() {
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="relative overflow-hidden">
-        <div className="max-w-6xl mx-auto px-6 py-16 md:py-20 grid md:grid-cols-2 gap-10 items-center">
-          <div className="lv-up">
-            <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide" style={{ background: "#FCE8E0", color: ORANGE }}>
-              <Heart className="h-3.5 w-3.5" /> Your neighborhood gym at Lake Viking
+      {/* Hero — full-bleed cinematic */}
+      <section className="relative min-h-[88vh] flex items-center">
+        <img src={img("1534438327276-14e5300c3a48", 1600)} alt="Inside The Egg — the gym floor" className="absolute inset-0 h-full w-full object-cover" loading="eager" fetchPriority="high" />
+        <div className="absolute inset-0" style={{ background: "linear-gradient(100deg, rgba(14,35,80,0.94) 0%, rgba(14,35,80,0.80) 38%, rgba(14,35,80,0.34) 68%, rgba(14,35,80,0) 100%)" }} />
+        <div className="relative max-w-6xl mx-auto px-6 w-full py-20">
+          <div className="max-w-2xl lv-up">
+            <span className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-white backdrop-blur" style={{ background: "rgba(255,255,255,0.14)", border: "1px solid rgba(255,255,255,0.25)" }}>
+              <Heart className="h-3.5 w-3.5" style={{ color: ORANGE }} /> Your neighborhood gym at Lake Viking
             </span>
-            <h1 className="mt-5 text-4xl md:text-6xl font-black leading-[1.05]" style={{ color: NAVY }}>
+            <h1 className="mt-6 text-5xl md:text-7xl font-black leading-[0.98] text-white">
               Lake Viking gets <span style={{ color: ORANGE }}>strong together.</span>
             </h1>
-            <p className="mt-5 text-lg text-slate-600 max-w-md">
-              Real equipment, real neighbors, real results — minutes from the water. No pressure, no judgment. Just a place that feels like home the day you walk in.
+            <p className="mt-6 text-lg md:text-xl text-white/85 max-w-lg">
+              Real equipment, real neighbors, real results — minutes from the water. The day you walk in, you&apos;re home.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <a href="#visit" className="rounded-full px-7 py-3.5 font-bold text-white shadow-lg" style={{ background: ORANGE }}>Book a Free Tour</a>
-              <a href="#plans" className="rounded-full px-7 py-3.5 font-bold border-2" style={{ color: BLUE, borderColor: BLUE }}>See Membership</a>
+            <div className="mt-9 flex flex-wrap gap-3">
+              <a href="#visit" className="rounded-full px-8 py-4 font-bold text-white shadow-xl" style={{ background: ORANGE }}>Book a Free Tour</a>
+              <a href="#plans" className="rounded-full px-8 py-4 font-bold text-white backdrop-blur border border-white/40 hover:bg-white/10">See Membership</a>
             </div>
-            <div className="mt-6 flex items-center gap-2 text-sm text-slate-500">
+            <div className="mt-7 flex items-center gap-3 text-sm text-white/80">
               <div className="flex" style={{ color: ORANGE }}>{[...Array(5)].map((_, i) => <Star key={i} className="h-4 w-4 fill-current" />)}</div>
-              Loved by Lake Viking families
+              Loved by 200+ Lake Viking families
             </div>
           </div>
-          <div className="lv-fade space-y-5">
-            <div className="relative">
-              <img src={img("1534438327276-14e5300c3a48", 900)} alt="Inside The Egg — the gym floor" className="rounded-3xl w-full h-[380px] object-cover shadow-2xl" loading="eager" fetchPriority="high" />
-              <div className="absolute -bottom-5 -left-5 hidden sm:block rounded-2xl bg-white shadow-xl px-5 py-4 border border-orange-100">
-                <div className="text-2xl font-black" style={{ color: BLUE }}>200+</div>
-                <div className="text-xs text-slate-500 font-medium">members &amp; growing</div>
-              </div>
-            </div>
-            <div className="hidden sm:block pt-2">
-              <CrowdMeter orange={ORANGE} />
-            </div>
+          {/* Floating live crowd meter — premium contrast on the photo */}
+          <div className="hidden lg:block absolute right-6 bottom-0 w-80 lv-fade">
+            <CrowdMeter orange={ORANGE} />
           </div>
         </div>
       </section>
