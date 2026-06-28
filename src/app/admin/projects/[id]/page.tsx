@@ -364,8 +364,10 @@ export default function AdminProjectDetailPage() {
         <div className="lg:col-span-2 space-y-6">
           {/* Gate 1 — approve to build (new_build only). Andy surfaces the request
               on WhatsApp; Blayke approves here before any design options get built.
-              Symmetric with the Gate-2 "Approve & send" control below. */}
-          {isNewBuild && (
+              Symmetric with the Gate-2 "Approve & send" control below. Once options
+              already exist, Gate 1 is moot (building happened) — hide it unless it was
+              explicitly approved, so we never show "nothing's built" above built options. */}
+          {isNewBuild && (designOptions.length === 0 || buildApproved) && (
             <Card className={buildApproved ? "border-emerald-200" : "border-blue-200"}>
               <CardHeader>
                 <div className="flex items-center gap-2">
