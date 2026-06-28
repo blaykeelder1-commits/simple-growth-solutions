@@ -12,6 +12,13 @@ the proven stack, page structure, performance/schema/conversion rules, and the s
 bugs we've already solved. Starting from the blueprint is how we stop re-discovering the
 same traps on every build.
 
+**Run the 7-step build process (`docs/website-build-blueprint.md` Section 0) on every
+build:** extract the brand from the source (programmatic color analysis, not eyeballing) →
+research national high-traffic examples → build 2–3 distinct directions → iterate for depth
+& immersion (tour gallery / live crowd meter / depth section / motion) → 3-pass review →
+keep the edit/deny conversation on the platform (not chat) → ship through the gates. We don't
+stop at "clean"; we push to a site the customer feels immersed in.
+
 **Learning loop:** when a build's 3-pass review (below) surfaces a *new* recurring trap —
 or a pattern that clearly performs better — append a dated one-liner to the blueprint's
 **Lessons Log** before closing the build. Andy's weekly `sgs-rulebook-review` promotes

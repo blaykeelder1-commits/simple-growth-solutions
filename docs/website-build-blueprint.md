@@ -20,6 +20,53 @@ It is distilled from four sites we've shipped and operated:
 
 ---
 
+## 0. The build process — how we arrive at a site the customer feels immersed in
+
+The repeatable thinking pattern. Run it end to end on every build. We don't ship "clean"
+and stop — we push to *immersive*, then iterate on the platform.
+
+**1. Extract the brand from the source — don't eyeball.** If the customer gives a logo,
+flag, sign, or photo, sample it *programmatically*: multi-pass pixel analysis (mean → mode →
+brightest field → correct for edge-bleed) for exact hex, not a guess. Capture the full
+identity — wordmark, mark/icon, the real phone/NAP printed on the asset (often differs from
+the contact's own number), and the type vibe. Lock a 2–3 color palette from the real asset.
+
+**2. Research proven, high-traffic examples — national, not just local.** Google-Trends /
+top-site research for the niche. Pull the patterns that convert (visible pricing, free-trial
+lead, ≤3-step booking, authentic photography, mobile-first) **and** the immersion methods the
+leaders use (gyms, e.g.: Planet Fitness virtual tour + live "crowd meter"; Equinox luxury
+visuals + motion; Life Time "more than a gym" depth). Apply them deliberately.
+
+**3. Build 2–3 genuinely distinct directions.** Not variations — different schemes and
+personalities (e.g. community-warm / bold-athletic / conversion-first), each a full,
+brand-accurate page with real photography, grounded in the research + the bones below.
+
+**4. Iterate for depth, flow, and immersion.** The first pass gets it right; the next gets
+it *felt*. Add intuitive narrative flow and immersion: a "step inside" tour gallery, a live
+"how busy right now" meter, a "more than a [X]" depth section, entrance motion, hover
+interactions. The customer should feel immersed in their own site — that is the bar.
+
+**5. 3-pass review** (see the protocol below) before anything reaches the customer.
+
+**6. The conversation lives on the platform, not in chat.** The owner reviews options on the
+admin board and **Requests edits / Denies with notes there** (recorded as `[DESIGN]`-tagged
+project notes → a tracked thread with a derived decision state). Claude/Andy revise from that
+feedback and re-post updated options. Never split the design conversation between a terminal
+and the site.
+
+**7. Gates + deploy architecture.** new-build surfaced to WhatsApp → **Gate 1** owner
+approves the build → build from this blueprint → admin **review board** → **Gate 2** owner
+approves & sends → customer picks → **payment subscription** → go-live. Deploy customer-site
+and SGS changes from a **git worktree off `origin/master`** (the working tree is chronically
+dirty), verify (typecheck / lint / 3-pass), then push.
+
+**Reliability defaults baked into the above:** `<img>` with pre-sized URLs (NOT `next/image`
+— the Render optimizer 502s); **CSS-only entrance animation** (content stays visible, a JS
+failure can never blank the page); a shared `_shared` module for reusable immersive pieces;
+only config-gated real IDs/links.
+
+---
+
 ## 1. The stack (default bones)
 
 - **Astro + Cloudflare Pages.** Static-first, fast, cheap to host (CF Pages), and it matches
@@ -124,5 +171,11 @@ When a build surfaces a **new** recurring trap or a pattern that clearly perform
 dated one-liner here (newest first). Andy's weekly `sgs-rulebook-review` promotes durable entries
 up into the rules above; keep this log tight — once a lesson is promoted, prune it.
 
-- _2026-06-27 — Blueprint created. Seeded from Waste Rescue KC, Sheridan, IDDI, J Rodgers. Future
-  builds append here._
+- _2026-06-27 — Lake Viking Gym build proved the Section-0 process. Wins to keep: (a) programmatic
+  4-pass color extraction from the customer's flag beat eyeballing (locked exact `#F0603C` / `#1F468F`);
+  (b) immersion methods (Step-Inside tour gallery + live crowd meter + "more than a gym" depth +
+  CSS entrance motion) noticeably lifted the feel over a "clean" v2; (c) on-platform `[DESIGN]`-tagged
+  edit/deny feedback loop replaced the terminal conversation. Traps: image-heavy preview pages can stall
+  the browser screenshot tool's network-idle wait — verify structure via server HTML/curl + a fresh tab.
+  next/image still 502s on Render → keep `<img>`._
+- _2026-06-27 — Blueprint created. Seeded from Waste Rescue KC, Sheridan, IDDI, J Rodgers._
