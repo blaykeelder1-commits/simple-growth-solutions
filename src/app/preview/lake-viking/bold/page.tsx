@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element -- intentional: next/image optimizer 502s on Render; Unsplash URLs are pre-sized */
-import { CheckCircle2, Flame, Trophy, MapPin, Phone, ArrowRight, Dumbbell, Clock } from "lucide-react";
+import { CheckCircle2, Flame, Trophy, MapPin, Phone, ArrowRight, Dumbbell, Clock, Camera } from "lucide-react";
+import { RevealStyles, CrowdMeter, TourGallery } from "../_shared";
 
 // Lake Viking Gym "The Egg" — Option 2: "Built at The Egg"
 // Bold athletic direction. Deep navy/black base, blaze orange punch, big
@@ -20,6 +21,7 @@ const img = (id: string, w = 1400) =>
 export default function BuiltAtTheEggPreview() {
   return (
     <div className="min-h-screen" style={{ background: INK, color: "#E8ECF5" }}>
+      <RevealStyles />
       {/* Preview ribbon */}
       <div className="bg-black text-white/80 text-center text-xs py-2 px-4 border-b border-white/10">
         Design Preview 2 · “Built at The Egg” — a sample direction for Lake Viking Gym. Final site uses your real photos &amp; details.
@@ -51,7 +53,7 @@ export default function BuiltAtTheEggPreview() {
       <section className="relative">
         <img src={img("1605296867304-46d5465a13f1", 1600)} alt="Training at The Egg" className="absolute inset-0 h-full w-full object-cover" loading="eager" fetchPriority="high" />
         <div className="absolute inset-0" style={{ background: `linear-gradient(90deg, ${INK} 8%, rgba(7,13,31,0.78) 55%, rgba(7,13,31,0.35) 100%)` }} />
-        <div className="relative max-w-6xl mx-auto px-6 py-24 md:py-32">
+        <div className="relative max-w-6xl mx-auto px-6 py-24 md:py-32 lv-up">
           <span className="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-black uppercase tracking-widest" style={{ background: ORANGE, color: "#fff" }}>
             <Flame className="h-3.5 w-3.5" /> Lake Viking · The Egg
           </span>
@@ -122,6 +124,25 @@ export default function BuiltAtTheEggPreview() {
               ))}
             </ul>
           </div>
+        </div>
+      </section>
+
+      {/* Step inside — tour gallery + live crowd meter (immersion) */}
+      <section className="max-w-6xl mx-auto px-6 py-20">
+        <div className="mb-8">
+          <span className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest" style={{ color: ORANGE }}>
+            <Camera className="h-4 w-4" /> Step inside
+          </span>
+          <h2 className="mt-2 text-3xl md:text-5xl font-black uppercase text-white">See where you&apos;ll <span style={{ color: ORANGE }}>train.</span></h2>
+        </div>
+        <div className="grid lg:grid-cols-3 gap-6 items-start">
+          <div className="lg:col-span-2">
+            <TourGallery
+              ids={["1517836357463-d25dfeac3438", "1574680096145-d05b474e2155", "1581009146145-b5ef050c2e1e", "1554284126-aa88f22d8b74", "1571902943202-507ec2618e8f"]}
+              captions={["The platform", "Squat racks", "Coaching floor", "Class space", "Open 5a–10p"]}
+            />
+          </div>
+          <CrowdMeter orange={ORANGE} dark />
         </div>
       </section>
 

@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element -- intentional: next/image optimizer 502s on Render; Unsplash URLs are pre-sized */
-import { CheckCircle2, Calendar, Star, MapPin, Phone, ArrowRight, Dumbbell, Clock, Search } from "lucide-react";
+import { CheckCircle2, Calendar, Star, MapPin, Phone, ArrowRight, Dumbbell, Clock, Search, Camera } from "lucide-react";
+import { RevealStyles, CrowdMeter, TourGallery } from "../_shared";
 
 // Lake Viking Gym "The Egg" — Option 3: "Join The Egg"
 // Conversion / booking-first direction. Clean, bright, sharp orange CTAs.
@@ -21,6 +22,7 @@ const img = (id: string, w = 1200) =>
 export default function JoinTheEggPreview() {
   return (
     <div className="min-h-screen bg-white text-slate-800">
+      <RevealStyles />
       {/* Preview ribbon */}
       <div className="bg-slate-900 text-white text-center text-xs py-2 px-4">
         Design Preview 3 · “Join The Egg” — a sample direction for Lake Viking Gym. Final site uses your real photos &amp; details.
@@ -55,7 +57,7 @@ export default function JoinTheEggPreview() {
       {/* Hero with inline claim form */}
       <section style={{ background: `linear-gradient(135deg, ${NAVY} 0%, ${BLUE} 100%)` }}>
         <div className="max-w-6xl mx-auto px-6 py-16 md:py-20 grid md:grid-cols-2 gap-10 items-center">
-          <div className="text-white">
+          <div className="text-white lv-up">
             <div className="flex items-center gap-2 text-sm text-white/80">
               <div className="flex" style={{ color: ORANGE }}>{[...Array(5)].map((_, i) => <Star key={i} className="h-4 w-4 fill-current" />)}</div>
               4.9 from Lake Viking members
@@ -101,6 +103,30 @@ export default function JoinTheEggPreview() {
             <p className="mt-1 text-sm text-slate-500">{d}</p>
           </div>
         ))}
+      </section>
+
+      {/* Step inside — tour gallery + live-busy nudge to claim (immersion + conversion) */}
+      <section className="max-w-6xl mx-auto px-6 pb-4">
+        <div className="mb-8">
+          <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest" style={{ color: ORANGE }}>
+            <Camera className="h-4 w-4" /> Step inside
+          </span>
+          <h2 className="mt-2 text-3xl md:text-4xl font-black" style={{ color: NAVY }}>Take a look around</h2>
+        </div>
+        <div className="grid lg:grid-cols-3 gap-6 items-start">
+          <div className="lg:col-span-2">
+            <TourGallery
+              ids={["1593079831268-3381b0db4a77", "1540497077202-7c8a3999166f", "1534438327276-14e5300c3a48", "1571902943202-507ec2618e8f", "1538805060514-97d9cc17730c"]}
+              captions={["Training floor", "Cardio deck", "Free weights", "Class studio", "Easy parking"]}
+            />
+          </div>
+          <div className="space-y-4">
+            <CrowdMeter orange={ORANGE} />
+            <a href="#claim" className="flex items-center justify-center gap-2 rounded-xl py-3.5 font-bold text-white" style={{ background: ORANGE }}>
+              Claim your free week <ArrowRight className="h-4 w-4" />
+            </a>
+          </div>
+        </div>
       </section>
 
       {/* Pricing — transparent, the star of this direction */}

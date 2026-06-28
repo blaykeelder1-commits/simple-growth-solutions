@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element -- intentional: next/image optimizer 502s on Render; Unsplash URLs are pre-sized */
-import { CheckCircle2, MapPin, Phone, Clock, Heart, Users, Dumbbell, Baby, Star } from "lucide-react";
+import { CheckCircle2, MapPin, Phone, Clock, Heart, Users, Dumbbell, Baby, Star, Camera, CalendarDays } from "lucide-react";
+import { RevealStyles, CrowdMeter, TourGallery } from "../_shared";
 
 // Lake Viking Gym "The Egg" — Option 1: "Hometown Strong"
 // Community / family direction. Warm cream base, the real flag colors:
@@ -36,6 +37,7 @@ function EggMark({ light = false }: { light?: boolean }) {
 export default function HometownStrongPreview() {
   return (
     <div className="min-h-screen" style={{ background: CREAM, color: "#23262F" }}>
+      <RevealStyles />
       {/* Preview ribbon */}
       <div className="bg-slate-900 text-white text-center text-xs py-2 px-4">
         Design Preview 1 · “Hometown Strong” — a sample direction for Lake Viking Gym. Final site uses your real photos &amp; details.
@@ -58,7 +60,7 @@ export default function HometownStrongPreview() {
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="max-w-6xl mx-auto px-6 py-16 md:py-20 grid md:grid-cols-2 gap-10 items-center">
-          <div>
+          <div className="lv-up">
             <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide" style={{ background: "#FCE8E0", color: ORANGE }}>
               <Heart className="h-3.5 w-3.5" /> Your neighborhood gym at Lake Viking
             </span>
@@ -77,11 +79,16 @@ export default function HometownStrongPreview() {
               Loved by Lake Viking families
             </div>
           </div>
-          <div className="relative">
-            <img src={img("1534438327276-14e5300c3a48", 900)} alt="Inside The Egg — the gym floor" className="rounded-3xl w-full h-[420px] object-cover shadow-2xl" loading="eager" fetchPriority="high" />
-            <div className="absolute -bottom-5 -left-5 hidden sm:block rounded-2xl bg-white shadow-xl px-5 py-4 border border-orange-100">
-              <div className="text-2xl font-black" style={{ color: BLUE }}>200+</div>
-              <div className="text-xs text-slate-500 font-medium">members &amp; growing</div>
+          <div className="lv-fade space-y-5">
+            <div className="relative">
+              <img src={img("1534438327276-14e5300c3a48", 900)} alt="Inside The Egg — the gym floor" className="rounded-3xl w-full h-[380px] object-cover shadow-2xl" loading="eager" fetchPriority="high" />
+              <div className="absolute -bottom-5 -left-5 hidden sm:block rounded-2xl bg-white shadow-xl px-5 py-4 border border-orange-100">
+                <div className="text-2xl font-black" style={{ color: BLUE }}>200+</div>
+                <div className="text-xs text-slate-500 font-medium">members &amp; growing</div>
+              </div>
+            </div>
+            <div className="hidden sm:block pt-2">
+              <CrowdMeter orange={ORANGE} />
             </div>
           </div>
         </div>
@@ -120,6 +127,47 @@ export default function HometownStrongPreview() {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Step Inside — virtual tour gallery (immersion) */}
+      <section className="max-w-6xl mx-auto px-6 py-20">
+        <div className="flex items-end justify-between flex-wrap gap-3 mb-8">
+          <div>
+            <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest" style={{ color: ORANGE }}>
+              <Camera className="h-4 w-4" /> Step inside
+            </span>
+            <h2 className="mt-2 text-3xl md:text-4xl font-black" style={{ color: NAVY }}>See The Egg before you visit</h2>
+          </div>
+          <a href="#visit" className="text-sm font-bold" style={{ color: BLUE }}>Book a walk-through →</a>
+        </div>
+        <TourGallery
+          ids={["1534438327276-14e5300c3a48", "1540497077202-7c8a3999166f", "1554284126-aa88f22d8b74", "1538805060514-97d9cc17730c", "1571902943202-507ec2618e8f"]}
+          captions={["Free-weight floor", "Cardio deck", "Group class studio", "Family & kids", "Open 7 days"]}
+        />
+      </section>
+
+      {/* More than a gym — community depth (Life Time method) */}
+      <section className="py-20" style={{ background: "#FCEFE9" }}>
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="text-center max-w-2xl mx-auto mb-12">
+            <h2 className="text-3xl md:text-4xl font-black" style={{ color: NAVY }}>More than a gym — it&apos;s the lake&apos;s living room</h2>
+            <p className="mt-3 text-slate-500">The Egg is where the community shows up — to sweat, sure, but also to belong.</p>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              { icon: CalendarDays, t: "Member events", d: "Cookouts, challenges, and seasonal meet-ups all summer long." },
+              { icon: Baby, t: "Kids & teens", d: "Youth strength, summer camps, and a space the whole family uses." },
+              { icon: Users, t: "Real community", d: "Coaches and members who know your name and notice when you're back." },
+              { icon: Heart, t: "On the lake", d: "Built for Lake Viking life — train, then head straight to the water." },
+            ].map(({ icon: Icon, t, d }) => (
+              <div key={t} className="rounded-3xl bg-white p-6 border border-orange-100 shadow-sm">
+                <div className="h-11 w-11 rounded-2xl grid place-items-center mb-4" style={{ background: "#FCE8E0", color: ORANGE }}><Icon className="h-6 w-6" /></div>
+                <h3 className="font-bold" style={{ color: NAVY }}>{t}</h3>
+                <p className="mt-1 text-sm text-slate-500">{d}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
