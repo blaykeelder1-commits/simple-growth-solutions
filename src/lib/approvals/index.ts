@@ -3,6 +3,7 @@ import type { ApprovalItem } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { recordWorkEvent, type WorkActor, type WorkEntity } from "@/lib/work/events";
 import { postSupportReply } from "@/lib/support/post-reply";
+import { customerLanguageIssues, validateReview } from "@/lib/review";
 
 /**
  * The ONE queue between Andy's work and a customer.
@@ -65,12 +66,37 @@ export interface CreateApprovalInput {
   draft?: string | null;
   previewUrl?: string | null;
   agentNote?: string | null;
+  /** 3-pass review record — required when Andy submits a customer-facing item. */
+  review?: unknown;
+}
+
+/** The exact text a cr_ship review covers: the preview + Andy's account of the change. */
+export function crShipSubject(previewUrl: string | null | undefined, agentNote: string | null | undefined): string {
+  return `${previewUrl ?? ""}
+${agentNote ?? ""}`;
+}
+
+/**
+ * Gate for Andy's customer-facing work: three passing reviews of the exact subject,
+ * and (for text the customer reads) no internal jargon. Throws ApprovalError(400).
+ */
+export function assertReviewed(subject: string, review: unknown, customerReads: boolean): void {
+  const problem = validateReview(review, subject);
+  if (problem) throw new ApprovalError(`3-pass review required: ${problem}`);
+  if (customerReads) {
+    const issues = customerLanguageIssues(subject);
+    if (issues.length) throw new ApprovalError(`the customer would read internal language: ${issues.join(", ")} — rewrite it plainly`);
+  }
 }
 
 /** Queue an item for Blayke. Any still-open item for the same kind+ref is superseded. */
 export async function createApproval(input: CreateApprovalInput, actor: WorkActor): Promise<ApprovalItem> {
   if (input.kind === "support_reply" && !input.draft?.trim()) {
     throw new ApprovalError("a support_reply needs the draft text");
+  }
+  if (actor === "andy" && input.kind === "support_reply") assertReviewed(input.draft!, input.review, true);
+  if (actor === "andy" && input.kind === "cr_ship") {
+    assertReviewed(crShipSubject(input.previewUrl, input.agentNote), input.review, false);
   }
   await prisma.approvalItem.updateMany({
     where: { kind: input.kind, refId: input.refId, status: { in: OPEN_STATUSES } },
@@ -86,6 +112,7 @@ export async function createApproval(input: CreateApprovalInput, actor: WorkActo
       draft: input.draft ?? null,
       previewUrl: input.previewUrl ?? null,
       agentNote: input.agentNote ?? null,
+      reviewRecord: input.review ? JSON.stringify(input.review) : null,
     },
   });
   await recordWorkEvent({ ...entityOf(item), event: "sent_for_approval", actor, note: item.code });

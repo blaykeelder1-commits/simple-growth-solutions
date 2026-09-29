@@ -1721,6 +1721,9 @@ model ApprovalItem {
   draft          String?   @db.Text // support reply text / proposed rule
   previewUrl     String?   @map("preview_url")
   agentNote      String?   @db.Text @map("agent_note")
+  // The 3-pass skeptical review record (JSON: subjectHash, rounds, passes[]) that
+  // Andy's customer-facing items must carry — see src/lib/review.
+  reviewRecord   String?   @db.Text @map("review_record")
   // awaiting → approved → sent | edits_requested | rejected | superseded
   status         String    @default("awaiting")
   decidedVia     String?   @map("decided_via") // whatsapp | portal

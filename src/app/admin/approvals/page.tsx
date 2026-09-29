@@ -19,7 +19,45 @@ interface ApprovalItem {
   feedback: string | null;
   sentAt: string | null;
   sentBy: string | null;
+  reviewRecord: string | null;
   createdAt: string;
+}
+
+interface ReviewRecord {
+  rounds: number;
+  passes: { lens: string; verdict: string; findings: string[] }[];
+}
+
+const LENS_LABELS: Record<string, string> = {
+  requirement: "Did exactly what was asked",
+  skeptic: "Accurate, in scope, no mistakes",
+  customer: "Reads right to the owner",
+};
+
+function ReviewBadge({ raw }: { raw: string | null }) {
+  if (!raw) return null;
+  let r: ReviewRecord;
+  try {
+    r = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const passed = r.passes.filter((p) => p.verdict === "pass").length;
+  return (
+    <details className="text-sm">
+      <summary className="cursor-pointer select-none text-green-800">
+        🛡 {passed}/3 independent reviews passed{r.rounds > 1 ? ` · fixed over ${r.rounds} rounds` : " · first time"}
+      </summary>
+      <ul className="mt-2 space-y-1 text-gray-700">
+        {r.passes.map((p) => (
+          <li key={p.lens}>
+            <span className="font-medium">{p.verdict === "pass" ? "✓" : "✗"} {LENS_LABELS[p.lens] ?? p.lens}</span>
+            {p.findings?.length ? <span className="text-gray-500"> — {p.findings.join("; ")}</span> : null}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
 }
 
 // Mirrors CUSTOMER_FACING in src/lib/approvals — these wait for Send after approval.
@@ -94,6 +132,7 @@ function ItemCard({ item, onAction }: { item: ApprovalItem; onAction: (id: strin
           <p className="mt-2 whitespace-pre-wrap break-words">{item.agentNote}</p>
         </details>
       )}
+      <ReviewBadge raw={item.reviewRecord} />
       {item.feedback && <p className="text-sm text-amber-800 break-words">Your note: {item.feedback}</p>}
 
       {awaiting && (

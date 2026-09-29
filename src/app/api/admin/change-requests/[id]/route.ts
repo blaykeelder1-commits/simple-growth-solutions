@@ -6,7 +6,7 @@ import { sendChangeRequestUpdateEmail } from "@/lib/email";
 import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
 import { actorFor, recordWorkEvent } from "@/lib/work/events";
-import { createApproval, OPEN_STATUSES } from "@/lib/approvals";
+import { ApprovalError, assertReviewed, createApproval, crShipSubject, OPEN_STATUSES } from "@/lib/approvals";
 
 const updateSchema = z.object({
   status: z
@@ -38,6 +38,9 @@ const updateSchema = z.object({
   // the customer feel looked after.
   lesson: z.string().max(4000).optional(),
   touch: z.string().max(2000).optional(),
+  // 3-pass review record (src/lib/review). Required from Andy for review_ready (covers
+  // the preview + note) and for completed/rejected (covers the resolution the customer is emailed).
+  review: z.unknown().optional(),
 });
 
 // Statuses the CUSTOMER should be emailed about. Andy's internal steps
@@ -74,6 +77,28 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
         { success: false, message: "rejecting a ticket requires a resolution (the customer is told why)" },
         { status: 400 }
       );
+    }
+
+    // The 3-pass review gate — checked BEFORE anything is saved.
+    if (isAndy && (validatedData.status === "review_ready" || validatedData.status === "completed" || validatedData.status === "rejected")) {
+      try {
+        if (validatedData.status === "review_ready") {
+          assertReviewed(crShipSubject(validatedData.previewUrl, validatedData.agentNote), validatedData.review, false);
+        } else {
+          if (!validatedData.resolution?.trim()) {
+            return NextResponse.json(
+              { success: false, message: "the customer is emailed the resolution — write one (plain language) and review it" },
+              { status: 400 }
+            );
+          }
+          assertReviewed(validatedData.resolution, validatedData.review, true);
+        }
+      } catch (err) {
+        if (err instanceof ApprovalError) {
+          return NextResponse.json({ success: false, message: err.message }, { status: err.status });
+        }
+        throw err;
+      }
     }
 
     const oldChangeRequest = await prisma.changeRequest.findUnique({
@@ -164,6 +189,7 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
             title: `${changeRequest.project?.projectName ?? "Site"} — ${changeRequest.title}`,
             previewUrl: changeRequest.previewUrl,
             agentNote: changeRequest.agentNote,
+            review: validatedData.review,
           },
           actor
         );

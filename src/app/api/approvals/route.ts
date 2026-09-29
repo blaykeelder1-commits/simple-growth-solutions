@@ -29,6 +29,7 @@ const createSchema = z.object({
   draft: z.string().max(8000).nullable().optional(),
   previewUrl: z.string().url().nullable().optional(),
   agentNote: z.string().max(8000).nullable().optional(),
+  review: z.unknown().optional(),
 });
 
 // POST /api/approvals — Andy queues an item (support reply draft, proposed rule).
