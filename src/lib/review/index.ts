@@ -51,7 +51,8 @@ export function validateReview(record: unknown, subject: string): string | null 
 
 // Internal language that must never reach a customer. Deterministic — no model call.
 const JARGON: { re: RegExp; why: string }[] = [
-  { re: /\b[0-9a-f]{7,40}\b/i, why: "a commit hash / id" },
+  // A hex run with BOTH letters and digits (a commit id) — not a phone number, not a word.
+  { re: /\b(?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{7,40}\b/i, why: "a commit hash / id" },
   { re: /\bcommit\b/i, why: "\"commit\"" },
   { re: /\b(?:HTTP\s*)?[1-5]\d\d\b(?=[^\n]{0,20}\b(?:status|ok|verified|response)\b)|\bverified\s+[1-5]\d\d\b/i, why: "an HTTP status code" },
   { re: /\b[\w-]+\.(?:jpe?g|png|webp|svg|astro|tsx?|jsx?|json|css|html)\b/i, why: "a file name" },
@@ -59,7 +60,7 @@ const JARGON: { re: RegExp; why: string }[] = [
   { re: /\b(?:preview-\d{4}|pages\.dev|localhost|\/api\/)/i, why: "an internal URL" },
   { re: /\b(?:CR|PR)\s*#?\w{6,}\b|\bcm[a-z0-9]{20,}\b/i, why: "an internal ticket id" },
   // Not "build"/"promote"/"production" — those are normal customer words ("we'll build the carousel").
-  { re: /\b(?:deploy(?:ed|ment|s)?|staging|repo(?:sitory)?|git|branch(?:es)?|prod)\b/i, why: "engineering language" },
+  { re: /\b(?:deploy(?:ed|ment|s)?|staging|repo(?:sitory)?|github|prod)\b/i, why: "engineering language" },
 ];
 
 /** Issues that make `text` unfit for a customer. Empty = fine. */

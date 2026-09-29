@@ -6,7 +6,7 @@ import { sendChangeRequestUpdateEmail } from "@/lib/email";
 import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
 import { actorFor, recordWorkEvent } from "@/lib/work/events";
-import { ApprovalError, assertReviewed, createApproval, crShipSubject, OPEN_STATUSES } from "@/lib/approvals";
+import { ApprovalError, assertReviewed, createApproval, crShipSubject, OPEN_STATUSES, supersedeCrShip } from "@/lib/approvals";
 
 const updateSchema = z.object({
   status: z
@@ -71,16 +71,24 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
         { status: 400 }
       );
     }
-    // Andy must say why; Blayke's dispatch dropdown has no resolution field, so his path is unchanged.
-    if (isAndy && validatedData.status === "rejected" && !validatedData.resolution?.trim()) {
+    // Rejecting a customer's request (which emails them) is Blayke's call, never Andy's.
+    if (isAndy && validatedData.status === "rejected") {
       return NextResponse.json(
-        { success: false, message: "rejecting a ticket requires a resolution (the customer is told why)" },
+        { success: false, message: "Andy cannot reject a customer's request — release it to Blayke (needs you) instead" },
+        { status: 403 }
+      );
+    }
+    // review_ready must carry the preview AND the note it was reviewed with — the gate checks
+    // exactly what gets stored and queued, never an older value already on the ticket.
+    if (isAndy && validatedData.status === "review_ready" && (!validatedData.previewUrl || !validatedData.agentNote?.trim())) {
+      return NextResponse.json(
+        { success: false, message: "review_ready needs both previewUrl and agentNote (the reviewed note)" },
         { status: 400 }
       );
     }
 
     // The 3-pass review gate — checked BEFORE anything is saved.
-    if (isAndy && (validatedData.status === "review_ready" || validatedData.status === "completed" || validatedData.status === "rejected")) {
+    if (isAndy && (validatedData.status === "review_ready" || validatedData.status === "completed")) {
       try {
         if (validatedData.status === "review_ready") {
           assertReviewed(crShipSubject(validatedData.previewUrl, validatedData.agentNote), validatedData.review, false);
@@ -110,6 +118,14 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
       return NextResponse.json(
         { success: false, message: "Change request not found" },
         { status: 404 }
+      );
+    }
+
+    // Andy closes (and so emails the customer about) only work Blayke sent: approved → completed.
+    if (isAndy && validatedData.status === "completed" && oldChangeRequest.status !== "approved") {
+      return NextResponse.json(
+        { success: false, message: `only an approved (sent) ticket can be completed — this one is ${oldChangeRequest.status}` },
+        { status: 409 }
       );
     }
 
@@ -156,6 +172,7 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
           agentNote: null,
         },
       });
+      await supersedeCrShip(id); // any queued approval was for work that no longer exists
       await recordWorkEvent({ entityType: "cr", entityId: id, event: "reopened", actor });
       return NextResponse.json({ success: true, changeRequest });
     }
@@ -176,8 +193,12 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
 
     // ── Timeline + approval queue ──────────────────────────────────────────
     const statusChanged = !!validatedData.status && oldChangeRequest.status !== validatedData.status;
+    // Preview or note edited outside a fresh review_ready: an approval queued for the old
+    // version would approve content that no longer matches — cancel it.
+    if (validatedData.status !== "review_ready" && (validatedData.previewUrl !== undefined || validatedData.agentNote !== undefined)) {
+      await supersedeCrShip(id);
+    }
     let approvalCode: string | undefined;
-    let approvalWarning: string | undefined;
     if (statusChanged && validatedData.status === "review_ready") {
       await recordWorkEvent({ entityType: "cr", entityId: id, event: "preview_ready", actor });
       try {
@@ -195,10 +216,14 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
         );
         approvalCode = item.code;
       } catch (err) {
-        // The ticket IS review_ready (visible on the dispatch board); only the queue
-        // entry failed. Say so instead of failing the whole update.
-        apiLogger.error({ err, changeRequestId: id }, "Approval item creation FAILED for review_ready ticket");
-        approvalWarning = "Ticket is review_ready but no approval code was created — approve it on the dispatch board.";
+        // No approval code = nobody can approve it: put the ticket back rather than leave an
+        // unreviewed "review_ready" that only the dispatch board could approve.
+        await prisma.changeRequest.update({ where: { id }, data: { status: oldChangeRequest.status } });
+        apiLogger.error({ err, changeRequestId: id }, "Approval item creation FAILED — review_ready reverted");
+        if (err instanceof ApprovalError) {
+          return NextResponse.json({ success: false, message: err.message }, { status: err.status });
+        }
+        throw err;
       }
     } else if (statusChanged && validatedData.status === "approved") {
       // Blayke approved from the dispatch board: that click is approve + Send in one.
@@ -258,7 +283,7 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
         .catch((e) => apiLogger.warn({ err: e }, "Failed to send change request update notification"));
     }
 
-    return NextResponse.json({ success: true, changeRequest, approvalCode, approvalWarning });
+    return NextResponse.json({ success: true, changeRequest, approvalCode });
   } catch (error) {
     return apiError(error, "Failed to update change request");
   }

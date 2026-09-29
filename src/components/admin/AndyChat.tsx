@@ -160,7 +160,11 @@ export default function AndyChat() {
         ))}
         {waiting && (
           <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Loader2 className="h-4 w-4 animate-spin" /> Andy is working on it…
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {messages.length > 0 &&
+            Date.now() - new Date(messages[messages.length - 1].createdAt).getTime() > 10 * 60 * 1000
+              ? "No answer after 10 minutes — Andy may be busy or restarting. Send it again, or use WhatsApp."
+              : "Andy is working on it…"}
           </div>
         )}
         <div ref={bottomRef} />

@@ -26,6 +26,7 @@ export const GET = withAdmin(async (req, _ctx, session) => {
       slaDueAt?: { lte: Date };
       andySeenAt?: null;
       createdAt?: { gte: Date };
+      OR?: ({ createdAt: { gte: Date } } | { updatedAt: { gte: Date } })[];
     };
     const where: Where = {};
     if (assigneeFilter === "me") {
@@ -46,9 +47,10 @@ export const GET = withAdmin(async (req, _ctx, session) => {
       where.andySeenAt = null;
     }
     if (createdWithinHours) {
-      where.createdAt = {
-        gte: new Date(Date.now() - parseInt(createdWithinHours, 10) * 60 * 60 * 1000),
-      };
+      // "Recent" = created OR touched recently: a ticket Blayke sent back for edits, or one
+      // that was just paid for, is new work even if it was first filed weeks ago.
+      const since = new Date(Date.now() - parseInt(createdWithinHours, 10) * 60 * 60 * 1000);
+      where.OR = [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }];
     }
 
     const requests = await prisma.changeRequest.findMany({

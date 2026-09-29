@@ -38,6 +38,10 @@ describe("customer language lint", () => {
     );
     expect(issues.length).toBeGreaterThanOrEqual(3);
   });
+  it("does not flag phone numbers, ordinary words or 'our KC branch'", () => {
+    expect(customerLanguageIssues("Call 8168101956 — our Kansas City branch effaced the old sign")).toEqual([]);
+  });
+
   it("passes the full plain-language reply we actually sent Jorge (SC8EX)", () => {
     const sent = readFileSync(join(__dirname, "__fixtures__", "jorge-sc8ex.txt"), "utf-8");
     expect(customerLanguageIssues(sent)).toEqual([]);

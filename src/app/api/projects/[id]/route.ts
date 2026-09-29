@@ -94,6 +94,20 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
     const body = await req.json();
     const validatedData = updateProjectSchema.parse(body);
 
+    // Gate 1 (approve build), Gate 2 (release designs to the customer) and project status
+    // (which emails the customer) are Blayke's decisions — never Andy's.
+    if (
+      actorFor(session) === "andy" &&
+      (validatedData.approveBuild !== undefined ||
+        validatedData.releaseDesignOptions !== undefined ||
+        validatedData.status !== undefined)
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Andy cannot approve builds, release designs or change project status — Blayke decides" },
+        { status: 403 }
+      );
+    }
+
     // Get old values for audit log
     const oldProject = await prisma.websiteProject.findUnique({
       where: { id },

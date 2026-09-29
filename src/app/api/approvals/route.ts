@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { withAdmin } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
 import { actorFor } from "@/lib/work/events";
-import { APPROVAL_KINDS, ApprovalError, createApproval, OPEN_STATUSES } from "@/lib/approvals";
+import { ApprovalError, createApproval, OPEN_STATUSES } from "@/lib/approvals";
 
 // GET /api/approvals — the queue: every open item plus anything decided in the last 7 days.
 export const GET = withAdmin(async () => {
@@ -21,8 +21,11 @@ export const GET = withAdmin(async () => {
   }
 });
 
+// Only these kinds are created through the API. cr_ship comes from the ticket route (with
+// its review) and build_start from new-build surfacing — never hand-made, so an item can't
+// point at an arbitrary ticket or project.
 const createSchema = z.object({
-  kind: z.enum(APPROVAL_KINDS),
+  kind: z.enum(["support_reply", "rule_change"]),
   refId: z.string().min(1),
   organizationId: z.string().nullable().optional(),
   title: z.string().min(1).max(300),

@@ -1,5 +1,5 @@
 import { randomInt } from "crypto";
-import type { ApprovalItem } from "@prisma/client";
+import type { ApprovalItem, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { recordWorkEvent, type WorkActor, type WorkEntity } from "@/lib/work/events";
 import { postSupportReply } from "@/lib/support/post-reply";
@@ -98,8 +98,26 @@ export async function createApproval(input: CreateApprovalInput, actor: WorkActo
   if (actor === "andy" && input.kind === "cr_ship") {
     assertReviewed(crShipSubject(input.previewUrl, input.agentNote), input.review, false);
   }
+  // Something Blayke already approved is waiting for his Send — never replace it silently.
+  const waitingSend = await prisma.approvalItem.findFirst({
+    where: { kind: input.kind, refId: input.refId, status: "approved" },
+    select: { code: true },
+  });
+  if (waitingSend) {
+    throw new ApprovalError(`${waitingSend.code} is already approved and waiting for Send — send or reject it first`, 409);
+  }
+  let title = input.title;
+  let organizationId = input.organizationId ?? null;
+  if (input.kind === "support_reply") {
+    // The reply goes to refId's organization — it must be real, and its name must be on the
+    // card so Blayke can see who receives it (never trust a title to say so).
+    const org = await prisma.organization.findUnique({ where: { id: input.refId }, select: { id: true, name: true } });
+    if (!org) throw new ApprovalError(`no customer organization ${input.refId}`, 404);
+    organizationId = org.id;
+    if (!title.toLowerCase().startsWith(org.name.toLowerCase())) title = `${org.name} — ${title}`;
+  }
   await prisma.approvalItem.updateMany({
-    where: { kind: input.kind, refId: input.refId, status: { in: OPEN_STATUSES } },
+    where: { kind: input.kind, refId: input.refId, status: { in: ["awaiting", "edits_requested"] } },
     data: { status: "superseded" },
   });
   const item = await prisma.approvalItem.create({
@@ -107,8 +125,8 @@ export async function createApproval(input: CreateApprovalInput, actor: WorkActo
       code: await newCode(),
       kind: input.kind,
       refId: input.refId,
-      organizationId: input.organizationId ?? null,
-      title: input.title,
+      organizationId,
+      title,
       draft: input.draft ?? null,
       previewUrl: input.previewUrl ?? null,
       agentNote: input.agentNote ?? null,
@@ -141,6 +159,9 @@ export async function decideApproval(opts: {
   if (opts.decision !== "approve" && !reason) {
     throw new ApprovalError(`say what to change — "${opts.decision} ${item.code} <reason>"`);
   }
+  if (item.kind === "build_start" && opts.decision === "edit") {
+    throw new ApprovalError(`a build is approve or reject — reject ${item.code} with your reason instead`);
+  }
   const allowedFrom = opts.decision === "reject" ? ["awaiting", "approved"] : ["awaiting"];
   if (!allowedFrom.includes(item.status)) {
     throw new ApprovalError(`${item.code} is already ${item.status}`, 409);
@@ -148,14 +169,17 @@ export async function decideApproval(opts: {
 
   const status =
     opts.decision === "approve" ? "approved" : opts.decision === "edit" ? "edits_requested" : "rejected";
-  // The WHERE on status is the lock: two decisions arriving together can't both apply.
-  const res = await prisma.approvalItem.updateMany({
-    where: { id: item.id, status: item.status },
-    data: { status, decidedVia: opts.via, decidedAt: new Date(), feedback: reason },
+  // One transaction: the decision and its effect land together or not at all, so a failed
+  // effect can never leave an item "approved" with nothing behind it. The WHERE on status
+  // is the lock: two decisions arriving together can't both apply.
+  await prisma.$transaction(async (tx) => {
+    const res = await tx.approvalItem.updateMany({
+      where: { id: item.id, status: item.status },
+      data: { status, decidedVia: opts.via, decidedAt: new Date(), feedback: reason },
+    });
+    if (res.count !== 1) throw new ApprovalError(`${item.code} changed while deciding — check it again`, 409);
+    await applyDecisionEffect(tx, item, opts.decision, reason);
   });
-  if (res.count !== 1) throw new ApprovalError(`${item.code} changed while deciding — check it again`, 409);
-
-  await applyDecisionEffect(item, opts.decision, reason);
   await recordWorkEvent({
     ...entityOf(item),
     event: status,
@@ -165,21 +189,33 @@ export async function decideApproval(opts: {
   return (await prisma.approvalItem.findUnique({ where: { id: item.id } }))!;
 }
 
-async function applyDecisionEffect(item: ApprovalItem, decision: Decision, reason: string | null) {
+async function applyDecisionEffect(
+  tx: Prisma.TransactionClient,
+  item: ApprovalItem,
+  decision: Decision,
+  reason: string | null
+) {
   if (item.kind === "build_start" && decision === "approve") {
     // Internal gate — final on approval (nothing reaches the customer).
-    await prisma.websiteProject.update({ where: { id: item.refId }, data: { buildApprovedAt: new Date() } });
+    await tx.websiteProject.update({ where: { id: item.refId }, data: { buildApprovedAt: new Date() } });
     return;
   }
   if (item.kind !== "cr_ship" || decision === "approve") return;
 
-  const cr = await prisma.changeRequest.findUnique({ where: { id: item.refId }, select: { agentNote: true } });
-  if (!cr) return;
+  const cr = await tx.changeRequest.findUnique({ where: { id: item.refId }, select: { agentNote: true, status: true } });
+  if (!cr || cr.status !== "review_ready") {
+    throw new ApprovalError(
+      `the ticket behind ${item.code} is no longer waiting for review (${cr?.status ?? "missing"}) — nothing changed`,
+      409
+    );
+  }
   if (decision === "edit") {
-    // Back to Andy: a fresh claimable ticket carrying Blayke's exact feedback.
-    await prisma.changeRequest.update({
+    // Back to Andy: a fresh claimable ticket carrying Blayke's exact feedback. The old
+    // preview is dropped so it can't be shipped by mistake.
+    await tx.changeRequest.update({
       where: { id: item.refId },
       data: {
+        previewUrl: null,
         status: "pending",
         andySeenAt: null,
         agentNote: `BLAYKE EDITS REQUESTED (${item.code}): ${reason}\n\n--- previous note ---\n${cr.agentNote ?? ""}`,
@@ -188,7 +224,7 @@ async function applyDecisionEffect(item: ApprovalItem, decision: Decision, reaso
   } else {
     // Preview rejected: stays with a human. Seen-guard kept so the sweep won't re-work it.
     // `pending` is not a customer-notify status, so the customer is not emailed.
-    await prisma.changeRequest.update({
+    await tx.changeRequest.update({
       where: { id: item.refId },
       data: {
         status: "pending",
@@ -220,18 +256,37 @@ export async function sendApproval(id: string, sentBy: string, actor: WorkActor)
     if (item.kind === "cr_ship") {
       // `approved` is what Andy's approval sweep promotes to production. It is not a
       // customer-notify status; the customer is emailed when the sweep marks it completed.
-      await prisma.changeRequest.update({ where: { id: item.refId }, data: { status: "approved" } });
+      const moved = await prisma.changeRequest.updateMany({
+        where: { id: item.refId, status: "review_ready" },
+        data: { status: "approved" },
+      });
+      if (moved.count !== 1) {
+        throw new ApprovalError(`the ticket behind ${item.code} is no longer waiting for review — nothing was shipped`, 409);
+      }
     } else {
       const ok = await postSupportReply({ organizationId: item.refId, reply: item.draft! });
       if (!ok) throw new ApprovalError("no customer user found for this organization", 404);
     }
   } catch (err) {
-    await prisma.approvalItem.update({ where: { id }, data: { status: "approved", sentAt: null, sentBy: null } });
+    // Release only our own claim (never revive an item that was superseded meanwhile).
+    await prisma.approvalItem.updateMany({
+      where: { id, status: "sent" },
+      data: { status: "approved", sentAt: null, sentBy: null },
+    });
     throw err;
   }
 
   await recordWorkEvent({ ...entityOf(item), event: item.kind === "cr_ship" ? "released" : "shipped", actor });
   return (await prisma.approvalItem.findUnique({ where: { id } }))!;
+}
+
+/** The ticket's preview or note changed (or it was reopened): any queued approval is stale. */
+export async function supersedeCrShip(changeRequestId: string): Promise<number> {
+  const res = await prisma.approvalItem.updateMany({
+    where: { kind: "cr_ship", refId: changeRequestId, status: { in: OPEN_STATUSES } },
+    data: { status: "superseded" },
+  });
+  return res.count;
 }
 
 /** Andy wrote an approved rule into his rulebook — close it so it isn't applied twice. */
