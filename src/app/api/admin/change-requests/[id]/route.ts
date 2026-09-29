@@ -5,6 +5,8 @@ import { apiError } from "@/lib/api/errors";
 import { sendChangeRequestUpdateEmail } from "@/lib/email";
 import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
+import { actorFor, recordWorkEvent } from "@/lib/work/events";
+import { createApproval, OPEN_STATUSES } from "@/lib/approvals";
 
 const updateSchema = z.object({
   status: z
@@ -31,6 +33,11 @@ const updateSchema = z.object({
   //    andySeenAt cleared, any half-built preview/note dropped) so the next
   //    intake sweep re-processes it from scratch.
   reopen: z.boolean().optional(),
+  // The learning loop. Required when Andy closes a ticket (completed) — a ticket
+  // cannot close without what was learned. `touch` = the small detail that made
+  // the customer feel looked after.
+  lesson: z.string().max(4000).optional(),
+  touch: z.string().max(2000).optional(),
 });
 
 // Statuses the CUSTOMER should be emailed about. Andy's internal steps
@@ -39,11 +46,35 @@ const updateSchema = z.object({
 const CUSTOMER_NOTIFY_STATUSES = new Set(["completed", "rejected"]);
 
 // PATCH /api/admin/change-requests/[id] - Update change request status
-export const PATCH = withAdmin(async (req, ctx) => {
+export const PATCH = withAdmin(async (req, ctx, session) => {
   try {
     const { id } = await ctx.params;
     const body = await req.json();
     const validatedData = updateSchema.parse(body);
+    const actor = actorFor(session);
+    const isAndy = actor === "andy";
+
+    // Andy never approves his own work: `approved` is what the ship sweep promotes
+    // to production, so only Blayke (dispatch board / approval Send) may set it.
+    if (isAndy && validatedData.status === "approved") {
+      return NextResponse.json(
+        { success: false, message: "Andy cannot set approved — queue it (review_ready) and Blayke approves" },
+        { status: 403 }
+      );
+    }
+    if (isAndy && validatedData.status === "completed" && !validatedData.lesson?.trim()) {
+      return NextResponse.json(
+        { success: false, message: "completing a ticket requires a lesson (what did this ticket teach us?)" },
+        { status: 400 }
+      );
+    }
+    // Andy must say why; Blayke's dispatch dropdown has no resolution field, so his path is unchanged.
+    if (isAndy && validatedData.status === "rejected" && !validatedData.resolution?.trim()) {
+      return NextResponse.json(
+        { success: false, message: "rejecting a ticket requires a resolution (the customer is told why)" },
+        { status: 400 }
+      );
+    }
 
     const oldChangeRequest = await prisma.changeRequest.findUnique({
       where: { id },
@@ -67,6 +98,7 @@ export const PATCH = withAdmin(async (req, ctx) => {
         data: { status: "in_progress", andySeenAt: new Date() },
       });
       const claimed = result.count === 1;
+      if (claimed) await recordWorkEvent({ entityType: "cr", entityId: id, event: "claimed", actor });
       const changeRequest = await prisma.changeRequest.findUnique({ where: { id } });
       return NextResponse.json({ success: true, claimed, changeRequest });
     }
@@ -75,10 +107,13 @@ export const PATCH = withAdmin(async (req, ctx) => {
     // is triaged to a human — it stays `pending` for Blayke but the sweep won't
     // re-flag it. Idempotent (only stamps if not already stamped).
     if (validatedData.markSeen) {
-      await prisma.changeRequest.updateMany({
+      const seen = await prisma.changeRequest.updateMany({
         where: { id, andySeenAt: null },
         data: { andySeenAt: new Date() },
       });
+      if (seen.count === 1) {
+        await recordWorkEvent({ entityType: "cr", entityId: id, event: "triaged", actor, note: validatedData.lesson });
+      }
       const changeRequest = await prisma.changeRequest.findUnique({ where: { id } });
       return NextResponse.json({ success: true, changeRequest });
     }
@@ -96,6 +131,7 @@ export const PATCH = withAdmin(async (req, ctx) => {
           agentNote: null,
         },
       });
+      await recordWorkEvent({ entityType: "cr", entityId: id, event: "reopened", actor });
       return NextResponse.json({ success: true, changeRequest });
     }
 
@@ -112,6 +148,65 @@ export const PATCH = withAdmin(async (req, ctx) => {
         project: { select: { id: true, projectName: true, organizationId: true } },
       },
     });
+
+    // ── Timeline + approval queue ──────────────────────────────────────────
+    const statusChanged = !!validatedData.status && oldChangeRequest.status !== validatedData.status;
+    let approvalCode: string | undefined;
+    let approvalWarning: string | undefined;
+    if (statusChanged && validatedData.status === "review_ready") {
+      await recordWorkEvent({ entityType: "cr", entityId: id, event: "preview_ready", actor });
+      try {
+        const item = await createApproval(
+          {
+            kind: "cr_ship",
+            refId: id,
+            organizationId: changeRequest.project?.organizationId ?? null,
+            title: `${changeRequest.project?.projectName ?? "Site"} — ${changeRequest.title}`,
+            previewUrl: changeRequest.previewUrl,
+            agentNote: changeRequest.agentNote,
+          },
+          actor
+        );
+        approvalCode = item.code;
+      } catch (err) {
+        // The ticket IS review_ready (visible on the dispatch board); only the queue
+        // entry failed. Say so instead of failing the whole update.
+        apiLogger.error({ err, changeRequestId: id }, "Approval item creation FAILED for review_ready ticket");
+        approvalWarning = "Ticket is review_ready but no approval code was created — approve it on the dispatch board.";
+      }
+    } else if (statusChanged && validatedData.status === "approved") {
+      // Blayke approved from the dispatch board: that click is approve + Send in one.
+      // (An item already approved in WhatsApp has its `approved` event; don't repeat it.)
+      const open = await prisma.approvalItem.findFirst({
+        where: { kind: "cr_ship", refId: id, status: { in: OPEN_STATUSES } },
+        orderBy: { createdAt: "desc" },
+      });
+      if (open) {
+        await prisma.approvalItem.update({
+          where: { id: open.id },
+          data: {
+            status: "sent",
+            ...(open.status !== "approved" && { decidedVia: "portal", decidedAt: new Date() }),
+            sentAt: new Date(),
+            sentBy: session.user.email || session.user.id,
+          },
+        });
+        if (open.status !== "approved") {
+          await recordWorkEvent({ entityType: "cr", entityId: id, event: "approved", actor });
+        }
+      }
+      await recordWorkEvent({ entityType: "cr", entityId: id, event: "released", actor });
+    } else if (statusChanged && validatedData.status === "completed") {
+      await recordWorkEvent({
+        entityType: "cr", entityId: id, event: "shipped", actor,
+        note: validatedData.lesson, touch: validatedData.touch,
+      });
+    } else if (statusChanged && validatedData.status) {
+      await recordWorkEvent({
+        entityType: "cr", entityId: id, event: validatedData.status, actor,
+        note: validatedData.resolution ?? validatedData.lesson,
+      });
+    }
 
     // Notify the customer only on customer-visible status changes. Andy's
     // internal hand-offs (review_ready, approved) must never email the customer.
@@ -137,7 +232,7 @@ export const PATCH = withAdmin(async (req, ctx) => {
         .catch((e) => apiLogger.warn({ err: e }, "Failed to send change request update notification"));
     }
 
-    return NextResponse.json({ success: true, changeRequest });
+    return NextResponse.json({ success: true, changeRequest, approvalCode, approvalWarning });
   } catch (error) {
     return apiError(error, "Failed to update change request");
   }

@@ -1680,3 +1680,58 @@ model SupportMessage {
   @@index([organizationId, createdAt])
   @@map("support_messages")
 }
+
+// ── Work timeline + approval queue (2026-09-29) ─────────────────────────────
+// WorkEvent is the append-only record of every step a piece of customer work
+// takes (created → claimed → preview_ready → approved → released → shipped, or
+// edits_requested / rejected). It is written server-side by the route handlers,
+// never by an agent prompt, so cycle time, revision rounds, first-pass approval,
+// Blayke's touches and the lessons behind each outcome are measured, not assumed.
+// Polymorphic on (entityType, entityId) — no FK, so it can never block the work.
+model WorkEvent {
+  id         String   @id @default(cuid())
+  entityType String   @map("entity_type") // cr | project | support | lead | rule
+  entityId   String   @map("entity_id")
+  event      String // created, claimed, triaged, preview_ready, sent_for_approval,
+  // approved, edits_requested, rejected, released, shipped, reopened, lesson
+  actor      String // andy | blayke | customer | system
+  note       String?  @db.Text // the reason / lesson — required on edits_requested, rejected, shipped-by-andy
+  touch      String?  @db.Text // the small detail that made the customer feel looked after
+  minutes    Int? // human minutes spent, when recorded
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([event, createdAt])
+  @@map("work_events")
+}
+
+// ApprovalItem is the ONE queue between Andy's work and a customer. Andy (or a
+// route) creates it; Blayke approves / requests edits / rejects by typing the
+// short `code` in the SGS WhatsApp chat or on /admin/approvals. Customer-facing
+// kinds (cr_ship, support_reply) then wait at `approved` until Blayke presses
+// Send in the admin portal — Send is the only path that reaches a customer.
+// Internal kinds (build_start, rule_change) are final on approval.
+model ApprovalItem {
+  id             String    @id @default(cuid())
+  code           String    @unique // e.g. S7K2Q — typed in WhatsApp: "approve S7K2Q"
+  kind           String // cr_ship | support_reply | build_start | rule_change
+  refId          String    @map("ref_id") // ChangeRequest / Organization / WebsiteProject id
+  organizationId String?   @map("organization_id")
+  title          String
+  draft          String?   @db.Text // support reply text / proposed rule
+  previewUrl     String?   @map("preview_url")
+  agentNote      String?   @db.Text @map("agent_note")
+  // awaiting → approved → sent | edits_requested | rejected | superseded
+  status         String    @default("awaiting")
+  decidedVia     String?   @map("decided_via") // whatsapp | portal
+  decidedAt      DateTime? @map("decided_at")
+  feedback       String?   @db.Text // reason for edits / rejection
+  sentAt         DateTime? @map("sent_at")
+  sentBy         String?   @map("sent_by")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@index([kind, refId])
+  @@map("approval_items")
+}

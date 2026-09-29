@@ -9,6 +9,7 @@ import {
 } from "@/lib/email";
 import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
+import { actorFor, recordWorkEvent } from "@/lib/work/events";
 import { computeSlaDueAt, RUSH_FEE_CENTS } from "@/lib/billing/sla";
 import {
   resolvePlanCaps,
@@ -191,6 +192,13 @@ export const POST = withAuth(async (req, ctx, session) => {
         slaDueAt,
         status: needsPayment ? "awaiting_payment" : "pending",
       },
+    });
+    await recordWorkEvent({
+      entityType: "cr",
+      entityId: changeRequest.id,
+      event: "created",
+      actor: actorFor(session),
+      note: changeRequest.isRush ? "rush" : null,
     });
 
     // ── Charge rush fee or overage fee via Square Payment Link ────────

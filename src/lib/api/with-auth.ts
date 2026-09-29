@@ -43,6 +43,22 @@ function serviceSession(req: NextRequest): AuthenticatedSession | null {
   } as AuthenticatedSession;
 }
 
+/**
+ * The approver token is held ONLY by the NanoClaw host process — never by Andy's
+ * agent (it is not in any agent secret scope). The host presents it when Blayke
+ * types "approve/edit/reject <code>" in the SGS WhatsApp chat, so the agent's own
+ * ANDY_SERVICE_TOKEN cannot approve Andy's own work.
+ */
+export function isApproverRequest(req: NextRequest): boolean {
+  const expected = process.env.SGS_APPROVER_TOKEN;
+  if (!expected) return false;
+  const header = req.headers.get("authorization");
+  if (!header?.startsWith("Bearer ")) return false;
+  const a = Buffer.from(header.slice(7).trim());
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 export type AuthenticatedHandler = (
   req: NextRequest,
   ctx: { params: Promise<Record<string, string>> },

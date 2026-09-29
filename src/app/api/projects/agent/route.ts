@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db/prisma";
 import { withAdmin } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
 import { z } from "zod";
+import { actorFor, recordWorkEvent } from "@/lib/work/events";
+import { createApproval } from "@/lib/approvals";
 
 // Andy-only endpoints (authenticated by the ANDY_SERVICE_TOKEN → admin). This is
 // how Andy on the VPS sees BRAND-NEW build requests (new_build projects a customer
@@ -102,7 +104,7 @@ const seenSchema = z.object({
 });
 
 // POST /api/projects/agent — Andy marks a new_build request as surfaced (set-once).
-export const POST = withAdmin(async (req, _ctx, _session) => {
+export const POST = withAdmin(async (req, _ctx, session) => {
   try {
     const { projectId } = seenSchema.parse(await req.json());
 
@@ -113,7 +115,31 @@ export const POST = withAdmin(async (req, _ctx, _session) => {
       data: { andySeenAt: new Date() },
     });
 
-    return NextResponse.json({ success: true, marked: result.count > 0 });
+    // The first (winning) surfacing queues Gate 1 as an approval, so Blayke can
+    // answer "approve <code>" in WhatsApp instead of opening the admin page.
+    let approvalCode: string | undefined;
+    if (result.count > 0) {
+      const project = await prisma.websiteProject.findUnique({
+        where: { id: projectId },
+        select: { projectName: true, organizationId: true, buildApprovedAt: true },
+      });
+      if (project && !project.buildApprovedAt) {
+        const actor = actorFor(session);
+        await recordWorkEvent({ entityType: "project", entityId: projectId, event: "created", actor: "customer" });
+        const item = await createApproval(
+          {
+            kind: "build_start",
+            refId: projectId,
+            organizationId: project.organizationId,
+            title: `New build — ${project.projectName}`,
+          },
+          actor
+        );
+        approvalCode = item.code;
+      }
+    }
+
+    return NextResponse.json({ success: true, marked: result.count > 0, approvalCode });
   } catch (error) {
     return apiError(error, "Failed to mark new-build request seen");
   }
