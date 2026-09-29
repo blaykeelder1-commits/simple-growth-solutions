@@ -1735,3 +1735,23 @@ model ApprovalItem {
   @@index([kind, refId])
   @@map("approval_items")
 }
+
+// Staff ↔ Andy chat in the admin portal (2026-09-29). The SAME Andy as the SGS
+// WhatsApp chat — NanoClaw feeds these messages into the sgs group, so he has the
+// same rules, memory and tools, and his reply comes back here. Customer-facing
+// output still becomes an ApprovalItem; nothing reaches a customer from this chat.
+model StaffMessage {
+  id         String    @id @default(cuid())
+  role       String // blayke | andy
+  authorId   String?   @map("author_id") // the admin user who typed it (null for Andy)
+  content    String    @db.Text
+  // What the admin was looking at when they wrote it (page + item), so Andy knows
+  // which customer/edit "this" means. e.g. "Approvals · SK4G8 · Waste Rescue KC".
+  context    String?   @db.Text
+  andySeenAt DateTime? @map("andy_seen_at") // set-once: NanoClaw picked it up
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([role, andySeenAt])
+  @@index([createdAt])
+  @@map("staff_messages")
+}

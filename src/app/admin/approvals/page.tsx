@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RefreshCw, ExternalLink, Send, Check, Pencil, X } from "lucide-react";
+import { RefreshCw, ExternalLink, Send, Check, Pencil, X, Bot } from "lucide-react";
+import { askAndyAbout } from "@/components/admin/AndyChat";
 
 interface ApprovalItem {
   id: string;
@@ -70,6 +71,13 @@ function ItemCard({ item, onAction }: { item: ApprovalItem; onAction: (id: strin
           </span>
         )}
         <span className="text-xs text-gray-400 ml-auto">{new Date(item.createdAt).toLocaleString()}</span>
+        <button
+          onClick={() => askAndyAbout(`${item.code} · ${item.title}`)}
+          className="inline-flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900"
+          title="Ask Andy about this item"
+        >
+          <Bot className="w-3.5 h-3.5" /> Ask Andy
+        </button>
       </div>
       <p className="font-medium text-gray-900 break-words">{item.title}</p>
       {item.previewUrl && (

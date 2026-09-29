@@ -4,6 +4,7 @@ import { useSession, signOut } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import Link from "next/link";
+import AndyChat from "@/components/admin/AndyChat";
 import { LayoutDashboard, Users, LogOut, Menu, X, GitBranch, Globe, Inbox, CheckSquare, BarChart3, Ticket } from "lucide-react";
 import { useState } from "react";
 
@@ -178,6 +179,7 @@ export default function AdminLayout({
         {/* Page content */}
         <main className="p-6">{children}</main>
       </div>
+      <AndyChat />
     </div>
   );
 }
