@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { withAuth, withAdmin } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
+import { actorFor, recordWorkEvent } from "@/lib/work/events";
 import { sendProjectStatusUpdateEmail } from "@/lib/email";
 import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
@@ -153,6 +154,18 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
           );
         })
         .catch((e) => apiLogger.warn({ err: e }, "Failed to send project status notification"));
+    }
+
+    // Gate 1 approved from the admin project page closes its WhatsApp approval item too,
+    // so the queue never shows a build as still waiting.
+    if (validatedData.approveBuild === true) {
+      const closed = await prisma.approvalItem.updateMany({
+        where: { kind: "build_start", refId: id, status: "awaiting" },
+        data: { status: "approved", decidedVia: "portal", decidedAt: new Date() },
+      });
+      if (closed.count) {
+        await recordWorkEvent({ entityType: "project", entityId: id, event: "approved", actor: actorFor(session) });
+      }
     }
 
     // Audit log. The headless service account ("andy-service") isn't a real
