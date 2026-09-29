@@ -3,7 +3,7 @@ import type { ApprovalItem, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { recordWorkEvent, type WorkActor, type WorkEntity } from "@/lib/work/events";
 import { postSupportReply } from "@/lib/support/post-reply";
-import { customerLanguageIssues, validateReview } from "@/lib/review";
+import { customerLanguageIssues, outOfPlanPromises, validateReview } from "@/lib/review";
 
 /**
  * The ONE queue between Andy's work and a customer.
@@ -86,6 +86,12 @@ export function assertReviewed(subject: string, review: unknown, customerReads: 
   if (customerReads) {
     const issues = customerLanguageIssues(subject);
     if (issues.length) throw new ApprovalError(`the customer would read internal language: ${issues.join(", ")} — rewrite it plainly`);
+    const promises = outOfPlanPromises(subject);
+    if (promises.length) {
+      throw new ApprovalError(
+        `${promises.join("; ")} — don't promise it: say it isn't part of their plan and offer the upgrade or an add-on quote`
+      );
+    }
   }
 }
 

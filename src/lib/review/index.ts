@@ -67,3 +67,26 @@ const JARGON: { re: RegExp; why: string }[] = [
 export function customerLanguageIssues(text: string): string[] {
   return JARGON.filter((j) => j.re.test(text)).map((j) => `contains ${j.why}`);
 }
+
+// Work no plan includes (src/lib/billing/plan-scope.ts NEVER_INCLUDED).
+const OUT_OF_PLAN =
+  /\b(?:facebook|instagram|tiktok|linkedin|social[- ]media|social (?:page|profile|account)s?|youtube channel|ad campaigns?|ad accounts?|google ads|facebook ads|run(?:ning)? (?:your|the) ads|online ordering|payment funnels?|crm integrations?)\b/i;
+// We are committing to do something.
+const COMMITMENT =
+  /\b(?:we(?:'|’)?ll|we will|we(?:'|’)re going to|we are going to|we can|we(?:'|’)d be happy to|let us)\b/i;
+// The paragraph is explicitly saying it is NOT included / offering an upgrade or quote.
+const NOT_INCLUDED =
+  /\b(?:isn(?:'|’)?t (?:part|included)|is not (?:part|included)|not (?:part of|included in)|outside (?:of )?your plan|upgrade|add-on|quote|we got that wrong|correction)\b/i;
+
+/**
+ * Paragraphs that PROMISE work outside every plan (e.g. "We'll build you a Facebook page").
+ * Deterministic backstop for the reviewers: a paragraph that names out-of-plan work and
+ * commits to it, without saying it isn't included, is refused.
+ */
+export function outOfPlanPromises(text: string): string[] {
+  return text
+    .split(/\n\s*\n|\n(?=\s*[-•*]|\s*\d+[.)])/)
+    .map((p) => p.trim())
+    .filter((p) => OUT_OF_PLAN.test(p) && COMMITMENT.test(p) && !NOT_INCLUDED.test(p))
+    .map((p) => `promises work outside the customer's plan: "${p.slice(0, 120)}${p.length > 120 ? "…" : ""}"`);
+}

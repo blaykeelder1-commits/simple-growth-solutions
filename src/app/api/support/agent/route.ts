@@ -5,6 +5,7 @@ import { withAdmin } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
 import { loadSupportContext, SUPPORT_RULEBOOK } from "@/lib/support/assistant";
 import { actorFor, recordWorkEvent } from "@/lib/work/events";
+import { describeScope } from "@/lib/billing/plan-scope";
 
 // Andy-only endpoints (authenticated by the ANDY_SERVICE_TOKEN → admin). This is
 // how Andy on the VPS reads support questions and customer history; his drafts are
@@ -52,7 +53,14 @@ export const GET = withAdmin(async (req) => {
     if (threadOrg) {
       const org = await prisma.organization.findUnique({ where: { id: threadOrg }, select: { id: true, name: true } });
       if (!org) return NextResponse.json({ success: false, message: "no such organization" }, { status: 404 });
-      return NextResponse.json({ success: true, organization: org, ...(await threadHistory(threadOrg, 40)) });
+      const ctx = await loadSupportContext(threadOrg);
+      return NextResponse.json({
+        success: true,
+        organization: org,
+        plan: ctx.plan,
+        planScope: describeScope(ctx.plan),
+        ...(await threadHistory(threadOrg, 40)),
+      });
     }
 
     const orgGroups = await prisma.supportMessage.groupBy({ by: ["organizationId"], _max: { createdAt: true } });
@@ -99,6 +107,7 @@ export const GET = withAdmin(async (req) => {
         orgName: context.orgName,
         lastCustomerAt: since.toISOString(),
         context,
+        planScope: describeScope(context.plan),
         editsRequested: lastDecision
           ? { code: lastDecision.code, previousDraft: lastDecision.draft, feedback: lastDecision.feedback }
           : null,

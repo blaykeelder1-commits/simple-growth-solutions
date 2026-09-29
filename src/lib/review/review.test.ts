@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { customerLanguageIssues, subjectHash, validateReview, type ReviewRecord } from "./index";
+import { customerLanguageIssues, outOfPlanPromises, subjectHash, validateReview, type ReviewRecord } from "./index";
 
 const good = (text: string): ReviewRecord => ({
   subjectHash: subjectHash(text),
@@ -28,6 +28,25 @@ describe("3-pass review gate", () => {
     r.passes[1] = { lens: "skeptic", verdict: "fail", findings: ["wrong phone"] };
     expect(validateReview(r, "t")).toMatch(/skeptic.*wrong phone/);
     expect(validateReview({ ...good("t"), passes: good("t").passes.slice(0, 2) }, "t")).toMatch(/customer/);
+  });
+});
+
+describe("out-of-plan promise check", () => {
+  const fixture = (f: string) => readFileSync(join(__dirname, "__fixtures__", f), "utf-8");
+  it("refuses the real 2026-09-29 morning message that promised a Facebook page", () => {
+    const issues = outOfPlanPromises(fixture("andy-morning-bbkn.txt"));
+    expect(issues.length).toBe(1);
+    expect(issues[0]).toMatch(/Facebook/);
+  });
+  it("passes the correction (SH8TT) that says the Facebook page isn't part of the plan", () => {
+    expect(outOfPlanPromises(fixture("jorge-sh8tt.txt"))).toEqual([]);
+  });
+  it("passes SC8EX, which mentions Facebook only as where links get shared", () => {
+    expect(outOfPlanPromises(fixture("jorge-sc8ex.txt"))).toEqual([]);
+  });
+  it("offering the upgrade is fine; promising the work is not", () => {
+    expect(outOfPlanPromises("Online ordering isn't part of your Managed plan — we can quote it as an add-on.")).toEqual([]);
+    expect(outOfPlanPromises("We'll set up Instagram for you this week.")).toHaveLength(1);
   });
 });
 
