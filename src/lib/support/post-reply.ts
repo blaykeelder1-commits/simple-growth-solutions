@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { apiLogger } from "@/lib/logger";
-import { getAdminEmails, sendSupportEscalationEmail } from "@/lib/email";
+import { getAdminEmails, sendSupportEscalationEmail, sendSupportReplyEmail } from "@/lib/email";
 import { loadSupportContext } from "@/lib/support/assistant";
 
 /**
@@ -41,6 +41,15 @@ export async function postSupportReply(opts: {
       escalateReason: escalateReason || null,
     },
   });
+
+  // The customer is not watching the portal — email them the reply so it actually reaches them.
+  const recipient = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } });
+  if (recipient?.email) {
+    const firstName = recipient.name?.trim().split(/\s+/)[0] || "there";
+    sendSupportReplyEmail(recipient.email, firstName, reply).catch((e) =>
+      apiLogger.error({ err: e, organizationId }, "Support reply posted but the customer email FAILED")
+    );
+  }
 
   if (escalate) {
     const [ctx, customer] = await Promise.all([

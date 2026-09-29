@@ -562,3 +562,32 @@ export async function sendProjectNoteEmail(
     html,
   });
 }
+
+/**
+ * Tell a customer they have a reply in their portal Support chat. The full reply is
+ * in the email so they can read it without logging in; the button opens the thread.
+ * Sent only when Blayke presses Send on an approved support reply.
+ */
+export async function sendSupportReplyEmail(
+  email: string,
+  customerName: string,
+  replyText: string
+) {
+  const html = emailLayout(`
+    <h2 style="color: #1f2937;">We replied to your message</h2>
+    <p>Hi ${escapeHtml(customerName)},</p>
+    <div style="background: #f9fafb; padding: 15px; border-radius: 6px; border-left: 4px solid #2563eb; margin: 20px 0;">
+      <p style="margin: 0; color: #374151; white-space: pre-wrap;">${escapeHtml(replyText)}</p>
+    </div>
+    <p>You can answer right from your portal — it keeps the whole conversation in one place.</p>
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${APP_URL}/portal/support" style="display: inline-block; background: linear-gradient(to right, #2563eb, #4f46e5); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);">Open the conversation</a>
+    </div>
+  `, 'Website Management');
+
+  return sendEmail({
+    to: email,
+    subject: "We replied to your message — Simple Growth Solutions",
+    html,
+  });
+}
