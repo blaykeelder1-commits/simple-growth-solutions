@@ -193,10 +193,10 @@ export default function SettingsPage() {
             Account deletion is permanent and removes your projects, requests,
             and billing history. To delete your account, email{" "}
             <a
-              href="mailto:hello@simple-growth-solution.com?subject=Delete%20my%20account"
+              href="mailto:info@simple-growth-solution.com?subject=Delete%20my%20account"
               className="text-red-600 font-medium hover:underline"
             >
-              hello@simple-growth-solution.com
+              info@simple-growth-solution.com
             </a>{" "}
             and we&apos;ll confirm and process it within 2 business days.
           </p>

@@ -123,10 +123,10 @@ export default function BookPage({
                     meantime, email us:
                   </p>
                   <a
-                    href="mailto:hello@simple-growth-solution.com"
+                    href="mailto:info@simple-growth-solution.com"
                     className="text-primary hover:underline"
                   >
-                    hello@simple-growth-solution.com
+                    info@simple-growth-solution.com
                   </a>
                 </div>
               )}

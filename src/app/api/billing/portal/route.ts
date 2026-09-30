@@ -70,7 +70,7 @@ export async function POST() {
           priceMonthly: squareSub.priceMonthly,
           currentPeriodEnd: squareSub.currentPeriodEnd,
         },
-        message: "Square subscriptions are managed by our team. Email us at support@simple-growth-solution.com to make changes.",
+        message: "Your plan is billed through Square. To cancel or switch plans, use \"Cancel or change plan\" on this page. To update your card or anything else, message us from Support in your portal or email info@simple-growth-solution.com.",
       });
     }
 
