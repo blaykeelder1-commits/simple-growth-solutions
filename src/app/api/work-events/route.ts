@@ -7,7 +7,7 @@ import { actorFor, recordWorkEvent } from "@/lib/work/events";
 
 // Events that carry what the loop learns from: Blayke's reasons for edits and
 // rejections, Andy's lessons when he ships or triages, and free-standing lessons.
-const LESSON_EVENTS = ["edits_requested", "rejected", "shipped", "triaged", "lesson"];
+const LESSON_EVENTS = ["edits_requested", "rejected", "shipped", "triaged", "lesson", "cancel_requested", "saved", "cancel_undone"];
 
 // GET /api/work-events?days=7 — the week's lessons plus a starvation line, so the
 // rulebook review reports "3 closed, 1 without a lesson" instead of silence.
@@ -28,6 +28,10 @@ export const GET = withAdmin(async (req) => {
       blaykeEditRequests: events.filter((e) => e.event === "edits_requested").length,
       blaykeRejections: events.filter((e) => e.event === "rejected").length,
       touchesCaptured: events.filter((e) => e.touch).length,
+      // Churn signal for the weekly review: why customers leave, and what kept them.
+      cancellations: events.filter((e) => e.event === "cancel_requested").length,
+      saved: events.filter((e) => e.event === "saved").length,
+      changedMind: events.filter((e) => e.event === "cancel_undone").length,
     };
     return NextResponse.json({ success: true, starvation, events });
   } catch (error) {

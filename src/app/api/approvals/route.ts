@@ -5,10 +5,12 @@ import { withAdmin } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
 import { actorFor } from "@/lib/work/events";
 import { ApprovalError, createApproval, OPEN_STATUSES } from "@/lib/approvals";
+import { ensureDuePauseTasks } from "@/lib/billing/cancellation";
 
 // GET /api/approvals — the queue: every open item plus anything decided in the last 7 days.
 export const GET = withAdmin(async () => {
   try {
+    await ensureDuePauseTasks().catch(() => undefined); // never block the queue on it
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const items = await prisma.approvalItem.findMany({
       where: { OR: [{ status: { in: OPEN_STATUSES } }, { updatedAt: { gte: since } }] },

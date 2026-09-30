@@ -91,6 +91,8 @@ model VerificationToken {
 model Organization {
   id                 String  @id @default(cuid())
   name               String
+  // A save offer is shown once per customer, ever (Blayke, 2026-09-30).
+  saveOfferUsedAt    DateTime? @map("save_offer_used_at")
   industry           String?
   annualRevenueTier  String? @map("annual_revenue_tier") // '100k-500k', '500k-1m', '1m-5m', '5m-20m'
   timezone           String  @default("America/New_York")
@@ -297,6 +299,16 @@ model Subscription {
   currentPeriodStart DateTime? @map("current_period_start")
   currentPeriodEnd   DateTime? @map("current_period_end")
   canceledAt         DateTime? @map("canceled_at")
+
+  // Self-serve cancellation (2026-09-30). The customer cancels in the portal; it takes
+  // effect at the end of the paid period (cancelAt) and can be undone until then.
+  cancelRequestedAt DateTime? @map("cancel_requested_at")
+  cancelAt          DateTime? @map("cancel_at")
+  cancelReason      String?   @map("cancel_reason") // too_expensive | not_using | missing_feature | unhappy | switching | closing | other
+  cancelComment     String?   @db.Text @map("cancel_comment")
+  // Accepted save offer: a downgrade scheduled for the next billing date (Blayke applies
+  // it in Square; approving the billing task sets `plan`).
+  pendingPlan       String?   @map("pending_plan")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

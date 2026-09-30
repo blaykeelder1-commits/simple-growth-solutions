@@ -32,3 +32,14 @@ describe("plan scope", () => {
     expect(describeScope(null)).toMatch(/Do not promise any work/);
   });
 });
+
+import { planDifference } from "./plan-scope";
+describe("planDifference", () => {
+  it("Pro → Managed lists what they lose, including the Pro features", () => {
+    const lost = planDifference("website_pro", "website_managed").join(" | ");
+    expect(lost).toMatch(/AI chatbot/);
+    expect(lost).toMatch(/Lead capture forms/);
+    expect(lost).toMatch(/4 change requests/);
+    expect(lost).not.toMatch(/Google Business Profile/); // every plan keeps it
+  });
+});

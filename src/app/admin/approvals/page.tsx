@@ -68,6 +68,7 @@ const KIND_LABELS: Record<string, string> = {
   support_reply: "Support reply",
   build_start: "Start new build",
   rule_change: "Rule change",
+  billing_task: "Billing to-do",
 };
 
 const STATUS_STYLES: Record<string, string> = {

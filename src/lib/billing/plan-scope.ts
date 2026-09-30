@@ -124,3 +124,12 @@ export function describeScope(rawPlan: string | null | undefined): string {
     "  Social media is never offered or priced by us — Blayke decides if it is ever sold as an extra.",
   ].join("\n");
 }
+
+/** What a customer gives up moving from one plan to another — computed, never hand-written. */
+export function planDifference(fromPlan: string, toPlan: string): string[] {
+  const from = websiteTier(fromPlan);
+  const to = websiteTier(toPlan);
+  if (!from || !to) return [];
+  const keep = new Set(PLAN_SCOPE[to].includes);
+  return PLAN_SCOPE[from].includes.filter((i) => !keep.has(i));
+}

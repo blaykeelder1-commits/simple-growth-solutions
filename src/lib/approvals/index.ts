@@ -18,7 +18,20 @@ import { customerLanguageIssues, outOfPlanPromises, validateReview } from "@/lib
  * reason is the lesson the loop learns from.
  */
 
-export const APPROVAL_KINDS = ["cr_ship", "support_reply", "build_start", "rule_change"] as const;
+export const APPROVAL_KINDS = ["cr_ship", "support_reply", "build_start", "rule_change", "billing_task"] as const;
+
+/**
+ * A billing_task is a to-do for Blayke that SGS can't safely do by API (Square's beta
+ * plan swap, comped plans, pausing a customer's site). He does it, then approves the code.
+ * agentNote holds the JSON the approve effect needs.
+ */
+export type BillingTask =
+  | { action: "downgrade"; subscriptionId: string; toPlan: string }
+  | { action: "cancel_manual"; subscriptionId: string }
+  | { action: "cancel_fallback"; subscriptionId: string }
+  | { action: "undo_cancel_fallback"; subscriptionId: string }
+  | { action: "pause_site"; subscriptionId: string }
+  | { action: "notice"; subscriptionId: string };
 export type ApprovalKind = (typeof APPROVAL_KINDS)[number];
 
 /** Kinds whose effect reaches a customer — these need a portal Send after approval. */
@@ -45,7 +58,7 @@ async function newCode(): Promise<string> {
   throw new ApprovalError("could not allocate an approval code", 500);
 }
 
-function entityOf(item: Pick<ApprovalItem, "kind" | "refId" | "id">): { entityType: WorkEntity; entityId: string } {
+function entityOf(item: Pick<ApprovalItem, "kind" | "refId" | "id" | "organizationId">): { entityType: WorkEntity; entityId: string } {
   switch (item.kind) {
     case "cr_ship":
       return { entityType: "cr", entityId: item.refId };
@@ -53,6 +66,8 @@ function entityOf(item: Pick<ApprovalItem, "kind" | "refId" | "id">): { entityTy
       return { entityType: "project", entityId: item.refId };
     case "support_reply":
       return { entityType: "support", entityId: item.refId };
+    case "billing_task":
+      return { entityType: "support", entityId: item.organizationId ?? item.refId };
     default:
       return { entityType: "rule", entityId: item.id };
   }
@@ -165,6 +180,9 @@ export async function decideApproval(opts: {
   if (opts.decision !== "approve" && !reason) {
     throw new ApprovalError(`say what to change — "${opts.decision} ${item.code} <reason>"`);
   }
+  if (item.kind === "billing_task" && opts.decision === "edit") {
+    throw new ApprovalError(`${item.code} is a to-do — approve it when done, or reject it with your reason`);
+  }
   if (item.kind === "build_start" && opts.decision === "edit") {
     throw new ApprovalError(`a build is approve or reject — reject ${item.code} with your reason instead`);
   }
@@ -201,6 +219,16 @@ async function applyDecisionEffect(
   decision: Decision,
   reason: string | null
 ) {
+  if (item.kind === "billing_task" && decision === "approve") {
+    // Blayke did the task (in Square / Cloudflare) — record what changed.
+    const task = JSON.parse(item.agentNote || "{}") as BillingTask;
+    if (task.action === "downgrade") {
+      await tx.subscription.update({ where: { id: task.subscriptionId }, data: { plan: task.toPlan, pendingPlan: null } });
+    } else if (task.action === "cancel_manual") {
+      await tx.subscription.update({ where: { id: task.subscriptionId }, data: { status: "canceled", canceledAt: new Date() } });
+    }
+    return;
+  }
   if (item.kind === "build_start" && decision === "approve") {
     // Internal gate — final on approval (nothing reaches the customer).
     await tx.websiteProject.update({ where: { id: item.refId }, data: { buildApprovedAt: new Date() } });

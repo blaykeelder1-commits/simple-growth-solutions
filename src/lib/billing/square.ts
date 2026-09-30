@@ -474,13 +474,31 @@ export async function getSubscription(
   };
 }
 
+/**
+ * Schedule cancellation at the END of the current billing period (Square sets
+ * `canceled_date` to the period end; status stays ACTIVE until then). Returns that date.
+ * https://developer.squareup.com/reference/square/subscriptions-api/cancel-subscription
+ */
 export async function cancelSubscription(
   cfg: SgsSquareConfig,
   subscriptionId: string
-): Promise<void> {
-  await request(cfg, `/subscriptions/${subscriptionId}/cancel`, {
+): Promise<{ canceledDate: string | null }> {
+  const res = await request<{ subscription?: { canceled_date?: string } }>(cfg, `/subscriptions/${subscriptionId}/cancel`, {
     method: "POST",
     body: {},
+  });
+  return { canceledDate: res.subscription?.canceled_date ?? null };
+}
+
+/**
+ * Undo a scheduled (not yet effective) cancellation: "The canceled_date of a subscription
+ * can only be removed to undo a future scheduled cancellation."
+ * https://developer.squareup.com/docs/subscriptions-api/manage-subscriptions
+ */
+export async function undoScheduledCancel(cfg: SgsSquareConfig, subscriptionId: string): Promise<void> {
+  await request(cfg, `/subscriptions/${subscriptionId}`, {
+    method: "PUT",
+    body: { subscription: { canceled_date: null } },
   });
 }
 

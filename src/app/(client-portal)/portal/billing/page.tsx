@@ -327,9 +327,16 @@ export default function BillingPage() {
                     ) : (
                       <span />
                     )}
-                    <Button variant="outline" size="sm" onClick={handleManageBilling} className="bg-white/50 hover:bg-white">
-                      Manage
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      {subscription.plan.startsWith("website_") && ["active", "trialing"].includes(subscription.status) && (
+                        <Link href="/portal/billing/cancel" className="text-sm text-gray-600 underline hover:text-gray-900">
+                          Cancel or change plan
+                        </Link>
+                      )}
+                      <Button variant="outline" size="sm" onClick={handleManageBilling} className="bg-white/50 hover:bg-white">
+                        Manage
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

@@ -591,3 +591,42 @@ export async function sendSupportReplyEmail(
     html,
   });
 }
+
+/** Confirms a self-serve cancellation: when it takes effect, and how to change their mind. */
+export async function sendCancellationScheduledEmail(email: string, firstName: string, planLabel: string, cancelAt: Date) {
+  const when = cancelAt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const html = emailLayout(`
+    <h2 style="color: #1f2937;">Your cancellation is confirmed</h2>
+    <p>Hi ${escapeHtml(firstName)},</p>
+    <p>We've cancelled your ${escapeHtml(planLabel)} plan. Everything stays exactly as it is until <strong>${escapeHtml(when)}</strong>, the end of the period you've already paid for. You won't be charged again.</p>
+    <p>Changed your mind? You can keep your plan with one click any time before then.</p>
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${APP_URL}/portal/billing/cancel" style="display: inline-block; background: linear-gradient(to right, #2563eb, #4f46e5); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600;">Keep my plan</a>
+    </div>
+    <p>Thank you for being a customer. If there's anything we could have done better, just reply to this email — we read every one.</p>
+  `, 'Website Management');
+  return sendEmail({ to: email, subject: "Your cancellation is confirmed — Simple Growth Solutions", html });
+}
+
+/** Confirms the downgrade a customer chose instead of cancelling. */
+export async function sendDowngradeScheduledEmail(
+  email: string,
+  firstName: string,
+  fromLabel: string,
+  toLabel: string,
+  effective: Date | null,
+  changes: string[]
+) {
+  const when = effective ? effective.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "your next billing date";
+  const html = emailLayout(`
+    <h2 style="color: #1f2937;">You're switching to ${escapeHtml(toLabel)}</h2>
+    <p>Hi ${escapeHtml(firstName)},</p>
+    <p>Glad you're staying. Your plan moves from ${escapeHtml(fromLabel)} to <strong>${escapeHtml(toLabel)}</strong> on <strong>${escapeHtml(when)}</strong>. Until then nothing changes.</p>
+    <p>Your website, hosting, security, Google Business Profile care and SEO all stay. What changes on ${escapeHtml(toLabel)}:</p>
+    <ul style="color: #374151;">${changes.map((c) => `<li>No longer included: ${escapeHtml(c)}</li>`).join("")}</ul>
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${APP_URL}/portal/billing" style="display: inline-block; background: linear-gradient(to right, #2563eb, #4f46e5); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600;">View my plan</a>
+    </div>
+  `, 'Website Management');
+  return sendEmail({ to: email, subject: `You're switching to ${toLabel} — Simple Growth Solutions`, html });
+}
