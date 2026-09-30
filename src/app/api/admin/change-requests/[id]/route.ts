@@ -163,13 +163,22 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
     // the intake sweep claims and processes it again. Clears the seen-guard and any
     // partial preview/note. No customer email (pending isn't a notify status).
     if (validatedData.reopen) {
+      // Andy reopens only a ticket parked for Blayke (pending) or orphaned mid-prep
+      // (in_progress) — never one waiting on Blayke's review or already approved/closed.
+      if (isAndy && !["pending", "in_progress"].includes(oldChangeRequest.status)) {
+        return NextResponse.json(
+          { success: false, message: `Andy can't reopen a ${oldChangeRequest.status} ticket — only Blayke can` },
+          { status: 403 }
+        );
+      }
+      // Blayke's instruction rides in the SAME write, so no sweep can claim it without the note.
       const changeRequest = await prisma.changeRequest.update({
         where: { id },
         data: {
           status: "pending",
           andySeenAt: null,
           previewUrl: null,
-          agentNote: null,
+          agentNote: validatedData.agentNote ?? null,
         },
       });
       await supersedeCrShip(id); // any queued approval was for work that no longer exists
