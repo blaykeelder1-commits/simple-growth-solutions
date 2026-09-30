@@ -28,8 +28,11 @@ import {
   PartyPopper,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { QualifyOutcome, QualifyStep, type LeadHandle } from "@/components/qualify/QualifyStep";
+import { getAttribution } from "@/lib/attribution";
+import type { FitStatus } from "@/lib/qualify/score";
 
-type AnalyzerState = "idle" | "loading" | "results" | "solution-preview" | "claim-offer" | "success";
+type AnalyzerState = "idle" | "loading" | "results" | "solution-preview" | "claim-offer" | "qualify" | "success";
 
 interface AnalysisData {
   url: string;
@@ -75,6 +78,8 @@ export function UrlAnalyzer() {
   const [scanMessage, setScanMessage] = useState(scanningMessages[0]);
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
   const [improvements, setImprovements] = useState<ImprovementItem[]>([]);
+  const [leadHandle, setLeadHandle] = useState<LeadHandle | null>(null);
+  const [fitStatus, setFitStatus] = useState<FitStatus | null>(null);
 
   // Animate scanning messages
   useEffect(() => {
@@ -164,15 +169,24 @@ export function UrlAnalyzer() {
               improvements: getTotalImprovements(improvements),
             }
           : undefined,
+        ...getAttribution(),
       }),
     });
 
+    const responseData = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const responseData = await response.json();
       throw new Error(responseData.error || "Failed to submit");
     }
 
-    setState("success");
+    // Ask the four fit questions before promising anything; without a handle
+    // (unexpected response) fall through to the honest "we'll review" outcome.
+    if (responseData.leadId && responseData.qualifyToken) {
+      setLeadHandle({ leadId: responseData.leadId, qualifyToken: responseData.qualifyToken });
+      setState("qualify");
+    } else {
+      setFitStatus("review");
+      setState("success");
+    }
   };
 
   // Get score color
@@ -195,6 +209,8 @@ export function UrlAnalyzer() {
     setUrl("");
     setAnalysisData(null);
     setImprovements([]);
+    setLeadHandle(null);
+    setFitStatus(null);
   };
 
   return (
@@ -397,14 +413,32 @@ export function UrlAnalyzer() {
       )}
 
       {/* Success State (Enhanced) */}
-      {state === "success" && (
+      {state === "qualify" && leadHandle && (
+        <Card variant="glass" className="p-8">
+          <QualifyStep
+            lead={leadHandle}
+            onDone={(status) => {
+              setFitStatus(status);
+              setState("success");
+            }}
+          />
+        </Card>
+      )}
+
+      {state === "success" && fitStatus !== "fit" && (
+        <Card variant="glass" className="p-8">
+          <QualifyOutcome status={fitStatus ?? "review"} />
+        </Card>
+      )}
+
+      {state === "success" && fitStatus === "fit" && (
         <Card variant="glass" className="p-8">
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 mb-6">
               <PartyPopper className="h-10 w-10 text-white" />
             </div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">
-              Your Free Website is Queued!
+              You Qualify for a Free Website!
             </h3>
             <p className="text-gray-600 max-w-md mx-auto">
               Our team is excited to transform your website. Here&apos;s what happens next:

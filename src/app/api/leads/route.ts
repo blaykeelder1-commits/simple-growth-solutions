@@ -6,6 +6,7 @@ import { withRateLimit } from "@/lib/rate-limit";
 import { startNurtureForLead } from "@/lib/nurture/engine";
 import { sendNewLeadInternalEmail } from "@/lib/email/lifecycle-emails";
 import { z } from "zod";
+import { qualifyToken } from "@/lib/qualify/token";
 
 // Full lead schema for questionnaire form
 const createLeadSchema = z.object({
@@ -19,10 +20,35 @@ const createLeadSchema = z.object({
   challenges: z.string().optional(),
 });
 
+// Where the lead came from — the form plus any campaign tags on the landing URL.
+const attributionSchema = z.object({
+  source: z.string().max(60).optional(),
+  utmSource: z.string().max(120).optional(),
+  utmMedium: z.string().max(120).optional(),
+  utmCampaign: z.string().max(200).optional(),
+  referrer: z.string().max(500).optional(),
+});
+
+function attribution(body: unknown, fallbackSource: string) {
+  const a = attributionSchema.safeParse(body);
+  const d = a.success ? a.data : {};
+  return {
+    source: d.source || fallbackSource,
+    utmSource: d.utmSource || null,
+    utmMedium: d.utmMedium || null,
+    utmCampaign: d.utmCampaign || null,
+    referrer: d.referrer || null,
+  };
+}
+
 // Simplified schema for URL analyzer quick capture
 const quickLeadSchema = z.object({
   email: z.string().email("Invalid email address"),
+  // The analyzer form sends contactName; older clients sent name. Accept both —
+  // reading only `name` is why every analyzer lead was saved as "Website Visitor".
   name: z.string().optional(),
+  contactName: z.string().optional(),
+  phone: z.string().max(40).optional(),
   source: z.string().optional(),
   websiteUrl: z.string().optional(),
   analysisData: z
@@ -75,9 +101,9 @@ export async function POST(req: NextRequest) {
       const lead = await prisma.lead.create({
         data: {
           businessName: body.businessName || businessName,
-          contactName: validated.name || "Website Visitor",
+          contactName: validated.contactName?.trim() || validated.name?.trim() || "Website Visitor",
           email: validated.email,
-          phone: null,
+          phone: validated.phone?.trim() || null,
           hasWebsite: !!validated.websiteUrl,
           websiteUrl: validated.websiteUrl || null,
           industry: null,
@@ -86,6 +112,7 @@ export async function POST(req: NextRequest) {
           analysisData: validated.analysisData
             ? JSON.stringify(validated.analysisData)
             : null,
+          ...attribution(body, validated.source || "url-analyzer"),
         },
       });
 
@@ -109,7 +136,11 @@ export async function POST(req: NextRequest) {
         console.error("Failed to send lead alert for", lead.id, err)
       );
 
-      return NextResponse.json({ success: true, lead }, { status: 201 });
+      // Only what the visitor's own next step needs — never echo the stored row.
+      return NextResponse.json(
+        { success: true, leadId: lead.id, qualifyToken: qualifyToken(lead.id) },
+        { status: 201 }
+      );
     }
 
     // Handle full lead form submission
@@ -125,6 +156,7 @@ export async function POST(req: NextRequest) {
         websiteUrl: validated.websiteUrl || null,
         industry: validated.industry || null,
         challenges: validated.challenges || null,
+        ...attribution(body, "questionnaire"),
       },
     });
 
@@ -148,7 +180,10 @@ export async function POST(req: NextRequest) {
       console.error("Failed to send lead alert for", lead.id, err)
     );
 
-    return NextResponse.json({ success: true, lead }, { status: 201 });
+    return NextResponse.json(
+      { success: true, leadId: lead.id, qualifyToken: qualifyToken(lead.id) },
+      { status: 201 }
+    );
   } catch (error) {
     return apiError(error, "Failed to create lead");
   }

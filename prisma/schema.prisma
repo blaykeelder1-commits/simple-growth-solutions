@@ -237,6 +237,24 @@ model Lead {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
+  // Where the lead came from: the form (website-analysis | questionnaire) plus any
+  // campaign tags on the landing URL, so lead source mix is measured, not guessed.
+  source        String?  @map("source")
+  utmSource     String?  @map("utm_source")
+  utmMedium     String?  @map("utm_medium")
+  utmCampaign   String?  @map("utm_campaign")
+  referrer      String?  @map("referrer")
+
+  // Qualification answers + the deterministic fit result (src/lib/qualify/score.ts).
+  trade             String?   @map("trade")
+  desiredAction     String?   @map("desired_action")
+  currentLeadSource String?   @map("current_lead_source")
+  readyThisWeek     Boolean?  @map("ready_this_week")
+  fitScore          Int?      @map("fit_score")
+  fitStatus         String?   @map("fit_status") // fit | review | decline
+  fitReasons        String?   @map("fit_reasons") @db.Text // JSON string[]
+  qualifiedAt       DateTime? @map("qualified_at")
+
   // Nurture sequence tracking
   nurtureStatus String    @default("new") @map("nurture_status") // new, nurturing, completed, converted, unsubscribed
   nurtureStep   Int       @default(0) @map("nurture_step") // 0=not started, 1=welcome, 2=case_study, 3=free_offer, 4=last_chance
@@ -249,6 +267,8 @@ model Lead {
   @@index([status])
   @@index([createdAt])
   @@index([nurtureStatus, nextNurtureAt])
+  @@index([source])
+  @@index([fitStatus])
   @@map("leads")
 }
 

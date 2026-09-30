@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { withAdmin } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
+import { loadOperations } from "@/lib/reports/operations";
 
 // GET /api/admin/reports
 // CEO-grade revenue + customer metrics. Aggregates everything needed for the
@@ -81,6 +82,7 @@ export const GET = withAdmin(async () => {
       prisma.subscription.count({ where: { OR: [{ status: "active" }, { status: "canceled" }, { status: "past_due" }] } }),
     ]);
     const trialConversionRate = everTrialed > 0 ? everActive / everTrialed : 0;
+    const operations = await loadOperations(now);
 
     return NextResponse.json({
       success: true,
@@ -107,6 +109,7 @@ export const GET = withAdmin(async () => {
       planBreakdown: Object.values(planBreakdown).sort((a, b) => b.mrrCents - a.mrrCents),
       trialConversionRate,
       signupSeries,
+      operations,
     });
   } catch (error) {
     return apiError(error, "Failed to compute reports");

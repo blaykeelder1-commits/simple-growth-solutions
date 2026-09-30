@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { TrendingUp, TrendingDown, DollarSign, Users, Sparkles, RefreshCw } from "lucide-react";
+import type { Operations } from "@/lib/reports/operations";
 
 interface ReportData {
   mrr: {
@@ -18,6 +19,81 @@ interface ReportData {
   planBreakdown: { plan: string; count: number; mrrCents: number }[];
   trialConversionRate: number;
   signupSeries: { date: string; count: number }[];
+  operations: Operations;
+}
+
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
+      <div className="mt-1 text-2xl font-bold text-gray-900">{value}</div>
+      {hint && <div className="mt-1 text-xs text-gray-500">{hint}</div>}
+    </div>
+  );
+}
+
+function Breakdown({ title, rows, empty }: { title: string; rows: { key: string; count: number }[]; empty: string }) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="mb-2 text-sm font-semibold text-gray-900">{title}</div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-gray-400">{empty}</p>
+      ) : (
+        <ul className="space-y-1 text-sm">
+          {rows.map((r) => (
+            <li key={r.key} className="flex justify-between gap-4">
+              <span className="text-gray-700">{r.key.replace(/_/g, " ")}</span>
+              <span className="font-medium text-gray-900">{r.count}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** How the work loop is doing — computed from recorded events only, units in every label. */
+function OperationsSection({ ops }: { ops: Operations }) {
+  const hours = ops.tickets.medianTurnaroundHours;
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900">Operations — last {ops.windowDays} days</h2>
+        <p className="text-sm text-gray-500">From recorded events only. A dash means nothing has been recorded yet.</p>
+      </div>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Stat
+          label="Ticket turnaround (median)"
+          value={hours === null ? "—" : hours >= 48 ? `${Math.round(hours / 24)} days` : `${hours} hours`}
+          hint={`${ops.tickets.completed} ticket(s) completed`}
+        />
+        <Stat
+          label="Approved first time"
+          value={ops.approvals.firstPassPct === null ? "—" : `${ops.approvals.firstPassPct}%`}
+          hint={`${ops.approvals.firstPass} of ${ops.approvals.pieces} piece(s) · ${ops.approvals.avgEditRounds ?? 0} edit rounds each`}
+        />
+        <Stat
+          label="Customer emails"
+          value={`${ops.customerEmails.sent} sent`}
+          hint={ops.customerEmails.failed ? `${ops.customerEmails.failed} FAILED` : "0 failed"}
+        />
+        <Stat
+          label="Your time logged"
+          value={ops.blayke.entriesWithMinutes ? `${ops.blayke.minutesLogged} min` : "—"}
+          hint={ops.blayke.entriesWithMinutes ? `${ops.blayke.entriesWithMinutes} entries` : "not being logged yet"}
+        />
+      </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Breakdown
+          title={`Cancellations: ${ops.cancellations.requested} requested · ${ops.cancellations.saved} saved`}
+          rows={ops.cancellations.byReason}
+          empty="No cancellations"
+        />
+        <Breakdown title={`Leads by source (${ops.leads.total})`} rows={ops.leads.bySource} empty="No leads" />
+        <Breakdown title="Leads by fit" rows={ops.leads.byFit} empty="No leads" />
+      </div>
+    </section>
+  );
 }
 
 const PLAN_LABELS: Record<string, string> = {
@@ -204,6 +280,8 @@ export default function ReportsPage() {
           )}
         </div>
       </div>
+
+      {data.operations && <OperationsSection ops={data.operations} />}
     </div>
   );
 }

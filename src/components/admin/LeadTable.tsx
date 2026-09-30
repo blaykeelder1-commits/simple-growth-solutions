@@ -12,7 +12,17 @@ interface Lead {
   status: string;
   analysisScore: number | null;
   createdAt: string;
+  source?: string | null;
+  utmSource?: string | null;
+  fitStatus?: string | null;
+  fitScore?: number | null;
 }
+
+const FIT_STYLES: Record<string, string> = {
+  fit: "bg-green-100 text-green-800",
+  review: "bg-amber-100 text-amber-800",
+  decline: "bg-gray-200 text-gray-700",
+};
 
 interface LeadTableProps {
   leads: Lead[];
@@ -56,6 +66,9 @@ export function LeadTable({ leads }: LeadTableProps) {
                 Score
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Fit / Source
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Date
               </th>
             </tr>
@@ -90,6 +103,18 @@ export function LeadTable({ leads }: LeadTableProps) {
                   ) : (
                     <span className="text-sm text-gray-400">-</span>
                   )}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  {lead.fitStatus ? (
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${FIT_STYLES[lead.fitStatus] ?? ""}`}>
+                      {lead.fitStatus} {lead.fitScore ?? "-"}/8
+                    </span>
+                  ) : (
+                    <span className="text-xs text-gray-400">not answered</span>
+                  )}
+                  <div className="text-xs text-gray-500 mt-1">
+                    {[lead.source, lead.utmSource].filter(Boolean).join(" · ") || "-"}
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {formatDate(lead.createdAt)}

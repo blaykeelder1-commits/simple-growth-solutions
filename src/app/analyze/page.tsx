@@ -7,6 +7,9 @@ import { Header, Footer } from "@/components/landing";
 import { ReportCard } from "@/components/analyzer/ReportCard";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
+import { QualifyOutcome, QualifyStep, type LeadHandle } from "@/components/qualify/QualifyStep";
+import { getAttribution } from "@/lib/attribution";
+import type { FitStatus } from "@/lib/qualify/score";
 
 interface AnalysisData {
   overallScore: number;
@@ -33,6 +36,8 @@ function AnalyzeContent() {
   const [leadBusiness, setLeadBusiness] = useState("");
   const [leadCaptured, setLeadCaptured] = useState(false);
   const [leadSubmitting, setLeadSubmitting] = useState(false);
+  const [leadHandle, setLeadHandle] = useState<LeadHandle | null>(null);
+  const [fitStatus, setFitStatus] = useState<FitStatus | null>(null);
 
   const handleLeadCapture = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +45,7 @@ function AnalyzeContent() {
 
     setLeadSubmitting(true);
     try {
-      await fetch("/api/leads", {
+      const res = await fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -55,8 +60,11 @@ function AnalyzeContent() {
                 improvements: data.recommendations?.length || 0,
               }
             : undefined,
+          ...getAttribution(),
         }),
       });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.leadId && j.qualifyToken) setLeadHandle({ leadId: j.leadId, qualifyToken: j.qualifyToken });
       setLeadCaptured(true);
     } catch {
       // Still show success to not block UX
@@ -225,16 +233,18 @@ function AnalyzeContent() {
             No credit card required. We&apos;ll reach out within 24 hours.
           </p>
         </div>
+      ) : leadHandle && !fitStatus ? (
+        <div className="mt-10 rounded-2xl border bg-white p-6 md:p-8">
+          <QualifyStep lead={leadHandle} onDone={setFitStatus} />
+        </div>
       ) : (
-        <div className="mt-10 rounded-2xl border bg-gradient-to-br from-green-50 to-emerald-50 p-6 text-center md:p-8">
-          <div className="mb-3 text-4xl">🎉</div>
-          <h2 className="mb-3 text-2xl font-bold text-green-800">
-            You&apos;re In!
-          </h2>
-          <p className="text-green-700">
-            We&apos;ll start building your new website and reach out within 24 hours
-            to schedule a demo. Keep an eye on your inbox!
-          </p>
+        <div
+          className={`mt-10 rounded-2xl border p-6 md:p-8 ${
+            fitStatus === "fit" ? "bg-gradient-to-br from-green-50 to-emerald-50" : "bg-white"
+          }`}
+        >
+          {/* No lead handle (the save failed) → the honest "we'll review" outcome. */}
+          <QualifyOutcome status={fitStatus ?? "review"} />
         </div>
       )}
     </div>

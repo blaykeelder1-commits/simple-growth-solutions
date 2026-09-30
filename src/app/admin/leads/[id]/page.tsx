@@ -23,6 +23,27 @@ interface Lead {
   convertedToOrgId: string | null;
   createdAt: string;
   updatedAt: string;
+  source: string | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  referrer: string | null;
+  trade: string | null;
+  desiredAction: string | null;
+  currentLeadSource: string | null;
+  readyThisWeek: boolean | null;
+  fitScore: number | null;
+  fitStatus: string | null;
+  fitReasons: string | null;
+}
+
+function parseReasons(raw: string | null): string[] {
+  try {
+    const v = raw ? JSON.parse(raw) : [];
+    return Array.isArray(v) ? v.map(String) : [];
+  } catch {
+    return [];
+  }
 }
 
 interface ConvertedOrg {
@@ -277,6 +298,41 @@ export default function LeadDetailPage() {
                 <p className="text-gray-900">{lead.challenges}</p>
               </div>
             )}
+
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Fit for a free build</p>
+              {lead.fitStatus ? (
+                <>
+                  <p className="text-gray-900 font-medium">
+                    {lead.fitStatus} ({lead.fitScore ?? "-"}/8)
+                  </p>
+                  <ul className="mt-1 list-disc pl-5 text-sm text-gray-700">
+                    {parseReasons(lead.fitReasons).map((r) => (
+                      <li key={r}>{r}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Trade: {lead.trade ?? "-"} · Wants: {lead.desiredAction ?? "-"} · Finds customers via:{" "}
+                    {lead.currentLeadSource ?? "-"} · Ready this week: {lead.readyThisWeek === null ? "-" : lead.readyThisWeek ? "yes" : "no"}
+                  </p>
+                </>
+              ) : (
+                <p className="text-gray-500 text-sm">Didn&apos;t answer the fit questions</p>
+              )}
+            </div>
+
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Came from</p>
+              <p className="text-gray-900 text-sm">
+                {[
+                  lead.source,
+                  lead.utmSource && `utm ${[lead.utmSource, lead.utmMedium, lead.utmCampaign].filter(Boolean).join(" / ")}`,
+                  lead.referrer && `via ${lead.referrer}`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "unknown (before tracking began 2026-09-30)"}
+              </p>
+            </div>
 
             {lead.analysisScore !== null && (
               <div>
