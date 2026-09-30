@@ -6,9 +6,10 @@ import { apiLogger } from '@/lib/logger';
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const FROM_EMAIL = process.env.EMAIL_FROM || 'Simple Growth Solutions <noreply@simple-growth-solution.com>';
-// Where a customer's reply lands. Unset until the address really receives mail —
-// a reply-to that bounces is worse than none (the portal link still works).
-const REPLY_TO = process.env.EMAIL_REPLY_TO || undefined;
+/** Our shared inbox (a Workspace alias that lands in the team mailbox; receiving verified 2026-09-30). */
+export const SGS_INBOX = 'info@simple-growth-solution.com';
+// Where a customer's reply lands — noreply@ has no mailbox, so without this a reply vanishes.
+const REPLY_TO = process.env.EMAIL_REPLY_TO || `Simple Growth Solutions <${SGS_INBOX}>`;
 
 /** Escape HTML special characters to prevent XSS in email templates */
 export function escapeHtml(str: string): string {
