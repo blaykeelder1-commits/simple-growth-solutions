@@ -35,12 +35,11 @@ export const GET = withAdmin(async (req) => {
       loadSupportContext(organizationId),
       prisma.workEvent.findMany({
         where: {
-          createdAt: { gte: since },
           note: { not: null },
           OR: [
-            { event: { in: ["edits_requested", "rejected"] }, NOT: { note: { startsWith: "Cleanup:" } } },
-            { event: "lesson", note: { startsWith: "REVIEW CAUGHT" } },
-            // Standing lessons from real mistakes (kept 45 days like the rest; re-record to extend).
+            { event: { in: ["edits_requested", "rejected"] }, createdAt: { gte: since }, NOT: { note: { startsWith: "Cleanup:" } } },
+            { event: "lesson", createdAt: { gte: since }, note: { startsWith: "REVIEW CAUGHT" } },
+            // Standing lessons from real mistakes that reached a customer — never expire.
             { event: "lesson", note: { startsWith: "MISTAKE" } },
           ],
         },
