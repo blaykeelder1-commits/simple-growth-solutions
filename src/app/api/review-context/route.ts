@@ -38,8 +38,10 @@ export const GET = withAdmin(async (req) => {
           createdAt: { gte: since },
           note: { not: null },
           OR: [
-            { event: { in: ["edits_requested", "rejected"] } },
+            { event: { in: ["edits_requested", "rejected"] }, NOT: { note: { startsWith: "Cleanup:" } } },
             { event: "lesson", note: { startsWith: "REVIEW CAUGHT" } },
+            // Standing lessons from real mistakes (kept 45 days like the rest; re-record to extend).
+            { event: "lesson", note: { startsWith: "MISTAKE" } },
           ],
         },
         orderBy: { createdAt: "desc" },
