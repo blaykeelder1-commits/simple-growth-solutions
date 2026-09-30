@@ -36,6 +36,7 @@ function AnalyzeContent() {
   const [leadBusiness, setLeadBusiness] = useState("");
   const [leadCaptured, setLeadCaptured] = useState(false);
   const [leadSubmitting, setLeadSubmitting] = useState(false);
+  const [leadError, setLeadError] = useState<string | null>(null);
   const [leadHandle, setLeadHandle] = useState<LeadHandle | null>(null);
   const [fitStatus, setFitStatus] = useState<FitStatus | null>(null);
 
@@ -44,6 +45,7 @@ function AnalyzeContent() {
     if (!leadEmail) return;
 
     setLeadSubmitting(true);
+    setLeadError(null);
     try {
       const res = await fetch("/api/leads", {
         method: "POST",
@@ -64,11 +66,13 @@ function AnalyzeContent() {
         }),
       });
       const j = await res.json().catch(() => ({}));
-      if (res.ok && j.leadId && j.qualifyToken) setLeadHandle({ leadId: j.leadId, qualifyToken: j.qualifyToken });
+      if (!res.ok || !j.leadId) throw new Error(j.message || `HTTP ${res.status}`);
+      if (j.qualifyToken) setLeadHandle({ leadId: j.leadId, qualifyToken: j.qualifyToken });
       setLeadCaptured(true);
     } catch {
-      // Still show success to not block UX
-      setLeadCaptured(true);
+      // Never show success for a lead that wasn't saved — that is how audit leads were
+      // silently lost for months. Keep the form so they can retry.
+      setLeadError("We couldn't save that. Please try again, or email info@simple-growth-solution.com.");
     } finally {
       setLeadSubmitting(false);
     }
@@ -229,6 +233,7 @@ function AnalyzeContent() {
               )}
             </Button>
           </form>
+          {leadError && <p className="mt-3 text-sm text-red-700">{leadError}</p>}
           <p className="mt-3 text-xs text-muted-foreground">
             No credit card required. We&apos;ll reach out within 24 hours.
           </p>

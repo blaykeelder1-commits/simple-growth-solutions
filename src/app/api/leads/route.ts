@@ -48,6 +48,7 @@ const quickLeadSchema = z.object({
   // reading only `name` is why every analyzer lead was saved as "Website Visitor".
   name: z.string().optional(),
   contactName: z.string().optional(),
+  businessName: z.string().max(200).optional(),
   phone: z.string().max(40).optional(),
   source: z.string().optional(),
   websiteUrl: z.string().optional(),
@@ -69,7 +70,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     // Check if this is a quick lead capture (from URL analyzer) or full form
-    const isQuickCapture = body.source === "url-analyzer" || (!body.businessName && body.email);
+    // The full questionnaire always sends hasWebsite; the analyzer forms never do. Keying
+    // on businessName instead sent every audit visitor who typed a business name into
+    // full-form validation — a 400 the page hid behind "You're in!", losing the lead
+    // (2026-05-12 → 2026-09-30).
+    const isQuickCapture = body?.hasWebsite === undefined;
 
     if (isQuickCapture) {
       const validated = quickLeadSchema.parse(body);
@@ -100,7 +105,7 @@ export async function POST(req: NextRequest) {
 
       const lead = await prisma.lead.create({
         data: {
-          businessName: body.businessName || businessName,
+          businessName: validated.businessName?.trim() || businessName,
           contactName: validated.contactName?.trim() || validated.name?.trim() || "Website Visitor",
           email: validated.email,
           phone: validated.phone?.trim() || null,
