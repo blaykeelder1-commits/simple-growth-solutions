@@ -34,9 +34,10 @@ const CUSTOMER = {
   // Site went live 2026-05-16. Leave as null to skip.
   actualCompletion: new Date("2026-05-16T00:00:00Z"),
   // CR-counting period for the subscription. Must be ~30 days so the
-  // `crsPerPeriod` cap (4 for Pro) means "per month" — not "per year". Manual
-  // subs don't get auto-rolled by a payment webhook, so `scripts/fix-
-  // onboarding-gaps.ts` is the periodic roller (run monthly or as needed).
+  // `crsPerPeriod` cap (4 for Pro) means "per month" — not "per year". A manual
+  // (comped) sub is free ONLY until currentPeriodEnd and is never auto-rolled
+  // (src/lib/billing/standing.ts, 2026-09-30); after that the customer is unpaid
+  // and must start a Square plan from the portal.
   subscriptionDurationDays: 30,
   // Password-reset token validity window. 60 days — comped onboarding is
   // friend-of-the-family pace; he shouldn't have to chase a renewed link.

@@ -4,6 +4,7 @@ import { withAdmin } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
 import { sendChangeRequestUpdateEmail } from "@/lib/email";
 import { notifyCustomer } from "@/lib/email/notify";
+import { orgStanding } from "@/lib/billing/standing";
 import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
 import { actorFor, recordWorkEvent } from "@/lib/work/events";
@@ -112,7 +113,7 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
 
     const oldChangeRequest = await prisma.changeRequest.findUnique({
       where: { id },
-      select: { status: true },
+      select: { status: true, project: { select: { organizationId: true } } },
     });
 
     if (!oldChangeRequest) {
@@ -120,6 +121,25 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
         { success: false, message: "Change request not found" },
         { status: 404 }
       );
+    }
+
+    // No new work for a customer who isn't paid (or in an in-date comp). Andy may still
+    // finish work Blayke already approved and sent, but never start or queue more.
+    // Blayke can override from the dispatch board — the approvals page carries a
+    // billing to-do for every unpaid customer (ensureStandingTasks).
+    if (isAndy && (validatedData.claim || validatedData.status === "in_progress" || validatedData.status === "review_ready")) {
+      const { standing } = await orgStanding(oldChangeRequest.project.organizationId);
+      if (standing === "unpaid") {
+        return NextResponse.json(
+          {
+            success: false,
+            code: "customer_unpaid",
+            message:
+              "ON HOLD: this customer has no paid plan, so no new work. Don't start it or promise it; Blayke has a billing to-do. Leave the ticket as is.",
+          },
+          { status: 402 }
+        );
+      }
     }
 
     // Andy closes (and so emails the customer about) only work Blayke sent: approved → completed.

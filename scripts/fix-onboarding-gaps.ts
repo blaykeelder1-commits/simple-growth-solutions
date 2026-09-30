@@ -94,45 +94,12 @@ async function main() {
   }
 
   // ────────────────────────────────────────────────────────────
-  // 2) Fix Jorge's subscription period to monthly (was 1 year)
+  // 2) REMOVED 2026-09-30: this step re-rolled every "manual" (free) subscription to a
+  // fresh 30 days, which kept Waste Rescue KC looking paid for months with nothing
+  // collected. A comp now ends at its currentPeriodEnd and is never auto-extended
+  // (src/lib/billing/standing.ts); extending one is an explicit admin decision.
   // ────────────────────────────────────────────────────────────
-  console.log("");
-  console.log("=== STEP 2: Roll manual sub periods to monthly window ===");
-
-  // Find every manual sub whose period is set too wide (>40 days) — these
-  // are the leftovers from the original 365-day setting. Roll them all to a
-  // fresh 30-day window starting today. Also covers any future expired manual
-  // subs, so this script doubles as the monthly roller.
-  const manualSubs = await prisma.subscription.findMany({
-    where: { processor: "manual", status: "active" },
-    include: { organization: { select: { name: true } } },
-  });
-
-  for (const sub of manualSubs) {
-    const periodLengthMs =
-      sub.currentPeriodEnd && sub.currentPeriodStart
-        ? sub.currentPeriodEnd.getTime() - sub.currentPeriodStart.getTime()
-        : 0;
-    const isWideOrExpired =
-      periodLengthMs > 40 * 24 * 60 * 60 * 1000 ||
-      !sub.currentPeriodEnd ||
-      sub.currentPeriodEnd.getTime() < now.getTime();
-
-    if (isWideOrExpired) {
-      const newEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-      await prisma.subscription.update({
-        where: { id: sub.id },
-        data: { currentPeriodStart: now, currentPeriodEnd: newEnd },
-      });
-      console.log(
-        `  ✓ Rolled ${sub.organization.name} (${sub.plan}) → ${now.toISOString().slice(0, 10)} → ${newEnd.toISOString().slice(0, 10)}`
-      );
-    } else {
-      console.log(
-        `  - ${sub.organization.name} (${sub.plan}) already on monthly window, skipping`
-      );
-    }
-  }
+  const manualSubs: unknown[] = [];
 
   console.log("");
   console.log("==================================================");
@@ -140,7 +107,7 @@ async function main() {
   console.log("==================================================");
   console.log("  Admin user :", ADMIN_EMAIL);
   console.log("  Admin reset:", adminResetUrl);
-  console.log(`  Manual subs rolled: ${manualSubs.length}`);
+  console.log(`  Manual subs rolled: ${manualSubs.length} (auto-roll removed)`);
   console.log("==================================================");
 }
 

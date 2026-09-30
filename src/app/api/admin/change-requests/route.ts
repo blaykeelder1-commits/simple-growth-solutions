@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { bestStanding, STANDING_SELECT, type StandingResult } from "@/lib/billing/standing";
 import { prisma } from "@/lib/db/prisma";
 import { withAdmin } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
@@ -84,18 +85,20 @@ export const GET = withAdmin(async (req, _ctx, session) => {
     );
     const subs = orgIds.length
       ? await prisma.subscription.findMany({
-          where: {
-            organizationId: { in: orgIds },
-            status: { in: ["active", "trialing"] },
-            plan: { startsWith: "website_" },
-          },
-          select: { organizationId: true, plan: true },
+          where: { organizationId: { in: orgIds }, plan: { startsWith: "website_" } },
+          select: { organizationId: true, ...STANDING_SELECT },
           orderBy: { createdAt: "desc" },
         })
       : [];
+    // Plan + billing standing per org. A plan only counts when it's paid or an in-date
+    // comp — Andy skips "unpaid" customers (and the claim route refuses them anyway).
+    const standingByOrg = new Map<string, StandingResult>();
+    for (const orgId of orgIds) {
+      standingByOrg.set(orgId, bestStanding(subs.filter((s) => s.organizationId === orgId)));
+    }
     const planByOrg = new Map<string, string>();
-    for (const s of subs) {
-      if (!planByOrg.has(s.organizationId)) planByOrg.set(s.organizationId, s.plan);
+    for (const [orgId, st] of standingByOrg) {
+      if (st.standing !== "unpaid" && st.sub) planByOrg.set(orgId, st.sub.plan);
     }
 
     return NextResponse.json({
@@ -126,6 +129,10 @@ export const GET = withAdmin(async (req, _ctx, session) => {
         plan: r.project.organization
           ? planByOrg.get(r.project.organization.id) ?? null
           : null,
+        // paid | comp | unpaid — "unpaid" means: no new work, don't promise any.
+        billing: r.project.organization
+          ? standingByOrg.get(r.project.organization.id)?.standing ?? "unpaid"
+          : "unpaid",
         assignee: r.assignee
           ? { id: r.assignee.id, name: r.assignee.name, email: r.assignee.email }
           : null,

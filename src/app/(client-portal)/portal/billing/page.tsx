@@ -30,6 +30,9 @@ interface Subscription {
   priceMonthly: number;
   currentPeriodEnd: string | null;
   trialEndDate: string | null;
+  processor?: string;
+  /** paid | comp | unpaid — from src/lib/billing/standing.ts */
+  standing?: "paid" | "comp" | "unpaid";
 }
 
 const planInfo: Record<string, { name: string; icon: React.ElementType; color: string }> = {
@@ -106,6 +109,7 @@ export default function BillingPage() {
   const [startingPlan, setStartingPlan] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
   const [justPaid, setJustPaid] = useState(false);
+  const [websiteStanding, setWebsiteStanding] = useState<"paid" | "comp" | "unpaid" | null>(null);
 
   const handleStartPlan = async (planKey: string) => {
     setStartingPlan(planKey);
@@ -134,6 +138,7 @@ export default function BillingPage() {
       if (!res.ok) throw new Error("Failed to load subscriptions");
       const data = await res.json();
       setSubscriptions(data.subscriptions || []);
+      setWebsiteStanding(data.websiteStanding ?? null);
     } catch {
       setError("Unable to load your billing information. Please try again.");
     } finally {
@@ -201,8 +206,9 @@ export default function BillingPage() {
     );
   }
 
+  // An unpaid record (e.g. a free period that ended) is not an active plan.
   const activeSubscriptions = subscriptions.filter(
-    (s) => s.status === "active" || s.status === "trialing"
+    (s) => (s.status === "active" || s.status === "trialing") && s.standing !== "unpaid"
   );
 
   const expiredSubscriptions = subscriptions.filter(
@@ -276,6 +282,17 @@ export default function BillingPage() {
       )}
 
       {/* Active subscriptions */}
+      {websiteStanding === "unpaid" && (
+        <div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-5">
+          <p className="font-semibold text-red-900">Your plan isn&apos;t active yet</p>
+          <p className="mt-1 text-sm text-red-800">
+            We don&apos;t have a payment on file for your website plan, so new website changes are paused.
+            Choose your plan below to start it. It renews automatically each month, so you won&apos;t
+            have to think about it again.
+          </p>
+        </div>
+      )}
+
       {activeSubscriptions.length > 0 ? (
         <div className="grid gap-5">
           {activeSubscriptions.map((subscription) => {
@@ -301,7 +318,9 @@ export default function BillingPage() {
                       <div>
                         <CardTitle className="text-lg">{plan.name}</CardTitle>
                         <CardDescription className="text-base">
-                          ${(subscription.priceMonthly / 100).toFixed(2)}/month
+                          {subscription.standing === "comp"
+                            ? "Complimentary"
+                            : `$${(subscription.priceMonthly / 100).toFixed(2)}/month`}
                         </CardDescription>
                       </div>
                     </div>
@@ -318,6 +337,10 @@ export default function BillingPage() {
                       <span className="text-gray-500">
                         Trial ends{" "}
                         {new Date(subscription.trialEndDate).toLocaleDateString()}
+                      </span>
+                    ) : subscription.standing === "comp" && subscription.currentPeriodEnd ? (
+                      <span className="text-gray-500">
+                        Free until {new Date(subscription.currentPeriodEnd).toLocaleDateString()}. Start your plan below to continue after that.
                       </span>
                     ) : subscription.currentPeriodEnd ? (
                       <span className="text-gray-500">

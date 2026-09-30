@@ -18,6 +18,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PlanStandingBanner } from "@/components/portal/PlanStandingBanner";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
 
@@ -172,7 +173,10 @@ export default function ClientPortalLayout({
           </div>
         </header>
 
-        <main className="p-6 lg:p-8">{children}</main>
+        <main className="p-6 lg:p-8">
+          <PlanStandingBanner />
+          {children}
+        </main>
       </div>
     </div>
   );

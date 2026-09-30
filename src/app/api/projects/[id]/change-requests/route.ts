@@ -10,11 +10,11 @@ import {
 import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
 import { actorFor, recordWorkEvent } from "@/lib/work/events";
+import { standingOf, UNPAID_CUSTOMER_MESSAGE } from "@/lib/billing/standing";
 import { computeSlaDueAt, RUSH_FEE_CENTS } from "@/lib/billing/sla";
 import {
   resolvePlanCaps,
   getPeriodWindow,
-  rollManualPeriodIfExpired,
   OVERAGE_CR_FEE_CENTS,
 } from "@/lib/billing/plan-caps";
 import {
@@ -84,18 +84,15 @@ export const POST = withAuth(async (req, ctx, session) => {
       },
       orderBy: { createdAt: "desc" },
     });
-    if (activeSub) activeSub = await rollManualPeriodIfExpired(prisma, activeSub);
+    // "active" is not enough: a $0 manual record is only a comp until its end date, and
+    // an expired comp is unpaid (src/lib/billing/standing.ts). Never auto-renewed.
+    if (activeSub && standingOf(activeSub) === "unpaid") activeSub = null;
     const activePlan: string | null = activeSub?.plan ?? null;
 
-    // Subscription gate — customers (not admins) must have an active managed plan.
+    // Subscription gate — customers (not admins) must have a paid or in-date comp plan.
     if (user?.role !== "admin" && !activeSub) {
       return NextResponse.json(
-        {
-          success: false,
-          message:
-            "An active management plan is required to submit change requests. Upgrade at /portal/billing.",
-          code: "subscription_required",
-        },
+        { success: false, message: UNPAID_CUSTOMER_MESSAGE, code: "subscription_required" },
         { status: 402 }
       );
     }

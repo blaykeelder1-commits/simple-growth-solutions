@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
+import { standingOf } from "@/lib/billing/standing";
 import { prisma } from "@/lib/db/prisma";
 import { withAuth } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
 import {
   resolvePlanCaps,
   getPeriodWindow,
-  rollManualPeriodIfExpired,
   OVERAGE_CR_FEE_CENTS,
 } from "@/lib/billing/plan-caps";
 
@@ -33,7 +33,7 @@ export const GET = withAuth(async (_req, _ctx, session) => {
       orderBy: { createdAt: "desc" },
     });
 
-    if (sub) sub = await rollManualPeriodIfExpired(prisma, sub);
+    if (sub && standingOf(sub) === "unpaid") sub = null; // expired comp / unpaid → no quota
 
     if (!sub) {
       return NextResponse.json({
