@@ -21,7 +21,7 @@ describe("median", () => {
 });
 
 describe("firstPassStats", () => {
-  it("counts a piece as first-pass only when the FIRST decision was a yes", () => {
+  it("counts a piece as first-pass only when it was approved with no edits first", () => {
     const s = firstPassStats([
       item("a", "sent", 1), // yes first time
       item("b", "edits_requested", 1), // needed edits...
@@ -29,6 +29,19 @@ describe("firstPassStats", () => {
       item("c", "rejected", 2),
     ]);
     expect(s).toEqual({ pieces: 3, firstPass: 1, firstPassPct: 33, avgEditRounds: 0.3 });
+  });
+
+  it("splits separate replies to the same customer into separate pieces (real Jorge history)", () => {
+    const s = firstPassStats([
+      item("jorge", "superseded", 1), // SA79T
+      item("jorge", "superseded", 2), // SADJ5
+      item("jorge", "sent", 3), // SC8EX
+      item("jorge", "sent", 9), // SH8TT — a later, separate reply
+      item("sk4g8", "sent", 4, "cr_ship"),
+      item("junk", "superseded", 5),
+      item("junk", "rejected", 6), // S5C4K
+    ]);
+    expect(s).toEqual({ pieces: 4, firstPass: 3, firstPassPct: 75, avgEditRounds: 0 });
   });
 
   it("ignores superseded and still-awaiting items", () => {
@@ -39,7 +52,7 @@ describe("firstPassStats", () => {
 
   it("keeps the same target under different kinds separate", () => {
     const s = firstPassStats([item("x", "sent", 1, "cr_ship"), item("x", "edits_requested", 1, "support_reply")]);
-    expect(s.pieces).toBe(2);
+    expect(s.pieces).toBe(1);
     expect(s.firstPass).toBe(1);
   });
 });

@@ -26,25 +26,35 @@ export interface DecidedApproval {
 }
 
 /**
- * First-pass rate: of the pieces of work Blayke decided on (grouped by kind + target),
- * how many were approved the FIRST time he looked. Edit rounds = edits_requested per piece.
- * Superseded items never got a decision, so they don't count either way.
+ * First-pass rate: of the pieces of work Blayke decided on, how many were approved the
+ * FIRST time he decided. A piece is one run of drafts for the same kind + target that
+ * ends in approved / sent / rejected — support replies are keyed by customer, so each
+ * finished reply starts a new piece. Superseded drafts were never decided and don't
+ * count; edits_requested inside a piece are its edit rounds.
  */
+const FINAL = new Set(["approved", "sent", "rejected"]);
+
 export function firstPassStats(items: DecidedApproval[]): { pieces: number; firstPass: number; firstPassPct: number | null; avgEditRounds: number | null } {
-  const groups = new Map<string, DecidedApproval[]>();
+  const byTarget = new Map<string, DecidedApproval[]>();
   for (const i of items) {
-    if (i.status === "superseded" || i.status === "awaiting") continue;
     const k = `${i.kind}:${i.refId}`;
-    groups.set(k, [...(groups.get(k) ?? []), i]);
+    byTarget.set(k, [...(byTarget.get(k) ?? []), i]);
   }
+  let pieces = 0;
   let firstPass = 0;
   let edits = 0;
-  for (const g of groups.values()) {
-    g.sort((a, b) => (a.decidedAt ?? a.createdAt).getTime() - (b.decidedAt ?? b.createdAt).getTime());
-    if (g[0].status === "approved" || g[0].status === "sent") firstPass++;
-    edits += g.filter((x) => x.status === "edits_requested").length;
+  for (const run of byTarget.values()) {
+    run.sort((a, b) => (a.decidedAt ?? a.createdAt).getTime() - (b.decidedAt ?? b.createdAt).getTime());
+    let editsInPiece = 0;
+    for (const i of run) {
+      if (i.status === "edits_requested") editsInPiece++;
+      if (!FINAL.has(i.status)) continue;
+      pieces++;
+      if (i.status !== "rejected" && editsInPiece === 0) firstPass++;
+      edits += editsInPiece;
+      editsInPiece = 0;
+    }
   }
-  const pieces = groups.size;
   return {
     pieces,
     firstPass,
@@ -64,7 +74,8 @@ export async function loadOperations(now = new Date()) {
 
   const [completedEvents, approvals, emailEvents, blaykeMinutes, cancelled, savedEvents, leads] = await Promise.all([
     prisma.workEvent.findMany({
-      where: { entityType: "cr", event: "completed", createdAt: { gte: since } },
+      // A finished ticket is recorded as "shipped" (status → completed, see the CR route).
+      where: { entityType: "cr", event: { in: ["shipped", "completed"] }, createdAt: { gte: since } },
       select: { entityId: true, createdAt: true },
       orderBy: { createdAt: "asc" },
     }),
@@ -93,7 +104,7 @@ export async function loadOperations(now = new Date()) {
     }),
   ]);
 
-  // Turnaround: ticket opened → first "completed". One completion per ticket (a reopen
+  // Turnaround: ticket opened → first time it was finished. One completion per ticket (a reopen
   // that completes again would otherwise count the same ticket twice).
   const firstCompletion = new Map<string, Date>();
   for (const e of completedEvents) if (!firstCompletion.has(e.entityId)) firstCompletion.set(e.entityId, e.createdAt);
