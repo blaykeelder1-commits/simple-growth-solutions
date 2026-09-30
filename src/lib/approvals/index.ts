@@ -252,6 +252,31 @@ export async function sendApproval(id: string, sentBy: string, actor: WorkActor)
   if (!CUSTOMER_FACING.has(item.kind)) throw new ApprovalError(`${item.kind} has nothing to send`);
   if (item.status !== "approved") throw new ApprovalError(`${item.code} is ${item.status}, not approved`, 409);
 
+  if (item.kind === "cr_ship") {
+    // Both writes in ONE transaction: the item is "sent" exactly when the ticket is
+    // "approved" (what Andy's sweep promotes). A crash can't leave one without the other.
+    // Not a customer-notify status; the customer is emailed when the sweep completes it.
+    await prisma.$transaction(async (tx) => {
+      const claim = await tx.approvalItem.updateMany({
+        where: { id, status: "approved" },
+        data: { status: "sent", sentAt: new Date(), sentBy },
+      });
+      if (claim.count !== 1) throw new ApprovalError(`${item.code} was already sent`, 409);
+      const moved = await tx.changeRequest.updateMany({
+        where: { id: item.refId, status: "review_ready" },
+        data: { status: "approved" },
+      });
+      if (moved.count !== 1) {
+        throw new ApprovalError(`the ticket behind ${item.code} is no longer waiting for review — nothing was shipped`, 409);
+      }
+    });
+    await recordWorkEvent({ ...entityOf(item), event: "released", actor });
+    return (await prisma.approvalItem.findUnique({ where: { id } }))!;
+  }
+
+  // Support reply: claim first so a double press can't post twice. (Posting then claiming
+  // would risk a DUPLICATE message to the customer on a crash — a lost send is recoverable,
+  // a duplicate isn't.)
   const claim = await prisma.approvalItem.updateMany({
     where: { id, status: "approved" },
     data: { status: "sent", sentAt: new Date(), sentBy },
@@ -259,17 +284,7 @@ export async function sendApproval(id: string, sentBy: string, actor: WorkActor)
   if (claim.count !== 1) throw new ApprovalError(`${item.code} was already sent`, 409);
 
   try {
-    if (item.kind === "cr_ship") {
-      // `approved` is what Andy's approval sweep promotes to production. It is not a
-      // customer-notify status; the customer is emailed when the sweep marks it completed.
-      const moved = await prisma.changeRequest.updateMany({
-        where: { id: item.refId, status: "review_ready" },
-        data: { status: "approved" },
-      });
-      if (moved.count !== 1) {
-        throw new ApprovalError(`the ticket behind ${item.code} is no longer waiting for review — nothing was shipped`, 409);
-      }
-    } else {
+    {
       const ok = await postSupportReply({ organizationId: item.refId, reply: item.draft! });
       if (!ok) throw new ApprovalError("no customer user found for this organization", 404);
     }
@@ -282,7 +297,7 @@ export async function sendApproval(id: string, sentBy: string, actor: WorkActor)
     throw err;
   }
 
-  await recordWorkEvent({ ...entityOf(item), event: item.kind === "cr_ship" ? "released" : "shipped", actor });
+  await recordWorkEvent({ ...entityOf(item), event: "shipped", actor });
   return (await prisma.approvalItem.findUnique({ where: { id } }))!;
 }
 

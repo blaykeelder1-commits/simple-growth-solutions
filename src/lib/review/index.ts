@@ -70,23 +70,34 @@ export function customerLanguageIssues(text: string): string[] {
 
 // Work no plan includes (src/lib/billing/plan-scope.ts NEVER_INCLUDED).
 const OUT_OF_PLAN =
-  /\b(?:facebook|instagram|tiktok|linkedin|social[- ]media|social (?:page|profile|account)s?|youtube channel|ad campaigns?|ad accounts?|google ads|facebook ads|run(?:ning)? (?:your|the) ads|online ordering|payment funnels?|crm integrations?)\b/i;
-// We are committing to do something.
+  /\b(?:facebook|instagram|tiktok|linkedin|twitter|pinterest|yelp|nextdoor|meta|social[- ]media|social (?:page|profile|account)s?|youtube channel|(?:run|manage|set up|launch|boost)(?:s|ing)? (?:your |the |some |more )?ads|ad campaigns?|ad accounts?|online ordering|payment funnels?|crm integrations?|mailchimp|newsletters?|email (?:marketing|campaigns?))\b/i;
+// A commitment to DO something ("can't"/"cannot" are not commitments; "let us know" is not one).
 const COMMITMENT =
-  /\b(?:we(?:'|’)?ll|we will|we(?:'|’)re going to|we are going to|we can|we(?:'|’)d be happy to|let us)\b/i;
-// The paragraph is explicitly saying it is NOT included / offering an upgrade or quote.
+  /\b(?:we(?:'|’)?ll|we will|we(?:'|’)re going to|we are going to|we can(?!(?:'|’)?t|not)|we(?:'|’)d (?:be happy|love) to|i(?:'|’)?ll|i will|i can(?!(?:'|’)?t|not)|i(?:'|’)m going to|happy to|our team will|andy will|let us (?!know))\b/i;
+// The sentence says it is NOT something we do / not included, or offers the upgrade/add-on.
 const NOT_INCLUDED =
-  /\b(?:isn(?:'|’)?t (?:part|included)|is not (?:part|included)|not (?:part of|included in)|outside (?:of )?your plan|upgrade|add-on|quote|we got that wrong|correction)\b/i;
+  /\b(?:isn(?:'|’)?t (?:part|included|something)|is not (?:part|included|something)|not (?:part of|included|something we)|outside (?:of )?(?:your|the) plan|(?:can(?:'|’)?t|cannot|don(?:'|’)?t|do not|won(?:'|’)?t|will not) (?:\w+ ){0,2}(?:manage|handle|run|offer|do|build|create|post|set up|provide)|upgrade|add-on|quote (?:it|that|this|you|for)|we got that wrong)\b/i;
 
 /**
- * Paragraphs that PROMISE work outside every plan (e.g. "We'll build you a Facebook page").
- * Deterministic backstop for the reviewers: a paragraph that names out-of-plan work and
- * commits to it, without saying it isn't included, is refused.
+ * Sentences that PROMISE work outside every plan ("We'll build you a clean page" right after
+ * a sentence about Facebook). Deterministic backstop for the reviewers. Judged per sentence:
+ * a commitment is flagged when it, or the sentence just before it, names out-of-plan work —
+ * unless the commitment's own sentence disclaims it, or the sentence before it was the
+ * disclaimer ("Facebook isn't something we handle. We'll pass it to the team.").
  */
 export function outOfPlanPromises(text: string): string[] {
-  return text
-    .split(/\n\s*\n|\n(?=\s*[-•*]|\s*\d+[.)])/)
-    .map((p) => p.trim())
-    .filter((p) => OUT_OF_PLAN.test(p) && COMMITMENT.test(p) && !NOT_INCLUDED.test(p))
-    .map((p) => `promises work outside the customer's plan: "${p.slice(0, 120)}${p.length > 120 ? "…" : ""}"`);
+  const issues: string[] = [];
+  for (const para of text.split(/\n\s*\n|\n(?=\s*[-•*]|\s*\d+[.)])/)) {
+    const sentences = para.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean);
+    sentences.forEach((s, i) => {
+      if (!COMMITMENT.test(s) || NOT_INCLUDED.test(s)) return;
+      const prev = i > 0 ? sentences[i - 1] : "";
+      const topical = OUT_OF_PLAN.test(s) || (!!prev && OUT_OF_PLAN.test(prev) && !NOT_INCLUDED.test(prev));
+      if (topical) {
+        const quoted = (prev && !OUT_OF_PLAN.test(s) ? `${prev} ${s}` : s).slice(0, 140);
+        issues.push(`promises work outside the customer's plan: "${quoted}"`);
+      }
+    });
+  }
+  return issues;
 }

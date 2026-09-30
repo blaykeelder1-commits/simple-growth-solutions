@@ -44,6 +44,25 @@ describe("out-of-plan promise check", () => {
   it("passes SC8EX, which mentions Facebook only as where links get shared", () => {
     expect(outOfPlanPromises(fixture("jorge-sc8ex.txt"))).toEqual([]);
   });
+  it.each([
+    "We can't manage your Instagram, but we can update the Instagram link on your site.",
+    "Facebook isn't something we handle. We'll pass your question to the team.",
+    "Unfortunately that's not included in your plan, but we can quote it as an add-on.",
+    "We've updated your Facebook link. Let us know if it looks right.",
+    "Since you're advertising, we'll make sure your website loads fast for ad visitors.",
+  ])("does not block the honest reply %j", (t) => {
+    expect(outOfPlanPromises(t)).toEqual([]);
+  });
+
+  it.each([
+    "I'll set up your Facebook page and run your ads.",
+    "Our team will manage your ads every month.",
+    "We can start a newsletter for you next week.",
+    "You have no Yelp listing yet. We'll create one for you.",
+  ])("blocks the out-of-plan promise %j", (t) => {
+    expect(outOfPlanPromises(t)).toHaveLength(1);
+  });
+
   it("offering the upgrade is fine; promising the work is not", () => {
     expect(outOfPlanPromises("Online ordering isn't part of your Managed plan — we can quote it as an add-on.")).toEqual([]);
     expect(outOfPlanPromises("We'll set up Instagram for you this week.")).toHaveLength(1);

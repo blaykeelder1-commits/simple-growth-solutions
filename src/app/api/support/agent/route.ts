@@ -4,8 +4,9 @@ import { prisma } from "@/lib/db/prisma";
 import { withAdmin } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
 import { loadSupportContext, SUPPORT_RULEBOOK } from "@/lib/support/assistant";
-import { actorFor, recordWorkEvent } from "@/lib/work/events";
+import { actorFor } from "@/lib/work/events";
 import { describeScope } from "@/lib/billing/plan-scope";
+import { getPastMistakes } from "@/lib/review/mistakes";
 
 // Andy-only endpoints (authenticated by the ANDY_SERVICE_TOKEN → admin). This is
 // how Andy on the VPS reads support questions and customer history; his drafts are
@@ -59,6 +60,7 @@ export const GET = withAdmin(async (req) => {
         organization: org,
         plan: ctx.plan,
         planScope: describeScope(ctx.plan),
+        pastMistakes: await getPastMistakes(),
         ...(await threadHistory(threadOrg, 40)),
       });
     }
@@ -141,7 +143,13 @@ export const POST = withAdmin(async (req, _ctx, session) => {
       );
     }
     const { organizationId, reason } = holdSchema.parse(body);
-    await recordWorkEvent({ entityType: "support", entityId: organizationId, event: "escalated", actor: actorFor(session), note: reason });
+    const org = await prisma.organization.findUnique({ where: { id: organizationId }, select: { id: true } });
+    if (!org) return NextResponse.json({ success: false, message: "no such organization" }, { status: 404 });
+    // Written directly (not the best-effort timeline helper): if the hold doesn't persist the
+    // thread would be re-drafted every sweep, so a failure must surface as an error.
+    await prisma.workEvent.create({
+      data: { entityType: "support", entityId: organizationId, event: "escalated", actor: actorFor(session), note: reason },
+    });
     return NextResponse.json({ success: true, held: organizationId });
   } catch (error) {
     return apiError(error, "Failed to hold support thread");

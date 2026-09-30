@@ -177,7 +177,40 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
       return NextResponse.json({ success: true, changeRequest });
     }
 
-    const changeRequest = await prisma.changeRequest.update({
+    let approvalCode: string | undefined;
+    let queuedItemId: string | undefined;
+    if (validatedData.status === "review_ready") {
+      const cr = await prisma.changeRequest.findUnique({
+        where: { id },
+        select: { title: true, previewUrl: true, agentNote: true, project: { select: { projectName: true, organizationId: true } } },
+      });
+      try {
+        const item = await createApproval(
+          {
+            kind: "cr_ship",
+            refId: id,
+            organizationId: cr?.project.organizationId ?? null,
+            title: `${cr?.project.projectName ?? "Site"} — ${cr?.title ?? "change request"}`,
+            previewUrl: validatedData.previewUrl ?? cr?.previewUrl ?? null,
+            agentNote: validatedData.agentNote ?? cr?.agentNote ?? null,
+            review: validatedData.review,
+          },
+          actor
+        );
+        approvalCode = item.code;
+        queuedItemId = item.id;
+      } catch (err) {
+        apiLogger.error({ err, changeRequestId: id }, "Approval item creation FAILED — ticket left unchanged");
+        if (err instanceof ApprovalError) {
+          return NextResponse.json({ success: false, message: err.message }, { status: err.status });
+        }
+        throw err;
+      }
+    }
+
+    let changeRequest;
+    try {
+      changeRequest = await prisma.changeRequest.update({
       where: { id },
       data: {
         ...(validatedData.status && { status: validatedData.status }),
@@ -189,42 +222,28 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
       include: {
         project: { select: { id: true, projectName: true, organizationId: true } },
       },
-    });
+      });
+    } catch (err) {
+      // The ticket didn't move — the approval we just queued would point at nothing real.
+      if (queuedItemId) {
+        await prisma.approvalItem.updateMany({ where: { id: queuedItemId, status: "awaiting" }, data: { status: "superseded" } });
+      }
+      throw err;
+    }
 
     // ── Timeline + approval queue ──────────────────────────────────────────
     const statusChanged = !!validatedData.status && oldChangeRequest.status !== validatedData.status;
-    // Preview or note edited outside a fresh review_ready: an approval queued for the old
-    // version would approve content that no longer matches — cancel it.
-    if (validatedData.status !== "review_ready" && (validatedData.previewUrl !== undefined || validatedData.agentNote !== undefined)) {
+    // Preview or note edited outside review_ready, or the ticket moved off review_ready by any
+    // route other than an approval (dispatch board drag, reopen, release): the queued approval
+    // no longer matches anything Blayke could sensibly approve — cancel it so it can't strand.
+    if (
+      (validatedData.status !== "review_ready" && (validatedData.previewUrl !== undefined || validatedData.agentNote !== undefined)) ||
+      (statusChanged && oldChangeRequest.status === "review_ready" && validatedData.status !== "approved")
+    ) {
       await supersedeCrShip(id);
     }
-    let approvalCode: string | undefined;
-    if (statusChanged && validatedData.status === "review_ready") {
-      await recordWorkEvent({ entityType: "cr", entityId: id, event: "preview_ready", actor });
-      try {
-        const item = await createApproval(
-          {
-            kind: "cr_ship",
-            refId: id,
-            organizationId: changeRequest.project?.organizationId ?? null,
-            title: `${changeRequest.project?.projectName ?? "Site"} — ${changeRequest.title}`,
-            previewUrl: changeRequest.previewUrl,
-            agentNote: changeRequest.agentNote,
-            review: validatedData.review,
-          },
-          actor
-        );
-        approvalCode = item.code;
-      } catch (err) {
-        // No approval code = nobody can approve it: put the ticket back rather than leave an
-        // unreviewed "review_ready" that only the dispatch board could approve.
-        await prisma.changeRequest.update({ where: { id }, data: { status: oldChangeRequest.status } });
-        apiLogger.error({ err, changeRequestId: id }, "Approval item creation FAILED — review_ready reverted");
-        if (err instanceof ApprovalError) {
-          return NextResponse.json({ success: false, message: err.message }, { status: err.status });
-        }
-        throw err;
-      }
+    if (validatedData.status === "review_ready") {
+      await recordWorkEvent({ entityType: "cr", entityId: id, event: "preview_ready", actor, note: approvalCode });
     } else if (statusChanged && validatedData.status === "approved") {
       // Blayke approved from the dispatch board: that click is approve + Send in one.
       // (An item already approved in WhatsApp has its `approved` event; don't repeat it.)

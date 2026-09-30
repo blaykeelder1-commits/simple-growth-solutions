@@ -77,6 +77,23 @@ export const NEVER_INCLUDED = [
   "Custom features — online ordering, payment funnels, CRM integrations — are one-time add-ons quoted per project",
 ];
 
+const PLAN_ALIASES: Record<string, PlanKey> = {
+  website_managed_annual: "website_managed",
+  website_pro_annual: "website_pro",
+  website_premium_annual: "website_premium",
+  starter_bundle: "website_managed",
+  growth_bundle: "website_pro",
+  full_suite: "website_premium",
+  enterprise_suite: "website_premium",
+};
+
+/** The website tier a subscription's plan key includes (annual and bundles map to their tier). */
+export function websiteTier(plan: string | null | undefined): PlanKey | null {
+  if (!plan) return null;
+  if (plan in PLAN_SCOPE) return plan as PlanKey;
+  return PLAN_ALIASES[plan] ?? null;
+}
+
 export function isPlanKey(plan: string | null | undefined): plan is PlanKey {
   return !!plan && plan in PLAN_SCOPE;
 }
@@ -85,8 +102,9 @@ export function isPlanKey(plan: string | null | undefined): plan is PlanKey {
  * The scope block handed to Andy and to every reviewer for this customer: what they have,
  * what no plan has, and exactly how to offer an upgrade when they ask for more.
  */
-export function describeScope(plan: string | null | undefined): string {
-  if (!isPlanKey(plan)) {
+export function describeScope(rawPlan: string | null | undefined): string {
+  const plan = websiteTier(rawPlan);
+  if (!plan) {
     return [
       "PLAN: none active. Do not promise any work. If they want changes, point them to choosing a plan",
       "(Billing tab in their portal) and flag it to Blayke.",

@@ -4,6 +4,7 @@ import { withAdmin } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
 import { loadSupportContext } from "@/lib/support/assistant";
 import { describeScope } from "@/lib/billing/plan-scope";
+import { getPastMistakes } from "@/lib/review/mistakes";
 
 /**
  * Everything a reviewer (and Andy, before he writes) must hold a draft against, fetched by
@@ -30,24 +31,7 @@ export const GET = withAdmin(async (req) => {
       return NextResponse.json({ success: false, message: "entity must be support:<orgId> or cr:<id>" }, { status: 400 });
     }
 
-    const since = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
-    const [ctx, mistakes] = await Promise.all([
-      loadSupportContext(organizationId),
-      prisma.workEvent.findMany({
-        where: {
-          note: { not: null },
-          OR: [
-            { event: { in: ["edits_requested", "rejected"] }, createdAt: { gte: since }, NOT: { note: { startsWith: "Cleanup:" } } },
-            { event: "lesson", createdAt: { gte: since }, note: { startsWith: "REVIEW CAUGHT" } },
-            // Standing lessons from real mistakes that reached a customer — never expire.
-            { event: "lesson", note: { startsWith: "MISTAKE" } },
-          ],
-        },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-        select: { event: true, note: true, createdAt: true },
-      }),
-    ]);
+    const [ctx, pastMistakes] = await Promise.all([loadSupportContext(organizationId), getPastMistakes()]);
 
     return NextResponse.json({
       success: true,
@@ -55,7 +39,7 @@ export const GET = withAdmin(async (req) => {
       orgName: ctx.orgName,
       plan: ctx.plan,
       planScope: describeScope(ctx.plan),
-      pastMistakes: mistakes.map((m) => `${m.createdAt.toISOString().slice(0, 10)} ${m.event === "lesson" ? "" : `Blayke ${m.event}: `}${m.note}`),
+      pastMistakes,
     });
   } catch (error) {
     return apiError(error, "Failed to load review context");

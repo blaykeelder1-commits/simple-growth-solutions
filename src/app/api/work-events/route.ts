@@ -20,10 +20,11 @@ export const GET = withAdmin(async (req) => {
       orderBy: { createdAt: "asc" },
     });
     const closed = events.filter((e) => e.event === "shipped" || e.event === "triaged");
+    const lessonFor = new Set(events.filter((e) => e.event === "lesson" && e.note).map((e) => `${e.entityType}:${e.entityId}`));
     const starvation = {
       days,
       closedTickets: closed.length,
-      closedWithoutLesson: closed.filter((e) => !e.note).length,
+      closedWithoutLesson: closed.filter((e) => !e.note && !lessonFor.has(`${e.entityType}:${e.entityId}`)).length,
       blaykeEditRequests: events.filter((e) => e.event === "edits_requested").length,
       blaykeRejections: events.filter((e) => e.event === "rejected").length,
       touchesCaptured: events.filter((e) => e.touch).length,

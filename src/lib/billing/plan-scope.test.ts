@@ -22,6 +22,12 @@ describe("plan scope", () => {
     expect(describeScope("website_premium")).toMatch(/one-time add-on/);
   });
 
+  it("annual and bundle plans get their website tier, not 'none active'", () => {
+    expect(describeScope("website_pro_annual")).toMatch(/PLAN: Managed Pro/);
+    expect(describeScope("growth_bundle")).toMatch(/PLAN: Managed Pro/);
+    expect(describeScope("enterprise_suite")).toMatch(/PLAN: Managed Premium/);
+  });
+
   it("no active plan = promise nothing", () => {
     expect(describeScope(null)).toMatch(/Do not promise any work/);
   });
