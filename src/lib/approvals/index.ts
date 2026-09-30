@@ -274,7 +274,12 @@ async function applyDecisionEffect(
  * the item first (approved → sent) so a double click can't send twice; if the
  * effect fails the claim is released and the error surfaces.
  */
-export async function sendApproval(id: string, sentBy: string, actor: WorkActor): Promise<ApprovalItem> {
+/** customerEmailed: for a support reply, whether the customer's email actually went out. */
+export async function sendApproval(
+  id: string,
+  sentBy: string,
+  actor: WorkActor
+): Promise<ApprovalItem & { customerEmailed?: boolean }> {
   const item = await prisma.approvalItem.findUnique({ where: { id } });
   if (!item) throw new ApprovalError("approval item not found", 404);
   if (!CUSTOMER_FACING.has(item.kind)) throw new ApprovalError(`${item.kind} has nothing to send`);
@@ -311,11 +316,10 @@ export async function sendApproval(id: string, sentBy: string, actor: WorkActor)
   });
   if (claim.count !== 1) throw new ApprovalError(`${item.code} was already sent`, 409);
 
+  let posted: { emailed: boolean } | null;
   try {
-    {
-      const ok = await postSupportReply({ organizationId: item.refId, reply: item.draft! });
-      if (!ok) throw new ApprovalError("no customer user found for this organization", 404);
-    }
+    posted = await postSupportReply({ organizationId: item.refId, reply: item.draft! });
+    if (!posted) throw new ApprovalError("no customer user found for this organization", 404);
   } catch (err) {
     // Release only our own claim (never revive an item that was superseded meanwhile).
     await prisma.approvalItem.updateMany({
@@ -326,7 +330,7 @@ export async function sendApproval(id: string, sentBy: string, actor: WorkActor)
   }
 
   await recordWorkEvent({ ...entityOf(item), event: "shipped", actor });
-  return (await prisma.approvalItem.findUnique({ where: { id } }))!;
+  return { ...(await prisma.approvalItem.findUnique({ where: { id } }))!, customerEmailed: posted.emailed };
 }
 
 /** The ticket's preview or note changed (or it was reopened): any queued approval is stale. */

@@ -171,6 +171,7 @@ function ItemCard({ item, onAction }: { item: ApprovalItem; onAction: (id: strin
 export default function ApprovalsPage() {
   const [items, setItems] = useState<ApprovalItem[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = async () => {
     try {
@@ -196,6 +197,13 @@ export default function ApprovalsPage() {
     });
     const j = await res.json().catch(() => ({}));
     if (!res.ok || !j.success) return j.message || `Failed (HTTP ${res.status})`;
+    if (action === "send" && j.item?.kind === "support_reply") {
+      setNotice(
+        j.item.customerEmailed
+          ? { ok: true, text: `${j.item.code} sent — posted to their portal and emailed to the customer.` }
+          : { ok: false, text: `${j.item.code} is in their portal, but the email to the customer FAILED — they may not see it. Reach them another way.` }
+      );
+    }
     await load();
     return null;
   };
@@ -242,6 +250,15 @@ export default function ApprovalsPage() {
           <RefreshCw className="w-5 h-5 text-gray-500" />
         </button>
       </div>
+
+      {notice && (
+        <p
+          role="status"
+          className={`rounded-lg border p-3 text-sm ${notice.ok ? "border-green-200 bg-green-50 text-green-800" : "border-red-300 bg-red-50 text-red-800 font-medium"}`}
+        >
+          {notice.text}
+        </p>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {column("Awaiting your approval", "Andy's work, waiting on your decision.", awaiting)}
         {column("Approved — ready to send", "You approved these. Send delivers them to the customer.", ready)}

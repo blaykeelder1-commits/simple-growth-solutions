@@ -2,19 +2,20 @@ import { prisma } from "@/lib/db/prisma";
 import { apiLogger } from "@/lib/logger";
 import { getAdminEmails, sendSupportEscalationEmail, sendSupportReplyEmail } from "@/lib/email";
 import { loadSupportContext } from "@/lib/support/assistant";
+import { notifyCustomer } from "@/lib/email/notify";
 
 /**
  * Post an assistant reply into a customer's portal support thread. The ONLY
  * caller that reaches a customer is the approval queue's Send (Blayke, in the
- * admin portal) — see src/lib/approvals. Returns false when the org has no user
- * to attach the message to.
+ * admin portal) — see src/lib/approvals. Returns null when the org has no user
+ * to attach the message to; otherwise whether the customer was actually emailed.
  */
 export async function postSupportReply(opts: {
   organizationId: string;
   reply: string;
   escalate?: boolean;
   escalateReason?: string | null;
-}): Promise<boolean> {
+}): Promise<{ emailed: boolean } | null> {
   const { organizationId, reply, escalate = false, escalateReason } = opts;
 
   // Attach to the customer being answered (latest customer message's author),
@@ -29,7 +30,7 @@ export async function postSupportReply(opts: {
     const anyUser = await prisma.user.findFirst({ where: { organizationId }, select: { id: true } });
     userId = anyUser?.id;
   }
-  if (!userId) return false;
+  if (!userId) return null;
 
   await prisma.supportMessage.create({
     data: {
@@ -43,11 +44,15 @@ export async function postSupportReply(opts: {
   });
 
   // The customer is not watching the portal — email them the reply so it actually reaches them.
+  // Awaited and recorded: "sent" must mean the customer was told, not just that the
+  // portal thread changed.
   const recipient = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } });
+  let emailed = false;
   if (recipient?.email) {
+    const email = recipient.email;
     const firstName = recipient.name?.trim().split(/\s+/)[0] || "there";
-    sendSupportReplyEmail(recipient.email, firstName, reply).catch((e) =>
-      apiLogger.error({ err: e, organizationId }, "Support reply posted but the customer email FAILED")
+    emailed = await notifyCustomer({ entityType: "support", entityId: organizationId }, "support reply email", () =>
+      sendSupportReplyEmail(email, firstName, reply)
     );
   }
 
@@ -69,5 +74,5 @@ export async function postSupportReply(opts: {
       )
       .catch((e) => apiLogger.warn({ err: e }, "Failed to send support escalation email"));
   }
-  return true;
+  return { emailed };
 }

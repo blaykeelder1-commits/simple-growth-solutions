@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { withAdmin } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
 import { sendChangeRequestUpdateEmail } from "@/lib/email";
+import { notifyCustomer } from "@/lib/email/notify";
 import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
 import { actorFor, recordWorkEvent } from "@/lib/work/events";
@@ -289,29 +290,31 @@ export const PATCH = withAdmin(async (req, ctx, session) => {
 
     // Notify the customer only on customer-visible status changes. Andy's
     // internal hand-offs (review_ready, approved) must never email the customer.
+    // Awaited and recorded, so Andy's completion receipt says whether the customer was told.
+    let customerEmailed: boolean | undefined;
     if (
       validatedData.status &&
       changeRequest.project &&
       oldChangeRequest.status !== validatedData.status &&
       CUSTOMER_NOTIFY_STATUSES.has(validatedData.status)
     ) {
-      prisma.user.findUnique({
+      const requester = await prisma.user.findUnique({
         where: { id: changeRequest.requesterId },
         select: { email: true, name: true },
-      })
-        .then((requester) => {
-          if (!requester) return;
-          return sendChangeRequestUpdateEmail(
+      });
+      if (requester) {
+        customerEmailed = await notifyCustomer({ entityType: "cr", entityId: id }, `ticket ${validatedData.status} email`, () =>
+          sendChangeRequestUpdateEmail(
             requester.email,
             requester.name || requester.email,
             { title: changeRequest.title, status: changeRequest.status, resolution: changeRequest.resolution },
             { id: changeRequest.project!.id, projectName: changeRequest.project!.projectName }
-          );
-        })
-        .catch((e) => apiLogger.warn({ err: e }, "Failed to send change request update notification"));
+          )
+        );
+      }
     }
 
-    return NextResponse.json({ success: true, changeRequest, approvalCode });
+    return NextResponse.json({ success: true, changeRequest, approvalCode, customerEmailed });
   } catch (error) {
     return apiError(error, "Failed to update change request");
   }

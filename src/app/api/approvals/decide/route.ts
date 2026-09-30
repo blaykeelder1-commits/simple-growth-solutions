@@ -22,10 +22,12 @@ export async function POST(req: NextRequest) {
   try {
     const { code, decision, reason } = decideSchema.parse(await req.json());
     let item;
+    let customerEmailed: boolean | undefined;
     if (decision === "send") {
       const found = await prisma.approvalItem.findUnique({ where: { code: code.trim().toUpperCase() } });
       if (!found) throw new ApprovalError(`no approval item ${code}`, 404);
       item = await sendApproval(found.id, "blayke (whatsapp)", "blayke");
+      customerEmailed = item.customerEmailed;
     } else {
       item = await decideApproval({ code, decision, reason, via: "whatsapp", actor: "blayke" });
     }
@@ -34,6 +36,7 @@ export async function POST(req: NextRequest) {
       item: { code: item.code, kind: item.kind, title: item.title, status: item.status },
       needsSend: item.status === "approved" && CUSTOMER_FACING.has(item.kind),
       portalUrl: approvalsUrl(),
+      customerEmailed,
     });
   } catch (error) {
     if (error instanceof ApprovalError) {

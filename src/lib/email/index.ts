@@ -6,6 +6,9 @@ import { apiLogger } from '@/lib/logger';
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const FROM_EMAIL = process.env.EMAIL_FROM || 'Simple Growth Solutions <noreply@simple-growth-solution.com>';
+// Where a customer's reply lands. Unset until the address really receives mail —
+// a reply-to that bounces is worse than none (the portal link still works).
+const REPLY_TO = process.env.EMAIL_REPLY_TO || undefined;
 
 /** Escape HTML special characters to prevent XSS in email templates */
 export function escapeHtml(str: string): string {
@@ -27,6 +30,9 @@ export interface EmailOptions {
 
 export async function sendEmail({ to, subject, html, text, replyTo }: EmailOptions) {
   if (!resend) {
+    // Silently "succeeding" in production would tell Blayke a customer was emailed when
+    // nothing left the building.
+    if (process.env.NODE_ENV === 'production') throw new Error('Email not sent: RESEND_API_KEY is not set');
     apiLogger.debug({ to, subject }, 'Email skipped (Resend not configured)');
     return { success: true, id: 'dev-mode' };
   }
@@ -38,7 +44,7 @@ export async function sendEmail({ to, subject, html, text, replyTo }: EmailOptio
       subject,
       html,
       text,
-      replyTo,
+      replyTo: replyTo ?? REPLY_TO,
     });
 
     if (error) {
