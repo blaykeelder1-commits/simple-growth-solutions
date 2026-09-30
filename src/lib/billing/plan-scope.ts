@@ -1,8 +1,8 @@
 /**
  * What each plan INCLUDES — the one source of truth for what we may promise a customer.
  *
- * Built from the public pricing page (src/app/pricing/page.tsx) plus Blayke's standing rule
- * (2026-09-29): every plan covers the website, the Google Business Profile and SEO; social
+ * Mirrors the public pricing page (src/app/pricing/page.tsx — keep the two in step) and
+ * Blayke's standing rule (2026-09-29): every plan covers the website, the Google Business Profile and SEO; social
  * media, ads and the customer's other accounts are NOT part of any plan. When a customer asks
  * for something outside their plan we don't do it for free and we don't flatly refuse — we
  * offer the upgrade (or a one-time add-on quote) and let Blayke decide the rest.
@@ -20,7 +20,7 @@ interface PlanScope {
   upgradeTo: PlanKey | null;
 }
 
-// Every plan includes these (Blayke's rule — the pricing page does not spell out GBP/SEO yet).
+// Every plan includes these (listed on the pricing page's Managed tier since 2026-09-30).
 const ALL_PLANS = [
   "Managed hosting, SSL and security monitoring for their website",
   "Website edits through change requests (their monthly allowance, below)",

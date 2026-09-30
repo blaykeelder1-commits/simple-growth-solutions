@@ -41,6 +41,8 @@ const websitePlans = [
     bgColor: "bg-blue-50",
     features: [
       "Managed hosting, SSL, and security monitoring",
+      "Google Business Profile kept accurate (hours, info, photos)",
+      "On-site SEO: titles, descriptions, speed, local search basics",
       "2 change requests per month included",
       "5-business-day turnaround",
       "$25 per extra change request, $49 same-day rush",
