@@ -5,7 +5,9 @@ import { prisma } from "@/lib/db/prisma";
  * every gate (edit requests, Andy's pipeline, the portal banner, Blayke's billing
  * to-dos).
  *
- *  - paid   — billed by a real processor (Square / Stripe) and in good standing.
+ *  - paid   — billed by a real processor (Square / Stripe) and in good standing. A
+ *             declined renewal keeps them paid for PAYMENT_GRACE_DAYS (Square emails them
+ *             an invoice and we ask them to update their card), then they're unpaid.
  *  - comp   — deliberately free ("manual"), but ONLY until its currentPeriodEnd. A comp
  *             never renews itself; extending one is an explicit admin decision.
  *  - unpaid — anything else: no plan, awaiting first payment, past due, canceled, or a
@@ -25,7 +27,10 @@ export interface StandingSub {
   status: string;
   processor: string;
   currentPeriodEnd: Date | null;
+  paymentFailedAt?: Date | null;
 }
+
+export const PAYMENT_GRACE_DAYS = 7;
 
 export interface StandingResult {
   standing: Standing;
@@ -35,12 +40,31 @@ export interface StandingResult {
   compUntil: Date | null;
 }
 
+/** Plans that include managed website work (edits, support). Bundles include a website. */
+export const MANAGED_PLANS = [
+  "website_managed",
+  "website_pro",
+  "website_premium",
+  "website_managed_annual",
+  "website_pro_annual",
+  "website_premium_annual",
+  "starter_bundle",
+  "growth_bundle",
+  "full_suite",
+  "enterprise_suite",
+];
+const MANAGED = new Set(MANAGED_PLANS);
+export const isManagedPlan = (plan: string) => MANAGED.has(plan);
+
 const PAID_PROCESSORS = new Set(["square", "stripe"]);
 const RANK: Record<Standing, number> = { paid: 2, comp: 1, unpaid: 0 };
 
 export function standingOf(sub: StandingSub, now: Date = new Date()): Standing {
   if (PAID_PROCESSORS.has(sub.processor)) {
-    return sub.status === "active" || sub.status === "trialing" ? "paid" : "unpaid";
+    if (sub.status !== "active" && sub.status !== "trialing") return "unpaid";
+    const failed = sub.paymentFailedAt?.getTime();
+    if (failed && now.getTime() - failed > PAYMENT_GRACE_DAYS * 24 * 60 * 60 * 1000) return "unpaid";
+    return "paid";
   }
   if (sub.processor === "manual") {
     return sub.status === "active" && sub.currentPeriodEnd !== null && sub.currentPeriodEnd.getTime() > now.getTime()
@@ -68,12 +92,13 @@ export const STANDING_SELECT = {
   status: true,
   processor: true,
   currentPeriodEnd: true,
+  paymentFailedAt: true,
 } as const;
 
-/** Standing for an organization's website / managed plans. */
+/** Standing for an organization's managed plans (website tiers and bundles). */
 export async function orgStanding(organizationId: string, now: Date = new Date()): Promise<StandingResult> {
   const subs = await prisma.subscription.findMany({
-    where: { organizationId, plan: { startsWith: "website_" } },
+    where: { organizationId, plan: { in: MANAGED_PLANS } },
     select: STANDING_SELECT,
     orderBy: { createdAt: "desc" },
   });

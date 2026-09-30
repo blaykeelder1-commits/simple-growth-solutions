@@ -5,6 +5,7 @@ import { apiError } from "@/lib/api/errors";
 import { actorFor, recordWorkEvent } from "@/lib/work/events";
 import { sendProjectStatusUpdateEmail } from "@/lib/email";
 import { apiLogger } from "@/lib/logger";
+import { orgStanding } from "@/lib/billing/standing";
 import { z } from "zod";
 
 // Frontend sends `null` to clear optional URL/platform fields; accept both
@@ -69,10 +70,9 @@ export const GET = withAuth(async (_req, ctx, session) => {
     // can preview the build inside the portal but the public URL only goes
     // live once they convert to a paid subscription. Admins always see it.
     if (user?.role !== "admin") {
-      const activeSub = await prisma.subscription.findFirst({
-        where: { organizationId: project.organizationId, status: "active" },
-      });
-      if (!activeSub) {
+      // Paid or in-date comp only — the same rule as every other gate.
+      const { standing } = await orgStanding(project.organizationId);
+      if (standing === "unpaid") {
         return NextResponse.json({
           success: true,
           project: { ...project, deployedUrl: null, repositoryUrl: null },

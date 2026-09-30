@@ -107,12 +107,13 @@ function NewChangeRequestContent() {
             "full_suite",
             "enterprise_suite",
           ]);
-          interface SubRow { plan: string; status: string }
+          interface SubRow { plan: string; status: string; standing?: string }
           const subs: SubRow[] = data.subscriptions || [];
           const managed = subs.find(
             (s) =>
               managedKeys.has(s.plan) &&
-              (s.status === "active" || s.status === "trialing")
+              (s.status === "active" || s.status === "trialing") &&
+              s.standing !== "unpaid"
           );
           setHasManagedSub(!!managed);
           setActivePlan(managed?.plan ?? null);

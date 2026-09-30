@@ -42,8 +42,9 @@ export const GET = withAdmin(async () => {
       }),
       prisma.organization.count({
         where: {
+          // Paying organizations only — a comp or manual record isn't revenue.
           subscriptions: {
-            some: { status: "active" },
+            some: { status: "active", processor: { in: ["square", "stripe"] } },
           },
         },
       }),

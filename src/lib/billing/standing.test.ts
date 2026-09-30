@@ -35,6 +35,15 @@ describe("standingOf", () => {
   });
 });
 
+describe("declined renewal grace", () => {
+  it("stays paid for 7 days after a failed charge, then unpaid", () => {
+    const day = 24 * 60 * 60 * 1000;
+    expect(standingOf(sub({ paymentFailedAt: new Date(now.getTime() - 6 * day) }), now)).toBe("paid");
+    expect(standingOf(sub({ paymentFailedAt: new Date(now.getTime() - 8 * day) }), now)).toBe("unpaid");
+    expect(standingOf(sub({ paymentFailedAt: null }), now)).toBe("paid");
+  });
+});
+
 describe("bestStanding", () => {
   it("paid beats comp beats unpaid, and reports the comp end date", () => {
     const comp = sub({ id: "c", processor: "manual" });

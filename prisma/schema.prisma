@@ -300,6 +300,12 @@ model Subscription {
   // populated until the customer pays and we provision the auto-renewing sub.
   squarePaymentLinkId   String? @map("square_payment_link_id")
   squarePaymentLinkUrl  String? @map("square_payment_link_url") @db.Text
+  // The order behind this checkout's payment link: a first payment activates ONLY the
+  // row whose order was paid (matching by customer alone could activate the wrong row).
+  squareOrderId         String? @map("square_order_id")
+  // Set when Square reports a failed renewal charge (the Square status stays ACTIVE);
+  // cleared by the next paid invoice. 7 days of grace, then work pauses (standing.ts).
+  paymentFailedAt       DateTime? @map("payment_failed_at")
 
   plan         String // website_managed, website_pro, etc.
   status       String @default("pending") // pending, awaiting_payment, trialing, active, past_due, canceled
@@ -340,6 +346,7 @@ model Subscription {
   @@index([stripeCustomerId])
   @@index([squareCustomerId])
   @@index([squareSubscriptionId])
+  @@index([squareOrderId])
   @@index([promoCodeId])
   @@map("subscriptions")
 }

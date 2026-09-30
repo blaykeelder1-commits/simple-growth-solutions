@@ -7,7 +7,9 @@ import {
   getSgsSquareConfig,
   findOrCreateCustomer,
   createPaymentLink,
+  deletePaymentLink,
 } from "@/lib/billing/square";
+import { bestStanding, isManagedPlan } from "@/lib/billing/standing";
 import { validatePromoCode } from "@/lib/billing/founding";
 import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
@@ -78,14 +80,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const existing = user.organization.subscriptions.find(
-      (s) => s.plan === plan && s.status === "active"
-    );
-    if (existing) {
-      return NextResponse.json(
-        { success: false, message: "Already subscribed to this plan" },
-        { status: 400 }
-      );
+    // One paid website plan per customer. Starting ANY website plan while already paying
+    // for one would leave both Square subscriptions billing (a double charge) — plan
+    // changes go through Cancel or change plan / Support instead. A comp (free) customer
+    // may start paying; that's the point of the comp ending.
+    if (SQUARE_PLAN_KEYS.has(plan)) {
+      const website = user.organization.subscriptions.filter((s) => isManagedPlan(s.plan));
+      if (bestStanding(website).standing === "paid") {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "You already have an active plan. To switch plans, use Cancel or change plan, or message us from Support.",
+          },
+          { status: 409 }
+        );
+      }
+    } else {
+      const existing = user.organization.subscriptions.find((s) => s.plan === plan && s.status === "active");
+      if (existing) {
+        return NextResponse.json({ success: false, message: "Already subscribed to this plan" }, { status: 400 });
+      }
     }
 
     const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
@@ -151,7 +166,26 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Persist a "pending" Subscription so the webhook can find it.
+      // Retire every older unpaid checkout for this org: delete its Square link so it
+      // can't be paid, and mark the row abandoned. Otherwise a customer who clicks Start
+      // twice and pays both links gets two recurring subscriptions.
+      const stale = user.organization.subscriptions.filter(
+        (s) => s.processor === "square" && s.status === "awaiting_payment"
+      );
+      for (const old of stale) {
+        if (old.squarePaymentLinkId) {
+          await deletePaymentLink(cfg, old.squarePaymentLinkId).catch((err) =>
+            apiLogger.error({ err, subscriptionId: old.id }, "Could not delete an old payment link — it may still be payable")
+          );
+        }
+        await prisma.subscription.updateMany({
+          where: { id: old.id, status: "awaiting_payment" },
+          data: { status: "abandoned" },
+        });
+      }
+
+      // Persist a "pending" Subscription so the webhook can find it — by the ORDER the
+      // customer pays, never by customer alone.
       await prisma.subscription.create({
         data: {
           organizationId: user.organizationId,
@@ -163,8 +197,12 @@ export async function POST(request: NextRequest) {
           squareCustomerId: customer.id,
           squarePaymentLinkId: link.id,
           squarePaymentLinkUrl: link.url,
+          squareOrderId: link.orderId ?? null,
         },
       });
+      if (!link.orderId) {
+        apiLogger.error({ plan, organizationId: user.organizationId }, "Square payment link returned no order id — the webhook cannot match this payment");
+      }
 
       return NextResponse.json({ success: true, url: link.url });
     }

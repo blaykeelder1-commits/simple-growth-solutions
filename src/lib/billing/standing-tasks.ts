@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { createApproval } from "@/lib/approvals";
-import { bestStanding, STANDING_SELECT } from "@/lib/billing/standing";
+import { bestStanding, MANAGED_PLANS, STANDING_SELECT } from "@/lib/billing/standing";
 
 /**
  * Billing to-dos that make unpaid work impossible to miss. Each lands once in the
@@ -46,8 +46,8 @@ export async function ensureStandingTasks(now: Date = new Date()): Promise<void>
       select: { organizationId: true },
     }),
     prisma.subscription.findMany({
-      where: { plan: { startsWith: "website_" } },
-      select: { organizationId: true, ...STANDING_SELECT },
+      where: { plan: { in: MANAGED_PLANS } },
+      select: { organizationId: true, cancelRequestedAt: true, ...STANDING_SELECT },
       orderBy: { createdAt: "desc" },
     }),
   ]);
@@ -67,7 +67,19 @@ export async function ensureStandingTasks(now: Date = new Date()): Promise<void>
     const { standing, sub, compUntil } = bestStanding(subs, now);
     const name = names.get(orgId) ?? "A customer";
 
-    if (standing === "unpaid") {
+    if (standing !== "unpaid") {
+      // Paid or comped now: any open "no paid plan" to-do for them is stale.
+      await prisma.approvalItem.updateMany({
+        where: { kind: "billing_task", status: "awaiting", refId: { startsWith: `${orgId}:unpaid:` } },
+        data: { status: "superseded" },
+      });
+    }
+
+    // A customer who cancelled on purpose is handled by the cancellation flow (one
+    // pause-site to-do) — not a "no paid plan" nag every month forever.
+    const cancelledOnPurpose = subs[0]?.status === "canceled" && !!subs[0]?.cancelRequestedAt;
+
+    if (standing === "unpaid" && !cancelledOnPurpose) {
       await raise(
         `${orgId}:unpaid:${month}`,
         orgId,

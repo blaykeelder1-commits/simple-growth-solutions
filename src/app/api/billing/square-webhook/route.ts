@@ -7,7 +7,10 @@ import {
   getPayment,
   createSubscription,
   createCardOnFile,
+  getSubscription,
 } from "@/lib/billing/square";
+import { bestStanding, MANAGED_PLANS, STANDING_SELECT } from "@/lib/billing/standing";
+import { createApproval } from "@/lib/approvals";
 import {
   foundingPlanVariationId,
   isWebsitePlan,
@@ -79,15 +82,22 @@ export async function POST(req: NextRequest) {
       case "invoice.payment_made":
         await handleInvoicePaid(event);
         break;
+      case "invoice.scheduled_charge_failed":
+        await handleChargeFailed(event);
+        break;
       default:
         // Quietly ignore unhandled events — common for Square's broad event set.
         break;
     }
   } catch (err) {
+    // Every handler is idempotent (atomic claims, Square idempotency keys, set-once
+    // fields), so let Square redeliver instead of dropping the event: a swallowed error
+    // here is how a customer ends up paid-but-not-provisioned with nobody retrying.
     apiLogger.error(
       { err, eventType: event.type, eventId: event.event_id },
-      "Square webhook handler failed — returning 200 to prevent retries"
+      "Square webhook handler failed — returning 500 so Square retries"
     );
+    return NextResponse.json({ received: false }, { status: 500 });
   }
 
   return NextResponse.json({ received: true });
@@ -131,25 +141,50 @@ async function handlePaymentEvent(event: SquareEvent) {
   //   1) A pending Subscription whose Payment Link's order_id matches → first-month payment
   //   2) A pending OneOffCharge whose order_id matches → rush fee or custom upcharge
   if (payment.orderId) {
+    // Only the checkout whose ORDER was paid. Matching by customer (the old rule) could
+    // activate a different, abandoned checkout — or treat a rush-fee payment as a first
+    // month — and start a second recurring subscription.
     const subscription = await prisma.subscription.findFirst({
-      where: {
-        processor: "square",
-        status: "awaiting_payment",
-        // We stored the payment link id. The Square Order ID is on the link,
-        // but we also stored the order id on the link response. Fall back to
-        // matching customer + plan if order id isn't recorded.
-        OR: [
-          // Match by stored payment link id is unreliable here because we
-          // didn't persist the order_id from the link. Match by customer
-          // instead — there should only be one awaiting_payment sub per
-          // (org, plan) at a time.
-          { squareCustomerId: payment.customerId || undefined },
-        ],
-      },
-      orderBy: { createdAt: "desc" },
+      where: { processor: "square", status: "awaiting_payment", squareOrderId: payment.orderId },
     });
 
     if (subscription) {
+      // Already paying for a website plan? Never create a second recurring subscription
+      // for the same customer: close this checkout and ask Blayke to refund it.
+      const others = await prisma.subscription.findMany({
+        where: {
+          organizationId: subscription.organizationId,
+          plan: { in: MANAGED_PLANS },
+          id: { not: subscription.id },
+        },
+        select: STANDING_SELECT,
+      });
+      if (isWebsitePlan(subscription.plan) && bestStanding(others).standing === "paid") {
+        const closed = await prisma.subscription.updateMany({
+          where: { id: subscription.id, status: "awaiting_payment" },
+          data: { status: "duplicate_refund_needed" },
+        });
+        if (closed.count === 1) {
+          const org = await prisma.organization.findUnique({
+            where: { id: subscription.organizationId },
+            select: { name: true },
+          });
+          await createApproval(
+            {
+              kind: "billing_task",
+              refId: `${subscription.id}:refund_duplicate`,
+              organizationId: subscription.organizationId,
+              title: `${org?.name ?? "A customer"} — paid twice: refund $${((payment.totalCents ?? 0) / 100).toFixed(2)}`,
+              draft:
+                `They already have a paid plan and just paid another checkout (Square payment ${payment.id}). ` +
+                `No second subscription was created. Refund this payment in Square, then approve this.`,
+              agentNote: JSON.stringify({ action: "notice", subscriptionId: subscription.id }),
+            },
+            "system"
+          );
+        }
+        return;
+      }
       // Provision the recurring Square Subscription against a saved card.
       // Payment Links capture the card for the first charge but do NOT persist a
       // reusable card, so payment.cardId is null here — store the card-on-file
@@ -227,6 +262,18 @@ async function handlePaymentEvent(event: SquareEvent) {
           // the subscription via the idempotency key, so just stop here.
           return;
         }
+
+        // They've paid: any "no paid plan" to-do for them is now stale.
+        await prisma.approvalItem
+          .updateMany({
+            where: {
+              kind: "billing_task",
+              status: "awaiting",
+              refId: { startsWith: `${subscription.organizationId}:unpaid:` },
+            },
+            data: { status: "superseded" },
+          })
+          .catch((err) => apiLogger.error({ err }, "Could not clear stale unpaid to-dos"));
 
         // Count the founding-code redemption now that the sub is live. Bounded
         // by maxRedemptions at validation time; this is the authoritative tally.
@@ -463,10 +510,71 @@ async function handleSubscriptionEvent(event: SquareEvent) {
   }
 }
 
-async function handleInvoicePaid(_event: SquareEvent) {
-  // Square sends invoice.payment_made for recurring subscription billing.
-  // We use this to extend currentPeriodEnd. For now we trust subscription.updated
-  // (which Square also fires) to carry charged_through_date — so this is a no-op.
+/** The local row for the Square subscription an invoice event belongs to, if any. */
+async function localForInvoice(event: SquareEvent) {
+  const invoice = event.data?.object?.invoice as { id?: string; subscription_id?: string } | undefined;
+  if (!invoice?.subscription_id) return null;
+  const local = await prisma.subscription.findFirst({ where: { squareSubscriptionId: invoice.subscription_id } });
+  return local ? { local, squareSubscriptionId: invoice.subscription_id } : null;
+}
+
+async function handleInvoicePaid(event: SquareEvent) {
+  // A renewal was paid. Square doesn't document that subscription.updated fires on every
+  // renewal, so read the subscription itself: move the paid-through date forward (else
+  // the "renewal missing" check raises false alarms) and clear any failed-charge mark.
+  const found = await localForInvoice(event);
+  if (!found) return;
+  const cfg = getSgsSquareConfig();
+  if (!cfg) return;
+  const remote = await getSubscription(cfg, found.squareSubscriptionId);
+  await prisma.subscription.update({
+    where: { id: found.local.id },
+    data: {
+      paymentFailedAt: null,
+      status: mapSquareSubscriptionStatus(remote.status),
+      ...(remote.chargedThroughDate ? { currentPeriodEnd: new Date(remote.chargedThroughDate) } : {}),
+    },
+  });
+}
+
+async function handleChargeFailed(event: SquareEvent) {
+  // A renewal charge was declined. Square keeps the subscription ACTIVE and emails the
+  // customer its invoice; we mark the failure (7 days of grace, see standing.ts), ask the
+  // customer to update their card, and tell Blayke once per failure.
+  const found = await localForInvoice(event);
+  if (!found) return;
+  const { local } = found;
+  const marked = await prisma.subscription.updateMany({
+    where: { id: local.id, paymentFailedAt: null },
+    data: { paymentFailedAt: new Date() },
+  });
+  if (marked.count === 0) return; // this failure was already handled
+
+  const owner =
+    (await prisma.user.findFirst({
+      where: { organizationId: local.organizationId, role: "owner" },
+      select: { email: true, name: true },
+    })) ||
+    (await prisma.user.findFirst({ where: { organizationId: local.organizationId }, select: { email: true, name: true } }));
+  if (owner?.email) {
+    await sendPaymentFailedEmail({ email: owner.email, name: owner.name || "there", plan: local.plan }).catch((err) =>
+      apiLogger.error({ err, subscriptionId: local.id }, "Payment-failed email FAILED")
+    );
+  }
+  const org = await prisma.organization.findUnique({ where: { id: local.organizationId }, select: { name: true } });
+  await createApproval(
+    {
+      kind: "billing_task",
+      refId: `${local.id}:charge_failed:${new Date().toISOString().slice(0, 10)}`,
+      organizationId: local.organizationId,
+      title: `${org?.name ?? "A customer"} — card declined on renewal`,
+      draft:
+        `Square could not charge their card for ${local.plan}. Square emailed them the invoice and we asked them to ` +
+        `update their card. Work continues for 7 days, then pauses automatically until they pay.`,
+      agentNote: JSON.stringify({ action: "notice", subscriptionId: local.id }),
+    },
+    "system"
+  );
 }
 
 // ============================================================

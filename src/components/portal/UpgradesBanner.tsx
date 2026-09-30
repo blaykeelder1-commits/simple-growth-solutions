@@ -10,6 +10,7 @@ interface SubRow {
   plan: string;
   status: string;
   createdAt?: string;
+  standing?: "paid" | "comp" | "unpaid";
 }
 
 const MANAGED_PLANS = new Set([
@@ -42,7 +43,8 @@ export function UpgradesBanner() {
         const managed = subs.find(
           (s) =>
             MANAGED_PLANS.has(s.plan) &&
-            (s.status === "active" || s.status === "trialing")
+            (s.status === "active" || s.status === "trialing") &&
+            s.standing !== "unpaid"
         );
         if (!managed?.createdAt) return;
         const ageMs = Date.now() - new Date(managed.createdAt).getTime();

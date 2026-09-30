@@ -10,7 +10,7 @@ import {
 import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
 import { actorFor, recordWorkEvent } from "@/lib/work/events";
-import { standingOf, UNPAID_CUSTOMER_MESSAGE } from "@/lib/billing/standing";
+import { orgStanding, UNPAID_CUSTOMER_MESSAGE } from "@/lib/billing/standing";
 import { computeSlaDueAt, RUSH_FEE_CENTS } from "@/lib/billing/sla";
 import {
   resolvePlanCaps,
@@ -35,17 +35,8 @@ const createChangeRequestSchema = z.object({
   acceptOverageFee: z.boolean().optional().default(false),
 });
 
-// Plans whose customers can submit change requests.
-const MANAGED_PLAN_KEYS = new Set([
-  "website_managed",
-  "website_pro",
-  "website_premium",
-  "starter_bundle",
-  "growth_bundle",
-  "full_suite",
-  "enterprise_suite",
-]);
-const ACTIVE_SUB_STATUSES = new Set(["active", "trialing"]);
+// Who may submit: decided by orgStanding (src/lib/billing/standing.ts), whose managed-plan
+// list includes the annual tiers this route's old local list left out.
 
 // POST /api/projects/[id]/change-requests - Create a change request
 export const POST = withAuth(async (req, ctx, session) => {
@@ -76,17 +67,12 @@ export const POST = withAuth(async (req, ctx, session) => {
 
     // Always look up the org's active managed plan so SLA + rush billing logic
     // apply consistently (even when an admin submits on behalf of a customer).
-    let activeSub = await prisma.subscription.findFirst({
-      where: {
-        organizationId: project.organizationId,
-        plan: { in: Array.from(MANAGED_PLAN_KEYS) },
-        status: { in: Array.from(ACTIVE_SUB_STATUSES) },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-    // "active" is not enough: a $0 manual record is only a comp until its end date, and
-    // an expired comp is unpaid (src/lib/billing/standing.ts). Never auto-renewed.
-    if (activeSub && standingOf(activeSub) === "unpaid") activeSub = null;
+    // The subscription that grants paid/comp standing (src/lib/billing/standing.ts) —
+    // not merely the newest "active" row, which could be an add-on or an expired comp.
+    const standing = await orgStanding(project.organizationId);
+    const activeSub = standing.standing !== "unpaid" && standing.sub
+      ? await prisma.subscription.findUnique({ where: { id: standing.sub.id } })
+      : null;
     const activePlan: string | null = activeSub?.plan ?? null;
 
     // Subscription gate — customers (not admins) must have a paid or in-date comp plan.

@@ -4,6 +4,7 @@ import { withAuth } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
 import { getAdminEmails, sendNewProjectNotification } from "@/lib/email";
 import { apiLogger } from "@/lib/logger";
+import { orgStanding } from "@/lib/billing/standing";
 import { z } from "zod";
 import { isWebsitePlan, type WebsitePlanKey } from "@/lib/billing/founding";
 import { additionalSitePriceCents } from "@/lib/billing/multi-site";
@@ -103,14 +104,11 @@ export const POST = withAuth(async (req, _ctx, session) => {
     if (user?.role !== "admin") {
       const existingSites = await prisma.websiteProject.count({ where: { organizationId } });
       if (existingSites >= 1) {
-        const baseSub = await prisma.subscription.findFirst({
-          where: {
-            organizationId,
-            plan: { startsWith: "website_" },
-            status: { in: ["active", "trialing"] },
-          },
-          orderBy: { createdAt: "desc" },
-        });
+        const standing = await orgStanding(organizationId);
+        const baseSub =
+          standing.standing !== "unpaid" && standing.sub
+            ? await prisma.subscription.findUnique({ where: { id: standing.sub.id } })
+            : null;
         if (!baseSub || !isWebsitePlan(baseSub.plan)) {
           return NextResponse.json(
             {
@@ -136,7 +134,7 @@ export const POST = withAuth(async (req, _ctx, session) => {
           );
         }
         // Charge the recurring add-on to the card on file. Loud, never silent.
-        const result = await provisionAdditionalSite(organizationId, basePlan, validatedData.projectName);
+        const result = await provisionAdditionalSite(organizationId, basePlan, validatedData.projectName, existingSites + 1);
         additionalSiteBilling = { billed: result.billed, reason: result.reason, priceCents: result.priceCents };
         if (!result.billed) {
           apiLogger.warn(

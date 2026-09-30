@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/prisma";
 import { apiLogger } from "@/lib/logger";
 import { createApproval, type BillingTask } from "@/lib/approvals";
 import { recordWorkEvent } from "@/lib/work/events";
+import { bestStanding } from "@/lib/billing/standing";
 import { cancelSubscription, getSgsSquareConfig, undoScheduledCancel } from "@/lib/billing/square";
 import { PLAN_SCOPE, planDifference, websiteTier } from "@/lib/billing/plan-scope";
 import { sendCancellationScheduledEmail, sendDowngradeScheduledEmail } from "@/lib/email";
@@ -33,10 +34,15 @@ const OFFER_REASONS = new Set<string>(["too_expensive", "not_using"]);
 const ACTIVE = ["active", "trialing"];
 
 async function activeSubscription(organizationId: string) {
-  return prisma.subscription.findFirst({
+  // The plan that actually grants service (paid, or an in-date comp). Oldest first so an
+  // additional-site row (same plan key, created later) is never cancelled in place of the
+  // customer's base plan.
+  const subs = await prisma.subscription.findMany({
     where: { organizationId, status: { in: ACTIVE }, plan: { startsWith: "website_" } },
-    orderBy: { createdAt: "desc" },
+    orderBy: { createdAt: "asc" },
   });
+  const granting = bestStanding(subs);
+  return granting.standing === "unpaid" || !granting.sub ? null : subs.find((s) => s.id === granting.sub!.id) ?? null;
 }
 
 /** The cheaper plan we can offer: Pro/Premium → Managed (annual → annual). Null for Managed. */

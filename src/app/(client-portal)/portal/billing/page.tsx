@@ -351,7 +351,7 @@ export default function BillingPage() {
                       <span />
                     )}
                     <div className="flex items-center gap-2">
-                      {subscription.plan.startsWith("website_") && ["active", "trialing"].includes(subscription.status) && (
+                      {subscription.plan.startsWith("website_") && subscription.standing !== "unpaid" && (
                         <Link href="/portal/billing/cancel" className="text-sm text-gray-600 underline hover:text-gray-900">
                           Cancel or change plan
                         </Link>
@@ -388,7 +388,9 @@ export default function BillingPage() {
         </Card>
       ) : null}
 
-      {/* Start a plan — the "go live" action after a free build */}
+      {/* Start a plan — the "go live" action after a free build. Hidden once they're paying:
+          starting a second plan would leave two Square subscriptions billing. */}
+      {websiteStanding !== "paid" && (
       <Card variant="professional">
         <CardHeader>
           <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -475,6 +477,7 @@ export default function BillingPage() {
           </div>
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

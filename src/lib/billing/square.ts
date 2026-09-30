@@ -263,6 +263,21 @@ export interface CardOnFile {
  * Idempotent on the payment id: Square returns the same card for retried
  * webhooks, so duplicate deliveries never create duplicate cards.
  */
+/**
+ * Delete a payment link so it can no longer be paid. Used when a customer starts a new
+ * checkout: an older, unpaid link must not stay payable (paying both would create two
+ * subscriptions). A link already gone (404) counts as deleted.
+ * https://developer.squareup.com/reference/square/checkout-api/delete-payment-link
+ */
+export async function deletePaymentLink(cfg: SgsSquareConfig, paymentLinkId: string): Promise<void> {
+  try {
+    await request(cfg, `/online-checkout/payment-links/${paymentLinkId}`, { method: "DELETE" });
+  } catch (err) {
+    if (err instanceof Error && /404|NOT_FOUND/.test(err.message)) return;
+    throw err;
+  }
+}
+
 export async function createCardOnFile(
   cfg: SgsSquareConfig,
   params: { paymentId: string; customerId: string }

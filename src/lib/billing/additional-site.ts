@@ -27,7 +27,9 @@ export interface AdditionalSiteResult {
 export async function provisionAdditionalSite(
   organizationId: string,
   basePlan: WebsitePlanKey,
-  siteName: string
+  siteName: string,
+  /** Which site this is (existing site count + 1) — makes a double submit bill once. */
+  siteNumber: number
 ): Promise<AdditionalSiteResult> {
   const priceCents = additionalSitePriceCents(basePlan);
   const cfg = getSgsSquareConfig();
@@ -53,11 +55,15 @@ export async function provisionAdditionalSite(
       name: `Additional site — ${basePlan} — ${siteName}`.slice(0, 60),
       phases: [{ amountCents: priceCents }],
     });
+    // Stable key: a repeated submit for the same site returns the SAME Square subscription.
     const sub = await createSubscription(cfg, {
       customerId: baseSub.squareCustomerId,
       cardId: baseSub.squareCardId,
       planVariationId: variation.planVariationId,
+      idempotencyKey: `addon-${organizationId}-site-${siteNumber}`,
     });
+    const already = await prisma.subscription.findFirst({ where: { squareSubscriptionId: sub.id }, select: { id: true } });
+    if (already) return { billed: true, priceCents, subscriptionId: already.id };
     // One Subscription row per billed site: an org's active website_ sub count
     // equals its billed-site count, which keeps the dispatch-board plan lookup
     // and per-site cap accounting consistent.

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { bestStanding, STANDING_SELECT, type StandingResult } from "@/lib/billing/standing";
+import { bestStanding, MANAGED_PLANS, STANDING_SELECT, type StandingResult } from "@/lib/billing/standing";
 import { prisma } from "@/lib/db/prisma";
 import { withAdmin } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
@@ -85,7 +85,7 @@ export const GET = withAdmin(async (req, _ctx, session) => {
     );
     const subs = orgIds.length
       ? await prisma.subscription.findMany({
-          where: { organizationId: { in: orgIds }, plan: { startsWith: "website_" } },
+          where: { organizationId: { in: orgIds }, plan: { in: MANAGED_PLANS } },
           select: { organizationId: true, ...STANDING_SELECT },
           orderBy: { createdAt: "desc" },
         })

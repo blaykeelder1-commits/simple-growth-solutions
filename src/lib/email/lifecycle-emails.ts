@@ -322,12 +322,12 @@ export async function sendPaymentFailedEmail(args: {
     `
     <h2 style="color: #b91c1c;">We couldn't process your payment</h2>
     <p>Hi ${firstName(args.name)},</p>
-    <p>We tried to bill your <strong>${escapeHtml(label)}</strong> plan, but the payment didn't go through — usually that's just an expired or replaced card.</p>
+    <p>We tried to bill your <strong>${escapeHtml(label)}</strong> plan, but the payment didn't go through. Usually that's just an expired or replaced card.</p>
     <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0;">
-      <p style="margin: 0; color: #4b5563;">To keep your site online and avoid any interruption, please update your payment method.</p>
+      <p style="margin: 0; color: #4b5563;">Square has emailed you an invoice for this payment. Paying it with a working card takes care of everything. Your plan keeps working for the next 7 days; after that, new website changes pause until it's paid.</p>
     </div>
-    ${button(`${APP_URL}/portal/billing`, "Update Payment Method")}
-    <p>We'll try again automatically over the next few days. If you think this is a mistake or need a hand, just reply to this email.</p>
+    <p>Need to change the card we bill each month? Just reply to this email or message us from your portal and we'll help you update it.</p>
+    ${button(`${APP_URL}/portal/billing`, "View my billing")}
     <p>Thanks,<br>The Simple Growth Solutions Team</p>
   `,
     "Website Management"

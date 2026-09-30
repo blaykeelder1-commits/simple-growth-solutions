@@ -9,6 +9,8 @@ export interface SubscriptionRecord {
   priceMonthly: number;
   currentPeriodEnd: string | null;
   trialEndDate: string | null;
+  /** paid | comp | unpaid from /api/billing/subscriptions (src/lib/billing/standing.ts) */
+  standing?: "paid" | "comp" | "unpaid";
 }
 
 interface UseSubscriptionReturn {
@@ -68,7 +70,8 @@ export function useSubscriptions(): UseSubscriptionReturn {
       return subscriptions.some(
         (sub) =>
           sub.plan === plan &&
-          (sub.status === 'active' || sub.status === 'trialing')
+          (sub.status === 'active' || sub.status === 'trialing') &&
+          sub.standing !== 'unpaid' // an expired comp or unpaid plan grants nothing
       );
     },
     [subscriptions]

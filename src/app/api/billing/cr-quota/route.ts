@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { standingOf } from "@/lib/billing/standing";
+import { orgStanding } from "@/lib/billing/standing";
 import { prisma } from "@/lib/db/prisma";
 import { withAuth } from "@/lib/api/with-auth";
 import { apiError } from "@/lib/api/errors";
@@ -25,15 +25,12 @@ export const GET = withAuth(async (_req, _ctx, session) => {
       });
     }
 
-    let sub = await prisma.subscription.findFirst({
-      where: {
-        organizationId: user.organizationId,
-        status: { in: ["active", "trialing"] },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    if (sub && standingOf(sub) === "unpaid") sub = null; // expired comp / unpaid → no quota
+    // The subscription that grants paid/comp standing (src/lib/billing/standing.ts) —
+    // not merely the newest "active" row, which could be an add-on or an expired comp.
+    const standing = await orgStanding(user.organizationId);
+    const sub = standing.standing !== "unpaid" && standing.sub
+      ? await prisma.subscription.findUnique({ where: { id: standing.sub.id } })
+      : null;
 
     if (!sub) {
       return NextResponse.json({

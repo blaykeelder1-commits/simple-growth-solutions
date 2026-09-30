@@ -25,8 +25,10 @@ export const GET = withAdmin(async () => {
       paidOneOffsLast30,
       signupTimeseries,
     ] = await Promise.all([
+      // Paying plans only (processor square/stripe): a $0 manual comp is not a customer
+      // paying us, and counting it is how "2 active subscriptions, $0 MRR" happened.
       prisma.subscription.findMany({
-        where: { status: "active" },
+        where: { status: "active", processor: { in: ["square", "stripe"] } },
         select: { plan: true, priceMonthly: true, createdAt: true },
       }),
       prisma.subscription.count({ where: { status: "trialing" } }),

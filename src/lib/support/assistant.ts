@@ -8,21 +8,9 @@
 // both served to Andy through the service-token agent endpoint.
 
 import { prisma } from "@/lib/db/prisma";
+import { orgStanding } from "@/lib/billing/standing";
 
-// Plans whose customers can submit change requests (mirrors the change-request route).
-const MANAGED_PLAN_KEYS = new Set([
-  "website_managed",
-  "website_pro",
-  "website_premium",
-  "website_managed_annual",
-  "website_pro_annual",
-  "website_premium_annual",
-  "starter_bundle",
-  "growth_bundle",
-  "full_suite",
-  "enterprise_suite",
-]);
-const ACTIVE_SUB_STATUSES = new Set(["active", "trialing"]);
+
 
 export interface SupportContext {
   orgName: string;
@@ -36,20 +24,15 @@ export interface SupportContext {
 export async function loadSupportContext(
   organizationId: string
 ): Promise<SupportContext> {
-  const [org, sub, projects] = await Promise.all([
+  const [org, standing, projects] = await Promise.all([
     prisma.organization.findUnique({
       where: { id: organizationId },
       select: { name: true },
     }),
-    prisma.subscription.findFirst({
-      where: {
-        organizationId,
-        plan: { in: Array.from(MANAGED_PLAN_KEYS) },
-        status: { in: Array.from(ACTIVE_SUB_STATUSES) },
-      },
-      orderBy: { createdAt: "desc" },
-      select: { plan: true, status: true },
-    }),
+    // The same answer every gate uses (src/lib/billing/standing.ts): an unpaid customer
+    // has NO plan here, so Andy's plan scope says "do not promise any work" — it never
+    // disagrees with the ticket list that says billing: unpaid.
+    orgStanding(organizationId),
     prisma.websiteProject.findMany({
       where: { organizationId },
       orderBy: { createdAt: "desc" },
@@ -79,8 +62,8 @@ export async function loadSupportContext(
 
   return {
     orgName: org?.name ?? "the customer",
-    plan: sub?.plan ?? null,
-    planStatus: sub?.status ?? null,
+    plan: standing.standing === "unpaid" ? null : standing.sub?.plan ?? null,
+    planStatus: standing.standing, // paid | comp | unpaid
     projects: projects.map((p) => ({
       name: p.projectName,
       status: p.status,
