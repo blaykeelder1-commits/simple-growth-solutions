@@ -120,6 +120,8 @@ export const GET = withAdmin(async (req, _ctx, session) => {
           id: r.project.id,
           name: r.project.projectName,
           organizationName: r.project.organization?.name ?? null,
+          // Andy needs it to write to the customer (support-sgs.ts draft <organizationId>).
+          organizationId: r.project.organization?.id ?? null,
         },
         plan: r.project.organization
           ? planByOrg.get(r.project.organization.id) ?? null
