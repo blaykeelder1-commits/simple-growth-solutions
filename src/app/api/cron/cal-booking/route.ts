@@ -40,7 +40,12 @@ export async function POST(req: NextRequest) {
   const signature = headersList.get("x-cal-signature-256");
   const secret = process.env.CAL_WEBHOOK_SECRET;
 
-  if (secret) {
+  // No secret configured = nobody can be verified, so refuse (it used to accept ANY
+  // unsigned POST and change lead/project status). Cal.com isn't wired up yet.
+  if (!secret) {
+    return NextResponse.json({ error: "Cal.com webhook not configured" }, { status: 503 });
+  }
+  {
     if (!signature) {
       return NextResponse.json({ error: "Missing signature" }, { status: 401 });
     }

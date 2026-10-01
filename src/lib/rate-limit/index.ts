@@ -86,6 +86,39 @@ export const rateLimiters = {
 export type RateLimitType = keyof typeof rateLimiters;
 
 /**
+ * Same limits, kept in this process's memory, used when Upstash Redis isn't configured.
+ * Production had no UPSTASH_* env, so every limiter was null and login, signup and
+ * password reset were unlimited (found 2026-09-30). One Render instance → per-process
+ * memory is a real limit; with several instances it is per instance (still far better
+ * than none). Fixed window, pruned as it goes.
+ */
+const MEMORY_LIMITS: Record<RateLimitType, { max: number; windowMs: number }> = {
+  auth: { max: 10, windowMs: 60_000 },
+  login: { max: 5, windowMs: 60_000 },
+  signup: { max: 20, windowMs: 3_600_000 },
+  passwordReset: { max: 3, windowMs: 900_000 },
+  api: { max: 100, windowMs: 60_000 },
+  ai: { max: 20, windowMs: 60_000 },
+  webhook: { max: 1000, windowMs: 60_000 },
+};
+const memoryHits = new Map<string, { count: number; resetAt: number }>();
+
+export function memoryLimit(type: RateLimitType, key: string, now = Date.now()) {
+  const { max, windowMs } = MEMORY_LIMITS[type];
+  const id = `${type}:${key}`;
+  let entry = memoryHits.get(id);
+  if (!entry || entry.resetAt <= now) {
+    entry = { count: 0, resetAt: now + windowMs };
+    memoryHits.set(id, entry);
+  }
+  entry.count += 1;
+  if (memoryHits.size > 50_000) {
+    for (const [k, v] of memoryHits) if (v.resetAt <= now) memoryHits.delete(k);
+  }
+  return { success: entry.count <= max, limit: max, remaining: Math.max(0, max - entry.count), reset: entry.resetAt };
+}
+
+/**
  * Get the client IP address from the request
  */
 export function getClientIp(request: NextRequest): string {
@@ -104,13 +137,13 @@ export async function rateLimit(
   type: RateLimitType = 'api'
 ): Promise<{ success: boolean; limit?: number; remaining?: number; reset?: number }> {
   const limiter = rateLimiters[type];
+  const ip = getClientIp(request);
 
-  // If Redis is not configured, allow all requests (development mode)
+  // No Redis configured → enforce the same limits in memory (never "allow everything").
   if (!limiter) {
-    return { success: true };
+    return memoryLimit(type, ip);
   }
 
-  const ip = getClientIp(request);
   const { success, limit, remaining, reset } = await limiter.limit(ip);
 
   return { success, limit, remaining, reset };
@@ -163,7 +196,7 @@ export async function rateLimitByIdentifier(
   const limiter = rateLimiters[type];
 
   if (!limiter) {
-    return { success: true };
+    return memoryLimit(type, identifier);
   }
 
   return await limiter.limit(identifier);

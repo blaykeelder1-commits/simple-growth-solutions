@@ -62,7 +62,10 @@ jobs:
             endpoints+=("$MANUAL_TARGET")
           else
             case "$SCHEDULE" in
-              "0 13 * * *") endpoints+=("/api/ar-engine/execute") ;;
+              # Cash Flow AI AR outreach is not a live product: the route expects
+              # x-cron-secret and has 401'd daily. Re-add (with that header) only
+              # when AR outreach launches — enabling it sends collection emails.
+              "0 13 * * *") ;;
               "0 14 * * *") endpoints+=("/api/billing/trial-check" "/api/ar-engine/sync-payments") ;;
               "0 15 * * *") endpoints+=("/api/nurture/process") ;;
               "0 16 * * *") endpoints+=("/api/billing/founding-reminders") ;;

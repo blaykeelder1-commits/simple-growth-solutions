@@ -23,7 +23,6 @@ import {
   FileText,
   Rocket,
 } from "lucide-react";
-import { CybersecurityUpsell } from "@/components/portal/UpsellBanner";
 import { UpgradesBanner } from "@/components/portal/UpgradesBanner";
 
 interface Project {
@@ -277,8 +276,7 @@ export default function PortalDashboard() {
       {/* In-portal upgrades banner — only renders for orgs ≥30 days into managed sub */}
       <UpgradesBanner />
 
-      {/* Cybersecurity Upsell */}
-      <CybersecurityUpsell />
+
 
       {/* Quick stats */}
       <div className="grid gap-5 md:grid-cols-3">

@@ -57,11 +57,10 @@ const upgrades: UpgradeCard[] = [
   {
     id: "marketing",
     name: "Marketing Engine",
-    pitch: "Email campaigns, social posts, and review-gen done for you.",
+    pitch: "Email campaigns and review requests done for you.",
     pricing: "From $149/mo",
     bullets: [
       "Monthly email campaigns",
-      "Social media scheduling",
       "Review request automation",
       "Lead-magnet landing pages",
     ],

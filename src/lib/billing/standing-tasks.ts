@@ -7,7 +7,10 @@ import { bestStanding, MANAGED_PLANS, STANDING_SELECT } from "@/lib/billing/stan
  * approvals queue (and so once in WhatsApp via the watcher) — deduped by refId:
  *
  *  - `<orgId>:unpaid:<yyyy-mm>`  a customer with a live website or a website plan has
- *    no paid plan (or their comp ended) → new work is paused. Re-raised at most monthly.
+ *    no paid plan (or their comp ended) → new work is paused. ONE open to-do per customer:
+ *    re-raised only after Blayke has decided the previous one and 30 days have passed.
+ *    (The month in the key only makes refIds unique; a month rollover must never add a
+ *    second open to-do — it did on 2026-10-01, announcing duplicates in WhatsApp.)
  *  - `<subId>:comp_ends:<date>`  a comp ends within 7 days → decide: charge, extend, stop.
  *  - `<subId>:renewal_missing:<date>`  a Square plan's period ended 3+ days ago and no
  *    renewal came through → check Square before doing more work.
@@ -79,7 +82,30 @@ export async function ensureStandingTasks(now: Date = new Date()): Promise<void>
     // pause-site to-do) — not a "no paid plan" nag every month forever.
     const cancelledOnPurpose = subs[0]?.status === "canceled" && !!subs[0]?.cancelRequestedAt;
 
-    if (standing === "unpaid" && !cancelledOnPurpose) {
+    // Self-heal: if a customer somehow has more than one open "no paid plan" to-do, keep
+    // the oldest and retire the rest.
+    const openUnpaid = await prisma.approvalItem.findMany({
+      where: { kind: "billing_task", status: "awaiting", refId: { startsWith: `${orgId}:unpaid:` } },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    if (openUnpaid.length > 1) {
+      await prisma.approvalItem.updateMany({
+        where: { id: { in: openUnpaid.slice(1).map((i) => i.id) } },
+        data: { status: "superseded" },
+      });
+    }
+    const lastDecided = openUnpaid.length
+      ? null
+      : await prisma.approvalItem.findFirst({
+          where: { kind: "billing_task", refId: { startsWith: `${orgId}:unpaid:` }, status: { not: "superseded" } },
+          orderBy: { createdAt: "desc" },
+          select: { decidedAt: true, createdAt: true },
+        });
+    const recentlyDecided =
+      !!lastDecided && now.getTime() - (lastDecided.decidedAt ?? lastDecided.createdAt).getTime() < 30 * 24 * 60 * 60 * 1000;
+
+    if (standing === "unpaid" && !cancelledOnPurpose && openUnpaid.length === 0 && !recentlyDecided) {
       await raise(
         `${orgId}:unpaid:${month}`,
         orgId,

@@ -480,11 +480,11 @@ export default function ProjectDetailPage() {
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <div className="text-xs uppercase tracking-wide text-gray-500 font-medium mb-1">
-                    Staging Preview
+                    Ready to go live
                   </div>
-                  <code className="text-sm bg-gray-50 px-2 py-1 rounded text-gray-700 break-all">
-                    preview.simplegrowth.app/{project.id.slice(0, 8)}
-                  </code>
+                  <p className="text-sm text-gray-700">
+                    Start your plan to put your new site on your own web address.
+                  </p>
                 </div>
                 <Link href="/portal/billing">
                   <Button className="bg-amber-600 hover:bg-amber-700 text-white shadow-md">

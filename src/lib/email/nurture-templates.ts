@@ -44,18 +44,17 @@ export function getNurtureWelcomeEmail(data: {
 
   const content = `
     <h2 style="color: #1f2937;">Welcome, ${escapeHtml(data.name)}!</h2>
-    <p>Thanks for your interest in Simple Growth Solutions. We help small businesses like ${escapeHtml(data.businessName)} grow through:</p>
+    <p>Thanks for your interest in Simple Growth Solutions. We help small businesses like ${escapeHtml(data.businessName)} win more customers online:</p>
     <ul style="padding-left: 20px; color: #374151;">
-      <li><strong>Professional Websites</strong> &mdash; designed and managed for you, starting free</li>
-      <li><strong>Cash Flow AI</strong> &mdash; intelligent invoice tracking that gets you paid faster</li>
-      <li><strong>Cybersecurity Shield</strong> &mdash; protect your business online</li>
-      <li><strong>Business Intelligence</strong> &mdash; AI-powered insights to guide your decisions</li>
+      <li><strong>A professional website</strong> &mdash; we build it free, then host and manage it for you</li>
+      <li><strong>Your Google Business Profile</strong> &mdash; kept accurate so local customers find you</li>
+      <li><strong>Search visibility (SEO)</strong> &mdash; set up so you show up when people look for what you do</li>
     </ul>
     ${websiteTeaser}
     <p>We'd love to learn more about your goals and show you how we can help.</p>
-    ${ctaButton('Schedule a Free Consultation', `${APP_URL}/contact`)}
+    ${ctaButton('Schedule a Free Consultation', `${APP_URL}/book`)}
     <p>Or, if you're ready to dive in:</p>
-    ${ctaButton('Get Started Free', `${APP_URL}/get-started`)}
+    ${ctaButton('Get Started Free', `${APP_URL}/questionnaire`)}
     <p style="color: #6b7280;">Best regards,<br>The Simple Growth Solutions Team</p>
     ${unsubscribeFooter({ leadId: data.leadId, token: data.token })}
   `;
@@ -106,7 +105,7 @@ export function getNurtureCaseStudyEmail(data: {
     </div>
 
     <p>And here's the best part: <strong>your first website is completely free</strong>. No catch, no credit card required. We build it, you own it.</p>
-    ${ctaButton('Claim Your Free Website', `${APP_URL}/get-started`)}
+    ${ctaButton('Claim Your Free Website', `${APP_URL}/questionnaire`)}
     <p style="color: #6b7280;">Best regards,<br>The Simple Growth Solutions Team</p>
     ${unsubscribeFooter({ leadId: data.leadId, token: data.token })}
   `;
@@ -163,7 +162,7 @@ export function getNurtureFreeOfferEmail(data: {
     </div>
 
     <p>All we need is a few minutes of your time to answer our quick questionnaire, and our team takes it from there.</p>
-    ${ctaButton('Start Your Free Website', `${APP_URL}/get-started`)}
+    ${ctaButton('Start Your Free Website', `${APP_URL}/questionnaire`)}
     <p style="color: #6b7280; font-size: 14px;">No credit card. No obligations. Just a better website for ${escapeHtml(data.businessName)}.</p>
     <p style="color: #6b7280;">Best regards,<br>The Simple Growth Solutions Team</p>
     ${unsubscribeFooter({ leadId: data.leadId, token: data.token })}
@@ -199,7 +198,7 @@ export function getNurtureLastChanceEmail(data: {
       <li>Zero cost on our starter plan, forever</li>
     </ul>
 
-    ${ctaButton('Claim Your Free Website Now', `${APP_URL}/get-started`)}
+    ${ctaButton('Claim Your Free Website Now', `${APP_URL}/questionnaire`)}
 
     <p style="color: #6b7280;">If you've decided this isn't for you, no worries at all. We won't send any more follow-ups after this. We wish you the best!</p>
     <p style="color: #6b7280;">Best regards,<br>The Simple Growth Solutions Team</p>

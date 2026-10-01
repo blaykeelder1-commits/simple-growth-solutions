@@ -115,12 +115,11 @@ export default function BookPage({
                     <Calendar className="h-10 w-10 text-primary" />
                   </div>
                   <h3 className="mb-2 text-xl font-semibold">
-                    Calendar setup pending
+                    Let&apos;s find a time
                   </h3>
                   <p className="mb-6 max-w-md text-muted-foreground">
-                    Set <code>NEXT_PUBLIC_CAL_LINK</code> (e.g.
-                    <code> simplegrowth/30min</code>) to enable booking. In the
-                    meantime, email us:
+                    Email us with a couple of times that work for you and we&apos;ll
+                    confirm your call within one business day:
                   </p>
                   <a
                     href="mailto:info@simple-growth-solution.com"
