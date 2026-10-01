@@ -11,7 +11,7 @@ import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
 import { actorFor, recordWorkEvent } from "@/lib/work/events";
 import { orgStanding, UNPAID_CUSTOMER_MESSAGE } from "@/lib/billing/standing";
-import { computeSlaDueAt, RUSH_FEE_CENTS } from "@/lib/billing/sla";
+import { computeSlaDueAt, RUSH_FEE_CENTS, rushIsBilled, slaLabel } from "@/lib/billing/sla";
 import {
   resolvePlanCaps,
   getPeriodWindow,
@@ -144,15 +144,14 @@ export const POST = withAuth(async (req, ctx, session) => {
       }
     }
 
-    // SLA: rush flag OR Pro plan = 24h; otherwise 5 business days.
+    // Turnaround per plan + rush (src/lib/billing/sla.ts — matches the pricing page).
     const slaDueAt = computeSlaDueAt({
       isRush: validatedData.rushDelivery,
       plan: activePlan,
     });
 
-    // Pro customers get same-day on every ticket without paying — don't bill them.
-    const billRush =
-      validatedData.rushDelivery && activePlan !== "website_pro";
+    // Rush is $49 on Managed only; free on Pro and Premium (monthly or annual).
+    const billRush = validatedData.rushDelivery && rushIsBilled(activePlan);
 
     // Either rush ($49) or overage ($25) hold the ticket in awaiting_payment.
     // If both apply, rush wins (it's the bigger charge).
@@ -261,14 +260,7 @@ export const POST = withAuth(async (req, ctx, session) => {
       // Customer-facing acknowledgment — closes the "did it go through?" loop
       // before they have to refresh the portal.
       if (session.user.email) {
-        const slaText =
-          activePlan === "website_pro"
-            ? "Within 24 hours (Pro plan)"
-            : activePlan === "website_premium"
-              ? "Same business day (Premium plan)"
-              : validatedData.rushDelivery
-                ? "Same day (rush)"
-                : "3–5 business days";
+        const slaText = slaLabel({ isRush: validatedData.rushDelivery, plan: activePlan });
         sendChangeRequestReceivedEmail(
           session.user.email,
           session.user.name || session.user.email,

@@ -31,6 +31,7 @@ interface Subscription {
   currentPeriodEnd: string | null;
   trialEndDate: string | null;
   processor?: string;
+  paymentFailedAt?: string | null;
   /** paid | comp | unpaid — from src/lib/billing/standing.ts */
   standing?: "paid" | "comp" | "unpaid";
 }
@@ -282,6 +283,21 @@ export default function BillingPage() {
       )}
 
       {/* Active subscriptions */}
+      {subscriptions.some((s) => s.paymentFailedAt) && (
+        <div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-5">
+          <p className="font-semibold text-red-900">Your last payment didn&apos;t go through</p>
+          <p className="mt-1 text-sm text-red-800">
+            Usually that&apos;s an expired or replaced card. Your plan keeps working for 7 days from the failed payment.
+          </p>
+          <Link
+            href="/portal/billing/card"
+            className="mt-3 inline-block rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+          >
+            Update card &amp; pay
+          </Link>
+        </div>
+      )}
+
       {websiteStanding === "unpaid" && (
         <div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-5">
           <p className="font-semibold text-red-900">Your plan isn&apos;t active yet</p>
@@ -351,6 +367,11 @@ export default function BillingPage() {
                       <span />
                     )}
                     <div className="flex items-center gap-2">
+                      {subscription.processor === "square" && subscription.standing !== "unpaid" && (
+                        <Link href="/portal/billing/card" className="text-sm text-gray-600 underline hover:text-gray-900">
+                          Update card
+                        </Link>
+                      )}
                       {subscription.plan.startsWith("website_") && subscription.standing !== "unpaid" && (
                         <Link href="/portal/billing/cancel" className="text-sm text-gray-600 underline hover:text-gray-900">
                           Cancel or change plan

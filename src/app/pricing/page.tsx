@@ -422,6 +422,9 @@ function PricingContent() {
                   a new page, a fix. Submit it through your portal, and we handle it.
                   Each plan includes a monthly cap so the system stays sustainable;
                   extra requests are $25 each, and same-day rush is $49 (free on Pro and Premium).
+                  Unused requests don&apos;t roll over. &ldquo;Same day&rdquo; means by 6 pm
+                  Central for requests received by 2 pm Central, Monday&ndash;Friday; later
+                  requests are due by 6 pm the next business day.
                 </p>
               </div>
 
@@ -466,8 +469,9 @@ function PricingContent() {
               <div className="bg-white rounded-lg p-6 shadow-sm">
                 <h3 className="font-semibold mb-2">Can I cancel anytime?</h3>
                 <p className="text-gray-600">
-                  Absolutely. All plans are month-to-month, no long-term contracts.
-                  Cancel from your billing dashboard. If you cancel, your live site
+                  Absolutely. Monthly plans are month-to-month and annual plans renew
+                  yearly &mdash; no other contracts. Cancel from your billing dashboard;
+                  it takes effect at the end of the period you&apos;ve already paid for. If you cancel, your live site
                   is paused at the end of your billing period &mdash; we stop hosting
                   and managing it. If you ever want to take the source code and
                   assets off our infrastructure to self-host, that&apos;s a one-time

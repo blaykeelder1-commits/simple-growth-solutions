@@ -38,6 +38,7 @@ export async function GET() {
         trialEndDate: true,
         createdAt: true,
         processor: true,
+        paymentFailedAt: true,
       },
       orderBy: { createdAt: "desc" },
     });

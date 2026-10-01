@@ -326,8 +326,8 @@ export async function sendPaymentFailedEmail(args: {
     <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0;">
       <p style="margin: 0; color: #4b5563;">Square has emailed you an invoice for this payment. Paying it with a working card takes care of everything. Your plan keeps working for the next 7 days; after that, new website changes pause until it's paid.</p>
     </div>
-    <p>Need to change the card we bill each month? Just reply to this email or message us from your portal and we'll help you update it.</p>
-    ${button(`${APP_URL}/portal/billing`, "View my billing")}
+    <p>Need to change the card we bill each month? You can update it in your portal in under a minute.</p>
+    ${button(`${APP_URL}/portal/billing/card`, "Update my card")}
     <p>Thanks,<br>The Simple Growth Solutions Team</p>
   `,
     "Website Management"

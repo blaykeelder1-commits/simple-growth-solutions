@@ -3,6 +3,8 @@ import type { ApprovalItem, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { recordWorkEvent, type WorkActor, type WorkEntity } from "@/lib/work/events";
 import { postSupportReply } from "@/lib/support/post-reply";
+import { apiLogger } from "@/lib/logger";
+import { getAdminEmails, sendSupportEscalationEmail } from "@/lib/email";
 import { customerLanguageIssues, outOfPlanPromises, validateReview } from "@/lib/review";
 
 /**
@@ -120,12 +122,24 @@ export async function createApproval(input: CreateApprovalInput, actor: WorkActo
     assertReviewed(crShipSubject(input.previewUrl, input.agentNote), input.review, false);
   }
   // Something Blayke already approved is waiting for his Send — never replace it silently.
+  // Exception: the customer wrote again after that reply was drafted, so it no longer
+  // answers them; the new draft replaces it (Blayke re-approves the up-to-date one).
   const waitingSend = await prisma.approvalItem.findFirst({
     where: { kind: input.kind, refId: input.refId, status: "approved" },
-    select: { code: true },
+    select: { id: true, code: true, createdAt: true },
   });
   if (waitingSend) {
-    throw new ApprovalError(`${waitingSend.code} is already approved and waiting for Send — send or reject it first`, 409);
+    const newerCustomerMessage =
+      input.kind === "support_reply"
+        ? await prisma.supportMessage.findFirst({
+            where: { organizationId: input.refId, role: "user", createdAt: { gt: waitingSend.createdAt } },
+            select: { id: true },
+          })
+        : null;
+    if (!newerCustomerMessage) {
+      throw new ApprovalError(`${waitingSend.code} is already approved and waiting for Send — send or reject it first`, 409);
+    }
+    await prisma.approvalItem.updateMany({ where: { id: waitingSend.id, status: "approved" }, data: { status: "superseded" } });
   }
   let title = input.title;
   let organizationId = input.organizationId ?? null;
@@ -155,7 +169,34 @@ export async function createApproval(input: CreateApprovalInput, actor: WorkActo
     },
   });
   await recordWorkEvent({ ...entityOf(item), event: "sent_for_approval", actor, note: item.code });
+  if (item.kind === "support_reply" && item.title.includes("⚠️")) {
+    await alertUrgentSupport(item).catch((err) =>
+      apiLogger.error({ err, code: item.code }, "Urgent support email to Blayke FAILED")
+    );
+  }
   return item;
+}
+
+/** Email the admins right away about an urgent support draft (on top of WhatsApp). */
+async function alertUrgentSupport(item: ApprovalItem): Promise<void> {
+  const [emails, lastUserMsg, org] = await Promise.all([
+    getAdminEmails(),
+    prisma.supportMessage.findFirst({
+      where: { organizationId: item.refId, role: "user" },
+      orderBy: { createdAt: "desc" },
+      select: { content: true, userId: true },
+    }),
+    prisma.organization.findUnique({ where: { id: item.refId }, select: { name: true } }),
+  ]);
+  const customer = lastUserMsg?.userId
+    ? await prisma.user.findUnique({ where: { id: lastUserMsg.userId }, select: { name: true, email: true } })
+    : null;
+  await sendSupportEscalationEmail(emails, {
+    orgName: org?.name ?? "A customer",
+    customerName: customer?.name || customer?.email || "A customer",
+    reason: `${item.title} — approve ${item.code} in WhatsApp or the admin portal, then Send.`,
+    lastMessage: lastUserMsg?.content || "(see portal thread)",
+  });
 }
 
 export type Decision = "approve" | "edit" | "reject";

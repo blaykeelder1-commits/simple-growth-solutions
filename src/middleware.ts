@@ -84,12 +84,14 @@ export async function middleware(request: NextRequest) {
       "Content-Security-Policy",
       [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-inline'", // unsafe-inline required for Next.js App Router inline scripts
-        "style-src 'self' 'unsafe-inline'", // unsafe-inline needed for Tailwind/inline styles
+        // Square Web Payments SDK hosts (portal → Billing → Update card), per
+        // https://developer.squareup.com/docs/web-payments/content-security-policy
+        "script-src 'self' 'unsafe-inline' https://web.squarecdn.com https://sandbox.web.squarecdn.com", // unsafe-inline required for Next.js App Router inline scripts
+        "style-src 'self' 'unsafe-inline' https://web.squarecdn.com https://sandbox.web.squarecdn.com", // unsafe-inline needed for Tailwind/inline styles
         "img-src 'self' data: https: blob:",
-        "font-src 'self' data:",
-        "connect-src 'self' https://api.resend.com https://*.supabase.co wss://*.supabase.co",
-        "frame-src 'self'",
+        "font-src 'self' data: https://square-fonts-production-f.squarecdn.com https://d1g145x70srn7h.cloudfront.net",
+        "connect-src 'self' https://api.resend.com https://*.supabase.co wss://*.supabase.co https://web.squarecdn.com https://sandbox.web.squarecdn.com https://pci-connect.squareup.com https://pci-connect.squareupsandbox.com https://o160250.ingest.sentry.io",
+        "frame-src 'self' https://web.squarecdn.com https://sandbox.web.squarecdn.com",
         "object-src 'none'",
         "base-uri 'self'",
         "form-action 'self'",

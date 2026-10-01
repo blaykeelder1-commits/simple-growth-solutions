@@ -70,7 +70,7 @@ export async function POST() {
           priceMonthly: squareSub.priceMonthly,
           currentPeriodEnd: squareSub.currentPeriodEnd,
         },
-        message: "Your plan is billed through Square. To cancel or switch plans, use \"Cancel or change plan\" on this page. To update your card or anything else, message us from Support in your portal or email info@simple-growth-solution.com.",
+        message: "Your plan is billed through Square. To cancel or switch plans, use \"Cancel or change plan\" on this page. To update your card, use \"Update card\" on this page. For anything else, message us from Support in your portal or email info@simple-growth-solution.com.",
       });
     }
 

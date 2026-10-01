@@ -15,11 +15,12 @@ interface Msg {
 const GREETING: Msg = {
   role: "assistant",
   content:
-    "Hi! I'm Andy, your support assistant. Ask me anything about your website, your plan, or a change request. I usually reply within a few minutes — your message comes straight to me.",
+    "Hi! I'm Andy from Simple Growth Solutions. Ask me anything about your website, your plan, or a change request. We reply right here and by email, usually the same business day.",
 };
 
 export default function SupportPage() {
   const [serverMsgs, setServerMsgs] = useState<Msg[]>([]);
+  const [receivedNote, setReceivedNote] = useState(false);
   const [pending, setPending] = useState<Msg[]>([]); // optimistic, not yet in server history
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -69,6 +70,7 @@ export default function SupportPage() {
         }
         if (tries >= maxTries) {
           setAwaitingReply(false);
+          setReceivedNote(true);
           return;
         }
         setTimeout(tick, 7000);
@@ -95,6 +97,7 @@ export default function SupportPage() {
       const data = await res.json().catch(() => ({}));
       if (data.ok) {
         setAwaitingReply(true);
+        setReceivedNote(false);
         pollForReply(assistantCountBefore);
       } else {
         setPending((p) => [
@@ -141,7 +144,7 @@ export default function SupportPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Support</h1>
           <p className="text-sm text-gray-500">
-            Chat with Andy — he usually replies within a few minutes.
+            Message our team. We reply here and by email, usually the same business day.
           </p>
         </div>
       </div>
@@ -170,6 +173,13 @@ export default function SupportPage() {
                   </div>
                 </div>
               ))
+            )}
+            {receivedNote && !awaitingReply && (
+              <div className="flex justify-start">
+                <div className="rounded-2xl px-4 py-2.5 bg-green-50 text-green-800 text-sm">
+                  Got it. Your message is with our team. We&apos;ll reply here and email you as soon as it&apos;s ready.
+                </div>
+              </div>
             )}
             {awaitingReply && (
               <div className="flex justify-start">

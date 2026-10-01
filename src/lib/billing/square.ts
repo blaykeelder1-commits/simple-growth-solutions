@@ -30,6 +30,8 @@ type SquareEnv = "sandbox" | "production";
 export interface SgsSquareConfig {
   accessToken: string;
   locationId: string;
+  /** Public Web Payments SDK application id (safe to send to the browser). */
+  applicationId: string | null;
   environment: SquareEnv;
   webhookKey: string | null;
   planIds: {
@@ -50,6 +52,7 @@ export function getSgsSquareConfig(): SgsSquareConfig | null {
   return {
     accessToken,
     locationId,
+    applicationId: process.env.SQUARE_APPLICATION_ID || null,
     environment,
     webhookKey: process.env.SQUARE_WEBHOOK_SIGNATURE_KEY || null,
     planIds: {
@@ -276,6 +279,117 @@ export async function deletePaymentLink(cfg: SgsSquareConfig, paymentLinkId: str
     if (err instanceof Error && /404|NOT_FOUND/.test(err.message)) return;
     throw err;
   }
+}
+
+// ============================================================
+// Card on file — customer self-serve update (portal → Billing → Update card)
+// ============================================================
+
+export interface CardSummary {
+  id: string;
+  brand: string | null;
+  last4: string | null;
+  expMonth: number | null;
+  expYear: number | null;
+  enabled: boolean;
+}
+
+/**
+ * Save a card the customer entered in the Web Payments SDK form (token from
+ * card.tokenize({ intent: "STORE" })) to their Square customer profile.
+ * https://developer.squareup.com/reference/square/cards-api/create-card
+ */
+export async function storeCardFromToken(
+  cfg: SgsSquareConfig,
+  params: { sourceId: string; customerId: string; idempotencyKey: string; cardholderName?: string }
+): Promise<CardSummary> {
+  const res = await request<{
+    card: { id: string; card_brand?: string; last_4?: string; exp_month?: number; exp_year?: number; enabled?: boolean };
+  }>(cfg, "/cards", {
+    method: "POST",
+    idempotencyKey: params.idempotencyKey,
+    body: {
+      source_id: params.sourceId,
+      card: {
+        customer_id: params.customerId,
+        ...(params.cardholderName ? { cardholder_name: params.cardholderName } : {}),
+      },
+    },
+  });
+  const c = res.card;
+  return {
+    id: c.id,
+    brand: c.card_brand ?? null,
+    last4: c.last_4 ?? null,
+    expMonth: c.exp_month ?? null,
+    expYear: c.exp_year ?? null,
+    enabled: c.enabled !== false,
+  };
+}
+
+export async function getCard(cfg: SgsSquareConfig, cardId: string): Promise<CardSummary> {
+  const res = await request<{
+    card: { id: string; card_brand?: string; last_4?: string; exp_month?: number; exp_year?: number; enabled?: boolean };
+  }>(cfg, `/cards/${cardId}`);
+  const c = res.card;
+  return {
+    id: c.id,
+    brand: c.card_brand ?? null,
+    last4: c.last_4 ?? null,
+    expMonth: c.exp_month ?? null,
+    expYear: c.exp_year ?? null,
+    enabled: c.enabled !== false,
+  };
+}
+
+/**
+ * Point a subscription's future charges at a different card on file.
+ * https://developer.squareup.com/reference/square/subscriptions-api/update-subscription
+ */
+export async function updateSubscriptionCard(cfg: SgsSquareConfig, subscriptionId: string, cardId: string): Promise<void> {
+  await request(cfg, `/subscriptions/${subscriptionId}`, {
+    method: "PUT",
+    body: { subscription: { card_id: cardId } },
+  });
+}
+
+export interface UnpaidInvoice {
+  id: string;
+  publicUrl: string;
+  amountCents: number | null;
+}
+
+/**
+ * The customer's most recent unpaid Square invoice that has a payment page (a declined
+ * renewal leaves one), so the portal can link straight to it.
+ * https://developer.squareup.com/reference/square/invoices-api/search-invoices
+ */
+export async function findUnpaidInvoice(cfg: SgsSquareConfig, customerId: string): Promise<UnpaidInvoice | null> {
+  const res = await request<{
+    invoices?: {
+      id: string;
+      status?: string;
+      public_url?: string;
+      payment_requests?: { computed_amount_money?: { amount?: number }; total_completed_amount_money?: { amount?: number } }[];
+    }[];
+  }>(cfg, "/invoices/search", {
+    method: "POST",
+    body: {
+      query: {
+        filter: { location_ids: [cfg.locationId], customer_ids: [customerId] },
+        sort: { field: "INVOICE_SORT_DATE", order: "DESC" },
+      },
+      limit: 20,
+    },
+  });
+  const open = (res.invoices ?? []).find(
+    (i) => (i.status === "UNPAID" || i.status === "PARTIALLY_PAID") && i.public_url
+  );
+  if (!open) return null;
+  const req = open.payment_requests?.[0];
+  const due = req?.computed_amount_money?.amount;
+  const paid = req?.total_completed_amount_money?.amount ?? 0;
+  return { id: open.id, publicUrl: open.public_url!, amountCents: typeof due === "number" ? due - paid : null };
 }
 
 export async function createCardOnFile(

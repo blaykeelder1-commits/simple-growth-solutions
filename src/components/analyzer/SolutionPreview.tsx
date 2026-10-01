@@ -180,7 +180,7 @@ export function SolutionPreview({
           <ArrowRight className="ml-2 h-5 w-5" />
         </Button>
         <p className="text-xs text-blue-200 mt-4">
-          No credit card required. Optional $79/mo management after launch.
+          No credit card required. Managed plans from $49/mo after launch.
         </p>
       </Card>
     </div>

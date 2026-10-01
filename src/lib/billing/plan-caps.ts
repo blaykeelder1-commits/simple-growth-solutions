@@ -86,7 +86,9 @@ export function resolvePlanCaps(
   if (!plan || !subStatus) return PLAN_CAPS.none;
   if (subStatus === "trialing") return PLAN_CAPS.trial;
   if (subStatus !== "active") return PLAN_CAPS.none;
-  return PLAN_CAPS[plan] ?? PLAN_CAPS.none;
+  // Annual plans (website_pro_annual …) get exactly their monthly tier's allowance —
+  // without this they resolved to "none" (0 change requests) despite paying a year up front.
+  return PLAN_CAPS[plan] ?? PLAN_CAPS[plan.replace(/_annual$/, "")] ?? PLAN_CAPS.none;
 }
 
 /**

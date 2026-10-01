@@ -27,7 +27,7 @@ const steps = [
     icon: Headset,
     title: "We Run It For $49/mo",
     description:
-      "Hosting, security, edits, and updates handled. Send a request anytime — standard turnaround is 3–5 business days, or pay $49 for same-day rush.",
+      "Hosting, security, edits, and updates handled. Send a request anytime — standard turnaround is 5 business days, or pay $49 for same-day rush.",
     color: "from-emerald-500 to-teal-500",
     bgColor: "bg-emerald-100",
     textColor: "text-emerald-600",

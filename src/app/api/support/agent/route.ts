@@ -60,6 +60,7 @@ export const GET = withAdmin(async (req) => {
         organization: org,
         plan: ctx.plan,
         planScope: describeScope(ctx.plan),
+        context: ctx,
         pastMistakes: await getPastMistakes(),
         ...(await threadHistory(threadOrg, 40)),
       });
@@ -81,10 +82,10 @@ export const GET = withAdmin(async (req) => {
         where: {
           kind: "support_reply",
           refId: g.organizationId,
-          OR: [
-            { status: { in: ["awaiting", "approved"] } },
-            { status: { in: ["sent", "rejected"] }, createdAt: { gte: since } },
-          ],
+          // Only a draft written AFTER the customer's latest message answers it. An older
+          // awaiting/approved draft would otherwise hide their follow-up indefinitely.
+          status: { in: ["awaiting", "approved", "sent", "rejected"] },
+          createdAt: { gte: since },
         },
         select: { id: true },
       });

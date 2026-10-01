@@ -214,7 +214,7 @@ export function ClaimOfferForm({
         </Button>
 
         <p className="text-xs text-center text-gray-500">
-          After your free build: optional $79/mo for hosting & management
+          After your free build: managed plans from $49/mo for hosting & management
         </p>
       </form>
 

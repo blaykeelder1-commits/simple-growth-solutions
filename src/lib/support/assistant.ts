@@ -15,7 +15,12 @@ import { orgStanding } from "@/lib/billing/standing";
 export interface SupportContext {
   orgName: string;
   plan: string | null;
+  /** paid | comp | unpaid (src/lib/billing/standing.ts) */
   planStatus: string | null;
+  /** Comp (free) plans: the date it ends. */
+  compUntil: string | null;
+  /** Set when a renewal card was declined; 7 days of grace from this date. */
+  paymentFailedAt: string | null;
   projects: { name: string; status: string; url: string | null }[];
   recentRequests: { title: string; status: string; createdAt: string }[];
 }
@@ -64,6 +69,8 @@ export async function loadSupportContext(
     orgName: org?.name ?? "the customer",
     plan: standing.standing === "unpaid" ? null : standing.sub?.plan ?? null,
     planStatus: standing.standing, // paid | comp | unpaid
+    compUntil: standing.compUntil ? standing.compUntil.toISOString().slice(0, 10) : null,
+    paymentFailedAt: standing.sub?.paymentFailedAt ? standing.sub.paymentFailedAt.toISOString().slice(0, 10) : null,
     projects: projects.map((p) => ({
       name: p.projectName,
       status: p.status,
