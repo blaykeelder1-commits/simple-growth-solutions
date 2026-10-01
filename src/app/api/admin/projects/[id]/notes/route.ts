@@ -5,6 +5,7 @@ import { apiError } from "@/lib/api/errors";
 import { sendProjectNoteEmail } from "@/lib/email";
 import { apiLogger } from "@/lib/logger";
 import { z } from "zod";
+import { actorFor } from "@/lib/work/events";
 
 const noteSchema = z.object({
   content: z.string().min(1),
@@ -17,6 +18,16 @@ export const POST = withAdmin(async (req, ctx, session) => {
     const { id: projectId } = await ctx.params;
     const body = await req.json();
     const validatedData = noteSchema.parse(body);
+
+    // A client-visible note emails every user in the customer's organization. Anything
+    // that reaches a customer goes through the approval queue (review → approve → Send),
+    // so Andy may only write internal notes.
+    if (!validatedData.isInternal && actorFor(session) === "andy") {
+      return NextResponse.json(
+        { success: false, message: "Andy cannot message customers directly — draft a support reply for approval instead" },
+        { status: 403 }
+      );
+    }
 
     const note = await prisma.projectNote.create({
       data: {

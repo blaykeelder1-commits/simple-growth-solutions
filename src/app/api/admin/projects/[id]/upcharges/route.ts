@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { actorFor } from "@/lib/work/events";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { withAdmin } from "@/lib/api/with-auth";
@@ -19,8 +20,16 @@ const createUpchargeSchema = z.object({
 // POST /api/admin/projects/[id]/upcharges - Quote a one-off custom upcharge
 // for the given project. Generates a Square Payment Link; the customer
 // receives the URL in their portal and (optionally) by email.
-export const POST = withAdmin(async (req, ctx) => {
+export const POST = withAdmin(async (req, ctx, session) => {
   try {
+    // Charging a customer is Blayke's decision; Andy's rules already forbid payment
+    // links, and now the code does too.
+    if (actorFor(session) === "andy") {
+      return NextResponse.json(
+        { success: false, message: "Andy cannot create charges — flag it to Blayke" },
+        { status: 403 }
+      );
+    }
     const { id: projectId } = await ctx.params;
     const project = await prisma.websiteProject.findUnique({
       where: { id: projectId },
